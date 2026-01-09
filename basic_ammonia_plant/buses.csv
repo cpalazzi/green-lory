@@ -1,0 +1,8 @@
+name,carrier,control,generator,comment
+power,AC,Slack,wind,High-voltage AC bus collecting renewable generation and exports to downstream conversion equipment.
+ammonia,Ammonia,Slack,,Terminal bus representing ammonia product; sized implicitly via loads and link conversions.
+power_storage,AC,Slack,,Buffer bus for the battery interface links.
+hydrogen,Hydrogen,Slack,,Intermediate hydrogen stream between electrolysis and synthesis.
+hydrogen_storage,Hydrogen,Slack,,Hydrogen storage state bus.
+ramp_penalty,AC,Slack,ramp_dummy,Virtual bus for enforcing ramp penalties on the Haber-Bosch unit.
+ramp_penalty_dest,AC,Slack,,Destination bus for ramp-penalty accumulation.

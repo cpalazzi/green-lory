@@ -1,0 +1,6 @@
+name,bus,control,p_nom,p_nom_extendable,marginal_cost,capital_cost,comment
+wind,power,Slack,0.0,True,0.0,149913.6944667165,Wind profile injected on the Power bus (pseudo-unit for weather data).
+solar,power,PQ,0.0,True,0.0,88139.57227779763,Fixed tilt PV resource represented via weather data.
+solar_tracking,power,PQ,0.0,False,0.0,88139.57227779763,Slot for tracking PV profiles (kept non-extendable by default).
+grid,power,PQ,0.0,False,0.0,1000000000.0,Placeholder for grid imports; prohibitively expensive to discourage use.
+ramp_dummy,ramp_penalty,Slack,10000.0,True,1.0,0.0,Helper generator that feeds the ramp penalty link to enforce smoothing.

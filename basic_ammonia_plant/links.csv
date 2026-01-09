@@ -1,0 +1,9 @@
+name,bus0,bus1,carrier,efficiency,p_nom_extendable,p_nom_max,p_min_pu,capital_cost,marginal_cost,ramp_limit_up,ramp_limit_down,bus2,efficiency2,comment
+electrolysis,power,hydrogen,AC,0.74,True,1000000.0,0.0,64375.0037870585,0.537,,,,,Main electrolyzer converting AC power into hydrogen.
+hydrogen_compression,hydrogen,hydrogen_storage,Hydrogen,1.0,True,1000000.0,0.0,127.36932410086362,0.0001,,,power,-0.05,"Moves hydrogen into storage, accounting for compression losses (neg. Power on bus2)."
+hydrogen_from_storage,hydrogen_storage,hydrogen,Hydrogen,1.0,True,1000000.0,0.0,0.08024258719069129,0.0,,,,1.0,Withdraws hydrogen from storage back to the process stream.
+ammonia_synthesis,power,ammonia,AC,6.25,True,10000000.0,0.3,741130.2546119003,0.0,0.4,0.4,hydrogen,-7.092,"Ammonia synthesis (Haber-Bosch) block, consuming power and hydrogen to produce ammonia."
+battery_interface_in,power,power_storage,AC,0.98,True,10000000.0,0.0,0.0,0.0,,,,1.0,Charger link for the battery buffer.
+battery_interface_out,power_storage,power,AC,0.99,True,10000000.0,0.0,148000.0,0.0,,,,1.0,Discharger link returning stored energy to the Power bus.
+hydrogen_fuel_cell,hydrogen,power,Hydrogen,0.5,True,1000000.0,0.0,145009.97548883324,0.0,,,,1.0,Optional fuel cell to supply power from hydrogen during deficits.
+penalty_link,ramp_penalty,ramp_penalty_dest,AC,1.0,True,1000000.0,0.0,108720000.00000006,1000000.0,,,,1.0,Transfers ramp penalty flow to an accumulating store for post-processing.

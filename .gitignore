@@ -1,0 +1,35 @@
+# Ignore everything by default
+*
+
+# But allow git to traverse directories
+!*/
+
+# Always keep these control files
+!.gitignore
+!.gitkeep
+!**/.gitkeep
+
+# Allow common source/config/doc formats
+!*.py
+!*.ipynb
+!*.csv
+!*.md
+!*.txt
+
+# Never commit virtualenvs or Python caches
+.venv/
+**/__pycache__/
+**/*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+
+# Keep repository structure but not bulky/generated inputs/outputs
+# (we still keep .gitkeep in each)
+/data/**
+!/data/**/.gitkeep
+
+/results/**
+!/results/**/.gitkeep
+
+/scripts/**
+!/scripts/**/.gitkeep
