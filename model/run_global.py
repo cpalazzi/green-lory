@@ -387,7 +387,9 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
             return None
         return float(value) * scale
 
-    onshore = _maybe("onshore_fraction", 100.0)
+    onshore = _maybe("onshore_land_pct", 1.0)
+    if onshore is None:
+        onshore = _maybe("onshore_fraction", 100.0)
     if onshore is not None:
         metadata["land_onshore_pct"] = onshore
 
