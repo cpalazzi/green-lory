@@ -1,10 +1,11 @@
 import logging
+import os
 
 import numpy as np
 import pandas as pd
 import pyomo.environ as pm
 
-from constants import HYDROGEN_HHV_MWH_PER_T, AMMONIA_HHV_MWH_PER_T
+from .constants import HYDROGEN_HHV_MWH_PER_T, AMMONIA_HHV_MWH_PER_T
 
 
 def _link_capacity_on_output_basis(network, series):
@@ -35,7 +36,7 @@ COST_COMPONENT_SPECS = {
     "hydrogen_compression": ("link", "hydrogen_compression"),
     "hydrogen_store": ("store", "compressed_hydrogen_store"),
     "ammonia_store": ("store", "ammonia"),
-    "battery": ("store", "battery"),
+    "battery": ("store", "battery_storage"),
 }
 
 INTEREST_RATE_COLUMN_ALIASES = {
@@ -459,15 +460,18 @@ def get_results_dict_for_multi_site(
     """Just a simpler function that only gets the headline information, and nothing to do with times"""
     dct = dict()
 
+    currency_code = os.environ.get("GREEN_LORY_CURRENCY", "USD").strip().upper()
+    currency_slug = currency_code.lower()
     if not operating:
         load = float(n.loads.p_set.values[0])
         production = load / AMMONIA_HHV_MWH_PER_T * 8760
         demand_mwh = load * 8760
         total_cost = float(n.objective)
-        dct['lcoa_usd_per_t'] = total_cost / production if production > 0 else np.nan
+        dct['currency'] = currency_code
+        dct[f'lcoa_{currency_slug}_per_t'] = total_cost / production if production > 0 else np.nan
         dct['annual_ammonia_demand_mwh'] = demand_mwh
         dct['annual_ammonia_production_t'] = production
-        dct['total_cost_usd_per_year'] = total_cost
+        dct[f'total_cost_{currency_slug}_per_year'] = total_cost
 
         component_costs, other_cost, total_capital, cost_denominator = _component_cost_breakdown(n)
         if cost_denominator == 0:
@@ -477,24 +481,25 @@ def get_results_dict_for_multi_site(
             dct[f'cost_share_{label}_pct'] = (
                 values['total'] / cost_denominator * 100 if cost_denominator else np.nan
             )
-            dct[f'lcoa_component_{label}_usd_per_t'] = (
+            dct[f'lcoa_component_{label}_{currency_slug}_per_t'] = (
                 values['total'] / production if production > 0 else np.nan
             )
 
         residual_share = other_cost / cost_denominator * 100 if cost_denominator else np.nan
         dct['cost_share_other_pct'] = residual_share
-        dct['lcoa_component_other_usd_per_t'] = (
+        dct[f'lcoa_component_other_{currency_slug}_per_t'] = (
             other_cost / production if production > 0 else np.nan
         )
         dct['capital_cost_share_pct'] = (
             total_capital / cost_denominator * 100 if cost_denominator else np.nan
         )
-        dct['lcoa_component_capital_usd_per_t'] = (
+        dct[f'lcoa_component_capital_{currency_slug}_per_t'] = (
             total_capital / production if production > 0 else np.nan
         )
     else:
         years = len(n.stores_t.e['ammonia']) / 8784
-        dct['lcoa_usd_per_t'] = np.nan
+        dct['currency'] = currency_code
+        dct[f'lcoa_{currency_slug}_per_t'] = np.nan
         dct['annual_ammonia_production_t'] = (
             n.stores_t.e['ammonia'].iloc[-1] / AMMONIA_HHV_MWH_PER_T * 1e-6 / years
         )

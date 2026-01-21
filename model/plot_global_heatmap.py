@@ -45,7 +45,7 @@ def _build_cell_geojson(
 
 def plot_lcoa_heatmap(
     csv_path: str | Path,
-    color_column: str = "lcoa_usd_per_t",
+    color_column: str = "auto",
     cell_size_deg: float = 1.0,
     color_scale: str = "Cividis",
 ):
@@ -53,6 +53,26 @@ def plot_lcoa_heatmap(
     df = pd.read_csv(csv_path)
     df.columns = [col.lower() for col in df.columns]
     color_column = color_column.lower()
+    if color_column in {"auto", "lcoa_currency_per_t"}:
+        inferred = None
+        if "currency" in df.columns:
+            currencies = (
+                df["currency"].dropna().astype(str).str.strip().str.lower().unique()
+            )
+            if len(currencies) == 1:
+                candidate = f"lcoa_{currencies[0]}_per_t"
+                if candidate in df.columns:
+                    inferred = candidate
+        if inferred is None and "lcoa_usd_per_t" in df.columns:
+            inferred = "lcoa_usd_per_t"
+        if inferred is None:
+            lcoa_cols = [
+                col for col in df.columns if col.startswith("lcoa_") and col.endswith("_per_t")
+            ]
+            if lcoa_cols:
+                inferred = lcoa_cols[0]
+        if inferred is not None:
+            color_column = inferred
     lat_col = "latitude" if "latitude" in df.columns else None
     lon_col = "longitude" if "longitude" in df.columns else None
     required = {color_column}
@@ -82,7 +102,7 @@ def plot_lcoa_heatmap(
     )
     hover_candidates = [
         "country",
-        "lcoa_usd_per_t",
+        color_column,
         "annual_ammonia_demand_mwh",
         wind_col,
         solar_col,
@@ -118,8 +138,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--color-column",
         type=str,
-        default="lcoa_usd_per_t",
-        help="Results column to visualise (default: lcoa_usd_per_t).",
+        default="auto",
+        help="Results column to visualise (default: auto).",
     )
     parser.add_argument(
         "--color-scale",

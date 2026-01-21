@@ -14,9 +14,9 @@ Green Lory is a PyPSA-based optimisation workflow for sizing green ammonia (and 
 ### Editing the base plant
 PyPSA consumes the canonical CSV bundle in `basic_ammonia_plant/`. The project no longer applies a YAML tech config at runtime.
 
-To update techno-economic assumptions, edit `inputs/tech_config_ammonia_plant.yaml` (overnight CAPEX, lifetimes, interest rates, efficiencies) and run `notebooks/00_tech_config.ipynb` to generate the PyPSA-ready CSV tables (annualised `capital_cost`, link cost basis conversion, updated efficiencies). The most important CSV headers are:
+To update techno-economic assumptions, edit one of the scenario YAML files (for example `inputs/tech_config_ammonia_plant_2030_qld.yaml` or `inputs/tech_config_ammonia_plant_2030_dea.yaml`) and run `notebooks/00_tech_config.ipynb` to generate the PyPSA-ready CSV tables (annualised `capital_cost`, link cost basis conversion, updated efficiencies). The most important CSV headers are:
 
-- `buses.csv`: `name` (bus id), `carrier` (AC, Hydrogen, Ammonia, …), `control` (Slack/PQ), optional `generator` reference when a bus hosts a fixed generator, plus a free-form `comment` column for documentation.
+- `buses.csv`: `name` (bus id), `carrier` (electricity_ac, electricity_stored, Hydrogen, Ammonia, …), `control` (Slack/PQ), optional `generator` reference when a bus hosts a fixed generator, plus a free-form `comment` column for documentation.
 - `generators.csv`: `name`, `bus`, `control`, `p_nom` (initial capacity), `p_nom_extendable` (bool), `marginal_cost`, `capital_cost`, and `comment`. Add any other PyPSA generator attribute as another column if needed.
 - `links.csv`: `name`, `bus0`, `bus1`, optional `bus2` (or higher), `carrier`, `efficiency`/`efficiency2`, `p_nom_extendable`, `p_nom_max`, `p_min_pu`, `capital_cost`, optional `ramp_limit_{up,down}`, and a `comment`. Empty cells simply leave an attribute at its PyPSA default.
 - `loads.csv`: `name`, `bus`, `p_set`, `comment` – perfect for the ammonia off‑take constraint.
@@ -25,7 +25,7 @@ To update techno-economic assumptions, edit `inputs/tech_config_ammonia_plant.ya
 #### Units and basis (important)
 This project treats **techno-economic inputs and reported outputs** on an **HHV output basis** (shorthand: `MW_out_HHV` / `MWh_HHV`).
 
-- **YAML inputs (`inputs/tech_config_ammonia_plant.yaml`)**
+- **YAML inputs (`inputs/tech_config_ammonia_plant_2030_qld.yaml`, `inputs/tech_config_ammonia_plant_2030_dea.yaml`)**
 	- Generators: `overnight_cost_per_mw` is per **MW_out (HHV)**
 	- Stores: `overnight_cost_per_mwh` is per **MWh (HHV)**
 	- Links: `overnight_cost_per_mw` is per **MW_out on bus1 (HHV)**
@@ -40,6 +40,7 @@ This project treats **techno-economic inputs and reported outputs** on an **HHV 
 
 - **Model outputs (saved CSVs / displayed results)**
 	- Link installed capacities are reported as **MW_out on bus1 (HHV)** so they are directly comparable across technologies.
+	- LCOA columns are emitted as a currency-specific heading such as `lcoa_usd_per_t` or `lcoa_eur_per_t` depending on `GREEN_LORY_CURRENCY`.
 
 Because PyPSA reads CSV headers literally, stick to the official attribute names listed in the [PyPSA component tables](https://pypsa.readthedocs.io/en/latest/components.html). Any extra column is ignored unless PyPSA knows how to map it, so documentation text belongs in the `comment` column rather than custom headers. When you need a new component, duplicate the relevant row, change the `name`, and adjust costs/limits; no auxiliary builder step is required. Keep every bus, generator, link, load, and store `name` in snake_case (e.g., `hydrogen_compression`) so the tech config and downstream scripts can match them reliably.
 
@@ -72,7 +73,7 @@ PyPSA-derived result tables append `_opt` fields (e.g., `p_nom_opt`, `e_nom_opt`
 
 For **exported results CSVs** produced by this repo (global sweeps and notebooks), link capacities are converted and reported as **MW_out on bus1 (HHV)** for readability.
 
-- Default CAPEX/interest assumptions live in `inputs/tech_config_ammonia_plant.yaml` (overnight cost, `lifetime_years`, `interest_rate`, `fixed_om_fraction`, plus link `carriers_in`/`carriers_out` recipes when needed).
+- Default CAPEX/interest assumptions live in `inputs/tech_config_ammonia_plant_2030_qld.yaml` (overnight cost, `lifetime_years`, `interest_rate`, `fixed_om_fraction`, plus link `carriers_in`/`carriers_out` recipes when needed).
 - `notebooks/00_tech_config.ipynb` converts those overnight assumptions into annualised PyPSA `capital_cost` values using the annuity payment
 	$\text{Annuity}(r, n) = \frac{r(1+r)^n}{(1+r)^n - 1}$
 	and writes updated `basic_ammonia_plant/*.csv` tables.
@@ -92,8 +93,8 @@ Some links have multiple inputs/outputs (e.g., ammonia synthesis consumes both p
 The notebook also cross-checks that the written coefficients reproduce the recipe ratios.
 
 ### Process coupling and ramping
-- **Linopy guardrails** – `main.main()` always calls PyPSA with `extra_functionality=auxiliary.linopy_constraints`, so every optimisation enforces three families of physical constraints: (1) the battery charger/discharger links (`battery_interface_in` and `battery_interface_out`) must share the same install capacity after accounting for their round-trip efficiency; (2) the hydrogen buffer cannot discharge faster than its energy content would allow because the discharger capacity is tied to `compressed_hydrogen_store` via a fixed cycling factor; and (3) the ammonia synthesis block ramp rates (`ramp_limit_up`/`ramp_limit_down` columns in `basic_ammonia_plant/links.csv`) apply snapshot-to-snapshot, preventing unrealistically fast step changes. The same logic has an operating-mode counterpart (`linopy_operating_constraints`) that reuses the fixed capacities from a prior design solve.
-- **Hydrogen compression loop** – `hydrogen_compression` represents the power draw needed to push hydrogen into the buffer, while `hydrogen_from_storage` is the low-lift withdrawal leg that simply meters hydrogen back into the process stream. Their capital costs/annuities are set via `inputs/tech_config_ammonia_plant.yaml` and written into the CSV bundle by `notebooks/00_tech_config.ipynb`.
+- **Linopy guardrails** – `main.main()` always calls PyPSA with `extra_functionality=auxiliary.linopy_constraints`, so every optimisation enforces three families of physical constraints: (1) the battery charger/discharger links (`battery_pcs_charge` and `battery_pcs_discharge`) must share the same install capacity after accounting for their round-trip efficiency; (2) the hydrogen buffer cannot discharge faster than its energy content would allow because the discharger capacity is tied to `compressed_hydrogen_store` via a fixed cycling factor; and (3) the ammonia synthesis block ramp rates (`ramp_limit_up`/`ramp_limit_down` columns in `basic_ammonia_plant/links.csv`) apply snapshot-to-snapshot, preventing unrealistically fast step changes. The same logic has an operating-mode counterpart (`linopy_operating_constraints`) that reuses the fixed capacities from a prior design solve.
+- **Hydrogen compression loop** – `hydrogen_compression` represents the power draw needed to push hydrogen into the buffer, while `hydrogen_from_storage` is the low-lift withdrawal leg that simply meters hydrogen back into the process stream. Their capital costs/annuities are set via the scenario YAML (for example `inputs/tech_config_ammonia_plant_2030_qld.yaml`) and written into the CSV bundle by `notebooks/00_tech_config.ipynb`.
 - **Fixed hydrogen/power ratios** – The `ammonia_synthesis` entry in `basic_ammonia_plant/links.csv` is a three-terminal PyPSA link. Bus0 (`power`) draws the electrical load, bus2 (`hydrogen`) withdraws feedstock, and bus1 (`ammonia`) receives the product. PyPSA enforces
 	$p_{ammonia} = -\eta_1 \cdot p_{power}$ and $p_{hydrogen} = -\eta_2 \cdot p_{power}$,
 	so the `efficiency` (`\eta_1 = 6.25`) and `efficiency2` (`\eta_2 = 7.092`) coefficients lock in the stoichiometric/energy ratios. In practice this means every tonne per hour of ammonia dispatched consumes a fixed amount of power and hydrogen, and no optimisation setting can vary that coupling unless you rewrite the CSV row. The negative sign on `efficiency2` simply tells PyPSA that hydrogen is consumed (not produced) in proportion to the link flow.
@@ -116,7 +117,9 @@ The notebook also cross-checks that the written coefficients reproduce the recip
 ## Preparing inputs
 - **Weather data**: `location_tools.all_locations()` stitches every `Solar*.nc`, `SolarTracking*.nc`, and `WindPowers*.nc` file under `data/` into three continuous xarray objects. The bundled NetCDF stacks in this repo are **hourly for 2019** (8760 timestamps from 2019-01-01 00:00 through 2019-12-31 23:00). You can drop in additional longitude slices matching the same time axis and they will be merged automatically. For single-site studies you can still supply your own CSV via `aux.get_weather_data`.
 - **Generator list**: every column in your weather file must match an entry in `basic_ammonia_plant/generators.csv`. Remove rows or set profiles to zero if a technology is unavailable.
-- **Costs & efficiencies**: edit `inputs/tech_config_ammonia_plant.yaml`, then run `notebooks/00_tech_config.ipynb` to write annualised `capital_cost` values and updated efficiencies into `basic_ammonia_plant/*.csv`.
+- **Costs & efficiencies**: edit the scenario YAML (for example `inputs/tech_config_ammonia_plant_2030_qld.yaml`), then run `notebooks/00_tech_config.ipynb` to write annualised `capital_cost` values and updated efficiencies into `basic_ammonia_plant/*.csv`.
+- **Significant figures**: input values in the YAML and numeric constants in code are rounded to **8 significant figures** to reduce noise in diff reviews. This has a negligible impact on solver speed and results.
+- **Currency handling**: set `currency:` at the top of each tech-config YAML (e.g., `USD` or `EUR`). If `GREEN_LORY_CURRENCY` is not set, `run_global` adopts the YAML currency and labels outputs accordingly.
 - **Discounting**: the notebook converts overnight CAPEX into annuity-based `capital_cost` values via each entry's `interest_rate` and `lifetime_years`.
 - **Land availability table**: `model/land_processing.py` writes `data/*_land_max_capacity.csv` with per-degree siting metadata (wind/solar availability, km² of usable land, an `onshore_land_pct` derived directly from the MODIS open-water share, and the resulting MW caps). Every column is lowercase (`latitude`, `longitude`, `max_capacity`, …) to simplify downstream joins. Wind capacity density defaults to the Salmon et al. (2021) wake-limited spacing of 200 km²/GW (≈5 MW/km²); solar follows the van de Ven et al. (2021) packing rule using the First Solar (2018) module geometry so higher latitudes automatically receive lower ground coverage ratios. If you need different spacing assumptions edit `_wind_density()` / `_solar_density()` directly before regenerating the CSV. The workflow always re-aggregates the MODIS HDF input—CSV shortcuts were removed—and will fall back to `pyhdf` if your netCDF4 build cannot read HDF4.
 
@@ -151,10 +154,10 @@ python main_mp.py
 - If you need to keep historical artefacts, place them under `results/archive/` (not yet created) or external storage before committing new runs.
 
 ### What `accumulated_penalty` represents
-`accumulated_penalty` is the dedicated store fed by the `penalty_link` in `basic_ammonia_plant/links.csv`. Both components now start at zero capacity but are extendable with prohibitively high annualised CAPEX set in `inputs/tech_config_ammonia_plant.yaml` and written into the CSV bundle via `notebooks/00_tech_config.ipynb`.
+`accumulated_penalty` is the dedicated store fed by the `penalty_link` in `basic_ammonia_plant/links.csv`. Both components now start at zero capacity but are extendable with prohibitively high annualised CAPEX set in the scenario YAML (for example `inputs/tech_config_ammonia_plant_2030_qld.yaml`) and written into the CSV bundle via `notebooks/00_tech_config.ipynb`.
 
 ## Capital cost roadmap
-- Current layer uses a notebook to translate `inputs/tech_config_ammonia_plant.yaml` into the CSV bundle; next up is adding per-region/per-carrier financing inputs plus scenario presets so `interest_rate` and `lifetime_years` can vary spatially.
+- Current layer uses a notebook to translate the scenario YAML into the CSV bundle; next up is adding per-region/per-carrier financing inputs plus scenario presets so `interest_rate` and `lifetime_years` can vary spatially.
 - The legacy Operating Guide stays retired—this README is the canonical reference and will continue to track future CLI/config improvements.
 
 ## Troubleshooting

@@ -3,7 +3,7 @@
 The project no longer applies technology YAML configuration at runtime.
 
 Use the notebook-driven input workflow in `notebooks/00_tech_config.ipynb` to:
-- load `inputs/tech_config_ammonia_plant.yaml`
+- load `inputs/tech_config_ammonia_plant_2030_qld.yaml`
 - convert overnight CAPEX + interest rates into annualised PyPSA `capital_cost`
 - write the resulting component tables into `basic_ammonia_plant/*.csv`
 """

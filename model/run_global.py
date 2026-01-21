@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEATHER_DIR = REPO_ROOT / "data"
 DEFAULT_LAND_CSV = DEFAULT_WEATHER_DIR / "20251222_land_max_capacity.csv"
 DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "example_finance_overrides.csv"
-DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant.yaml"
+DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_qld.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
 _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
 # Techno-economic inputs are now expected to be pre-processed into the CSV bundle.
@@ -66,6 +66,9 @@ def _load_tech_inputs(path: str | Path | None) -> Dict[str, dict]:
         LOGGER.warning("Tech YAML %s not found; financing overrides will not affect costs.", resolved)
         return {}
     data = yaml.safe_load(resolved.read_text()) or {}
+    currency = data.get("currency")
+    if currency and not os.environ.get("GREEN_LORY_CURRENCY"):
+        os.environ["GREEN_LORY_CURRENCY"] = str(currency).strip().upper()
     techs = data.get("techs")
     if not isinstance(techs, dict):
         LOGGER.warning("Tech YAML %s missing top-level 'techs' mapping; skipping overrides.", resolved)
@@ -483,6 +486,7 @@ def run_global(
     weather_dir: str | Path | None = None,
     land_csv: str | Path | None = None,
     interest_csv: str | Path | None = None,
+    tech_yaml: str | Path | None = None,
     aggregation_count: int = 1,
     time_step: float = 1.0,
     max_snapshots: int | None = None,
@@ -499,6 +503,7 @@ def run_global(
             capacity metadata.
         interest_csv: CSV with `lat`, `lon`, `tech`, `interest_rate` columns to override
             financing assumptions per technology.
+        tech_yaml: Optional tech-config YAML used to source financing defaults and currency metadata.
         aggregation_count: Snapshot aggregation factor forwarded to the weather loader.
         time_step: Duration of each snapshot in hours.
         max_snapshots: Optional hard cap on the number of weather snapshots to simulate per
@@ -510,7 +515,7 @@ def run_global(
         dataset = lt.all_locations(str(weather_dir), cache_resources=True)
         land_df = _load_land_table(land_csv or DEFAULT_LAND_CSV)
         interest_df = _load_interest_table(interest_csv or DEFAULT_INTEREST_CSV)
-        tech_inputs = _load_tech_inputs(DEFAULT_TECH_YAML)
+        tech_inputs = _load_tech_inputs(tech_yaml or DEFAULT_TECH_YAML)
         world = _load_country_shapes()
         store = results_store.Data_store()
 
@@ -569,6 +574,31 @@ def run_global(
                 LOGGER.warning("Optimisation failed for (%s, %s): %s", lat, lon, exc)
                 progress.update(lat, lon, status)
                 continue
+
+            # Backfill explicit currency columns if legacy outputs are returned.
+            currency_code = os.environ.get("GREEN_LORY_CURRENCY", "USD").strip().upper()
+            currency_slug = currency_code.lower()
+            if f"lcoa_{currency_slug}_per_t" not in results:
+                if "lcoa_currency_per_t" in results:
+                    results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_currency_per_t"]
+                elif "lcoa_usd_per_t" in results:
+                    results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_usd_per_t"]
+            if "currency" not in results:
+                results["currency"] = currency_code
+            if (
+                f"total_cost_{currency_slug}_per_year" not in results
+                and "total_cost_currency_per_year" in results
+            ):
+                results[f"total_cost_{currency_slug}_per_year"] = results[
+                    "total_cost_currency_per_year"
+                ]
+            if (
+                f"total_cost_{currency_slug}_per_year" not in results
+                and "total_cost_usd_per_year" in results
+            ):
+                results[f"total_cost_{currency_slug}_per_year"] = results[
+                    "total_cost_usd_per_year"
+                ]
 
             if land_cap is not None:
                 results["land_capacity_cap"] = land_cap
