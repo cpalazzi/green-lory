@@ -456,8 +456,17 @@ def get_results_dict_for_multi_site(
     operating=False,
     time_step=1.0,
     interest_rates=None,
+    water_cost_usd_per_m3=None,
+    land_cost_usd_per_km2_year=None,
+    land_used_km2=None,
 ):
-    """Just a simpler function that only gets the headline information, and nothing to do with times"""
+    """Just a simpler function that only gets the headline information, and nothing to do with times.
+    
+    Optional spatial cost parameters:
+    - water_cost_usd_per_m3: desalination cost (added to LCOA)
+    - land_cost_usd_per_km2_year: annual land rent per km²
+    - land_used_km2: actual land footprint used (for calculating land cost)
+    """
     dct = dict()
 
     currency_code = os.environ.get("GREEN_LORY_CURRENCY", "USD").strip().upper()
@@ -496,6 +505,21 @@ def get_results_dict_for_multi_site(
         dct[f'lcoa_component_capital_{currency_slug}_per_t'] = (
             total_capital / production if production > 0 else np.nan
         )
+        
+        # Add water cost per tonne ammonia
+        if water_cost_usd_per_m3 is not None and production > 0:
+            water_usage_m3_per_t = 1.5  # Default from YAML; could be passed as parameter
+            water_cost_per_t = float(water_cost_usd_per_m3) * water_usage_m3_per_t
+            dct['water_cost_usd_per_m3'] = float(water_cost_usd_per_m3)
+            dct[f'water_cost_{currency_slug}_per_t'] = water_cost_per_t
+        
+        # Add land cost per tonne ammonia
+        if land_cost_usd_per_km2_year is not None and land_used_km2 is not None and production > 0:
+            annual_land_cost = float(land_cost_usd_per_km2_year) * float(land_used_km2)
+            land_cost_per_t = annual_land_cost / production
+            dct['land_cost_usd_per_km2_year'] = float(land_cost_usd_per_km2_year)
+            dct['land_used_km2'] = float(land_used_km2)
+            dct[f'land_cost_{currency_slug}_per_t'] = land_cost_per_t
     else:
         years = len(n.stores_t.e['ammonia']) / 8784
         dct['currency'] = currency_code

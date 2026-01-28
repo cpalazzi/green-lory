@@ -199,6 +199,9 @@ def main(
     time_step=1.0,
     tech_config_overrides=None,
     interest_rates=None,
+    water_cost_usd_per_m3=None,
+    land_cost_usd_per_km2_year=None,
+    land_used_km2=None,
 ):
     """Code to execute run at a single location"""
     # Import the weather data
@@ -281,6 +284,9 @@ def main(
             aggregation_count=aggregation_count,
             time_step=time_step,
             interest_rates=interest_rates,
+            water_cost_usd_per_m3=water_cost_usd_per_m3,
+            land_cost_usd_per_km2_year=land_cost_usd_per_km2_year,
+            land_used_km2=land_used_km2,
         )
 
     return output

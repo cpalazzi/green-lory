@@ -91,10 +91,11 @@ def _apply_finance_overrides(
     aggregation_count: int,
     time_step: float,
 ) -> None:
-    """Apply per-tech interest_rate overrides by recomputing capital_cost.
+    """Apply per-tech interest_rate and build_cost_multiplier overrides by recomputing capital_cost.
 
     Convention:
     - YAML overnight costs are quoted on an HHV output basis.
+    - Build cost multiplier applies to build_cost (labor + remoteness sensitive).
     - PyPSA Links are sized on an input basis (bus0 MW_in), so link capital_cost
       must be USD/MW_in/year.
     - Stores are scaled in generate_network() by time_step * aggregation_count;
@@ -105,6 +106,7 @@ def _apply_finance_overrides(
 
     for tech, params in overrides.items():
         rate = params.get("interest_rate")
+        build_mult = params.get("build_cost_multiplier", 1.0)
         if rate is None:
             continue
         normalized = plant_main.normalize_component_name(tech)
@@ -119,10 +121,23 @@ def _apply_finance_overrides(
         fixed_om_fraction = float(raw.get("fixed_om_fraction", 0.0))
 
         if component_type in {"generator", "link"}:
-            overnight = raw.get("overnight_cost_per_mw")
-            if overnight is None:
+            # Compute effective overnight cost with build_cost_multiplier applied
+            tech_cost = raw.get("tech_cost_per_mw")
+            build_cost = raw.get("build_cost_per_mw")
+            overnight_base = raw.get("overnight_cost_per_mw")
+            
+            if overnight_base is None:
                 continue
-            annual_out = _annualised_capital_cost(float(overnight), float(rate), lifetime_years, fixed_om_fraction)
+            
+            # Use new split if available, otherwise fall back to total overnight cost
+            if tech_cost is not None and build_cost is not None:
+                effective_build_cost = float(build_cost) * float(build_mult)
+                overnight = float(tech_cost) + effective_build_cost
+            else:
+                # Backward compat: if no split, apply multiplier to entire overnight cost
+                overnight = float(overnight_base) * float(build_mult)
+            
+            annual_out = _annualised_capital_cost(overnight, float(rate), lifetime_years, fixed_om_fraction)
 
             if component_type == "generator":
                 if normalized in network.generators.index:
@@ -137,10 +152,21 @@ def _apply_finance_overrides(
                 network.links.loc[normalized, "capital_cost"] = annual_out * efficiency
 
         elif component_type == "store":
-            overnight = raw.get("overnight_cost_per_mwh")
-            if overnight is None:
+            # Compute effective overnight cost with build_cost_multiplier applied
+            tech_cost = raw.get("tech_cost_per_mwh")
+            build_cost = raw.get("build_cost_per_mwh")
+            overnight_base = raw.get("overnight_cost_per_mwh")
+            
+            if overnight_base is None:
                 continue
-            annual = _annualised_capital_cost(float(overnight), float(rate), lifetime_years, fixed_om_fraction)
+            
+            if tech_cost is not None and build_cost is not None:
+                effective_build_cost = float(build_cost) * float(build_mult)
+                overnight = float(tech_cost) + effective_build_cost
+            else:
+                overnight = float(overnight_base) * float(build_mult)
+            
+            annual = _annualised_capital_cost(overnight, float(rate), lifetime_years, fixed_om_fraction)
             if normalized in network.stores.index:
                 network.stores.loc[normalized, "capital_cost"] = annual * float(time_step) * float(aggregation_count)
 
@@ -302,6 +328,16 @@ def _read_country_file(path: str | Path) -> gpd.GeoDataFrame | None:
 
 
 def _interest_overrides(interest_df: pd.DataFrame, lat: float, lon: float) -> Dict[str, Dict[str, float]] | None:
+    """Load interest_rate, build_cost_multiplier, and spatial cost parameters from overrides CSV.
+    
+    Returns dict with structure:
+    {
+        'solar': {'interest_rate': 0.058, 'build_cost_multiplier': 1.2, ...},
+        ...
+    }
+    Location-level params (water_cost_usd_per_m3, land_cost_usd_per_km2_year) are 
+    stored once per location and shared across all techs.
+    """
     if interest_df.empty:
         return None
     mask = (interest_df["lat"] - lat).abs() <= _LAT_LON_TOLERANCE
@@ -309,10 +345,32 @@ def _interest_overrides(interest_df: pd.DataFrame, lat: float, lon: float) -> Di
     subset = interest_df.loc[mask]
     if subset.empty:
         return None
+    
     overrides: Dict[str, Dict[str, float]] = {}
+    location_params: Dict[str, float] = {}
+    
     for _, row in subset.iterrows():
         tech = row["tech"]
-        overrides.setdefault(tech, {})["interest_rate"] = float(row["interest_rate"])
+        overrides.setdefault(tech, {})
+        
+        # Tech-specific parameters
+        if "interest_rate" in row and pd.notna(row["interest_rate"]):
+            overrides[tech]["interest_rate"] = float(row["interest_rate"])
+        
+        if "build_cost_multiplier" in row and pd.notna(row["build_cost_multiplier"]):
+            overrides[tech]["build_cost_multiplier"] = float(row["build_cost_multiplier"])
+        
+        # Location-level parameters (store once, will be reused for all techs at this location)
+        if "land_cost_usd_per_km2_year" in row and pd.notna(row["land_cost_usd_per_km2_year"]):
+            location_params["land_cost_usd_per_km2_year"] = float(row["land_cost_usd_per_km2_year"])
+        
+        if "water_cost_usd_per_m3" in row and pd.notna(row["water_cost_usd_per_m3"]):
+            location_params["water_cost_usd_per_m3"] = float(row["water_cost_usd_per_m3"])
+    
+    # Store location params in a special key that won't conflict with tech names
+    if location_params:
+        overrides["__location__"] = location_params
+    
     return overrides or None
 
 
@@ -543,6 +601,12 @@ def run_global(
 
             overrides = _interest_overrides(interest_df, lat, lon)
             interest_rates = _compose_interest_rates(overrides)
+            
+            # Extract location-level spatial cost parameters from overrides
+            location_params = overrides.get("__location__", {}) if overrides else {}
+            water_cost_usd_per_m3 = location_params.get("water_cost_usd_per_m3")
+            land_cost_usd_per_km2_year = location_params.get("land_cost_usd_per_km2_year")
+            
             network = plant_main.generate_network(
                 len(weather_frame),
                 "basic_ammonia_plant",
@@ -558,6 +622,20 @@ def run_global(
                 time_step=time_step,
             )
             land_cap, land_row = _apply_land_caps(network, land_df, lat, lon)
+            
+            # Calculate land used (sum of capacity * land_use_km2)
+            land_used_km2 = None
+            if tech_inputs:
+                land_used_km2 = 0.0
+                for gen_name in network.generators.index:
+                    if gen_name in ["wind", "solar", "solar_tracking"]:
+                        capacity = float(network.generators.at[gen_name, "p_nom_opt"])
+                        if capacity > 0:
+                            tech_key = gen_name
+                            if tech_key in tech_inputs:
+                                land_use = tech_inputs[tech_key].get("land_use_km2_per_mw")
+                                if land_use is not None:
+                                    land_used_km2 += capacity * float(land_use)
 
             try:
                 with _suppress_solver_streams(quiet):
@@ -568,6 +646,9 @@ def run_global(
                         aggregation_count=aggregation_count,
                         time_step=time_step,
                         interest_rates=interest_rates,
+                        water_cost_usd_per_m3=water_cost_usd_per_m3,
+                        land_cost_usd_per_km2_year=land_cost_usd_per_km2_year,
+                        land_used_km2=land_used_km2,
                     )
             except Exception as exc:  # noqa: BLE001
                 status = "solver"
