@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import io
 import logging
+import math
 import os
 import sys
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
@@ -19,6 +20,7 @@ try:
     from . import main as plant_main
     from . import location_tools as lt
     from . import data_store as results_store
+    from . import land_processing
 except ImportError:  # pragma: no cover - fallback for direct execution
     PACKAGE_ROOT = Path(__file__).resolve().parent
     if str(PACKAGE_ROOT) not in sys.path:
@@ -26,13 +28,14 @@ except ImportError:  # pragma: no cover - fallback for direct execution
     import main as plant_main  # type: ignore
     import location_tools as lt  # type: ignore
     import data_store as results_store  # type: ignore
+    import land_processing  # type: ignore
 
 LOGGER = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEATHER_DIR = REPO_ROOT / "data"
 DEFAULT_LAND_CSV = DEFAULT_WEATHER_DIR / "20251222_land_max_capacity.csv"
-DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "example_finance_overrides.csv"
+DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "example_finance_overrides_spatial.csv"
 DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_qld.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
 _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
@@ -84,6 +87,19 @@ def _load_tech_inputs(path: str | Path | None) -> Dict[str, dict]:
     return out
 
 
+def _load_tech_meta(path: str | Path | None) -> Dict[str, float]:
+    resolved = _resolve_path(path) or DEFAULT_TECH_YAML
+    if not resolved.exists():
+        return {}
+    data = yaml.safe_load(resolved.read_text()) or {}
+    meta: Dict[str, float] = {}
+    if "water_usage_m3_per_t_nh3" in data:
+        meta["water_usage_m3_per_t_nh3"] = float(data["water_usage_m3_per_t_nh3"])
+    if "water_cost_baseline_usd_per_m3" in data:
+        meta["water_cost_baseline_usd_per_m3"] = float(data["water_cost_baseline_usd_per_m3"])
+    return meta
+
+
 def _apply_finance_overrides(
     network,
     tech_inputs: Dict[str, dict],
@@ -105,6 +121,8 @@ def _apply_finance_overrides(
         return
 
     for tech, params in overrides.items():
+        if tech == "__location__":
+            continue
         rate = params.get("interest_rate")
         build_mult = params.get("build_cost_multiplier", 1.0)
         if rate is None:
@@ -169,6 +187,205 @@ def _apply_finance_overrides(
             annual = _annualised_capital_cost(overnight, float(rate), lifetime_years, fixed_om_fraction)
             if normalized in network.stores.index:
                 network.stores.loc[normalized, "capital_cost"] = annual * float(time_step) * float(aggregation_count)
+
+
+def _link_capacity_mw_out(network, link_name: str) -> float:
+    if link_name not in network.links.index:
+        return 0.0
+    eff_col = "output_basis_efficiency" if "output_basis_efficiency" in network.links.columns else "efficiency"
+    efficiency = float(network.links.at[link_name, eff_col]) if eff_col in network.links.columns else 1.0
+    if math.isnan(efficiency):
+        efficiency = 1.0
+    p_nom = network.links.at[link_name, "p_nom_opt"]
+    if pd.isna(p_nom):
+        return 0.0
+    return float(p_nom) * float(efficiency)
+
+
+def _component_capacity_for_cost(network, component_type: str, name: str) -> float:
+    if component_type == "generator":
+        if name not in network.generators.index:
+            return 0.0
+        p_nom = network.generators.at[name, "p_nom_opt"]
+        return 0.0 if pd.isna(p_nom) else float(p_nom)
+    if component_type == "link":
+        return _link_capacity_mw_out(network, name)
+    if component_type == "store":
+        if name not in network.stores.index:
+            return 0.0
+        e_nom = network.stores.at[name, "e_nom_opt"]
+        return 0.0 if pd.isna(e_nom) else float(e_nom)
+    return 0.0
+
+
+def _compute_headline_splits(
+    network,
+    tech_inputs: Dict[str, dict],
+    overrides: Dict[str, Dict[str, float]] | None,
+    aggregation_count: int,
+    time_step: float,
+) -> Dict[str, float]:
+    """Compute headline cost splits without double counting.
+
+    Returns percentages of total annual cost for:
+    - build_cost_pct: build portion of principal recovery
+    - tech_cost_pct: tech portion of principal recovery
+    - om_cost_pct: fixed O&M
+    - interest_pct: interest portion of capital recovery
+    Also returns weighted build_cost_multiplier_applied.
+    """
+    total_cost = float(network.objective) if network.objective else 0.0
+    if total_cost <= 0:
+        return {}
+
+    total_build_principal = 0.0
+    total_tech_principal = 0.0
+    total_interest = 0.0
+    total_fixed_om = 0.0
+    base_build_cost = 0.0
+    weighted_build_cost = 0.0
+
+    overrides = overrides or {}
+    store_scale = float(aggregation_count) * float(time_step)
+
+    for name, raw in tech_inputs.items():
+        if not isinstance(raw, dict):
+            continue
+        component_type = str(raw.get("component_type", "")).lower()
+        capacity = _component_capacity_for_cost(network, component_type, name)
+        if capacity <= 0:
+            continue
+
+        tech_cost = raw.get("tech_cost_per_mw") if component_type in {"generator", "link"} else raw.get("tech_cost_per_mwh")
+        build_cost = raw.get("build_cost_per_mw") if component_type in {"generator", "link"} else raw.get("build_cost_per_mwh")
+        if tech_cost is None or build_cost is None:
+            continue
+
+        override_params = overrides.get(name, {})
+        build_mult = float(override_params.get("build_cost_multiplier", 1.0))
+        tech_cost_total = float(tech_cost) * capacity
+        build_cost_total_base = float(build_cost) * capacity
+        build_cost_total = build_cost_total_base * build_mult
+
+        lifetime_years = float(raw.get("lifetime_years", 20.0))
+        interest_rate = float(override_params.get("interest_rate", raw.get("interest_rate", 0.07)))
+        fixed_om_fraction = float(raw.get("fixed_om_fraction", 0.0))
+
+        if lifetime_years <= 0:
+            continue
+
+        overnight_total = tech_cost_total + build_cost_total
+        if component_type == "store":
+            overnight_total *= store_scale
+        principal_total = overnight_total / lifetime_years
+        annual_capital = overnight_total * _annuity_factor(interest_rate, lifetime_years)
+        interest_total = max(0.0, annual_capital - principal_total)
+        fixed_om_total = overnight_total * fixed_om_fraction
+
+        if component_type == "store":
+            tech_cost_total *= store_scale
+            build_cost_total *= store_scale
+
+        total_tech_principal += tech_cost_total / lifetime_years
+        total_build_principal += build_cost_total / lifetime_years
+        total_interest += interest_total
+        total_fixed_om += fixed_om_total
+        base_build_cost += build_cost_total_base
+        weighted_build_cost += build_cost_total
+
+    build_mult_applied = None
+    if base_build_cost > 0:
+        build_mult_applied = weighted_build_cost / base_build_cost
+
+    return {
+        "build_cost_multiplier_applied": build_mult_applied if build_mult_applied is not None else 1.0,
+        "build_cost_pct": total_build_principal / total_cost * 100.0,
+        "tech_cost_pct": total_tech_principal / total_cost * 100.0,
+        "om_cost_pct": total_fixed_om / total_cost * 100.0,
+        "interest_pct": total_interest / total_cost * 100.0,
+    }
+
+
+def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    currency_code = str(df["currency"].iloc[0]).strip().lower() if "currency" in df.columns else "usd"
+    lcoa_col = f"lcoa_{currency_code}_per_t"
+    total_cost_col = f"total_cost_{currency_code}_per_year"
+    water_cost_col = f"water_cost_{currency_code}_per_t"
+    land_cost_col = f"land_cost_{currency_code}_per_t"
+
+    headline = [
+        "latitude",
+        "longitude",
+        "country",
+        "currency",
+        lcoa_col,
+        "annual_ammonia_demand_mwh",
+        "annual_ammonia_production_t",
+        total_cost_col,
+        "build_cost_multiplier_applied",
+        "build_cost_pct",
+        "tech_cost_pct",
+        "om_cost_pct",
+        "interest_pct",
+        "water_cost_pct",
+        "land_cost_pct",
+        "other_cost_pct",
+    ]
+
+    land_water = [
+        "water_cost_usd_per_m3",
+        "water_usage_m3_per_t_nh3",
+        water_cost_col,
+        "land_cost_usd_per_km2_year",
+        "land_used_km2",
+        land_cost_col,
+        "land_capacity_cap_mw",
+        "land_onshore_pct",
+        "land_cell_area_km2",
+        "area_cap_mw",
+        "solar_area_used_km2",
+        "wind_area_used_km2",
+    ]
+
+    capacities = [
+        "wind_mw",
+        "solar_mw",
+        "solar_tracking_mw",
+        "grid_mw",
+        "ramp_dummy_mw",
+        "electrolysis_mw",
+        "hydrogen_compression_mw",
+        "hydrogen_from_storage_mw",
+        "ammonia_synthesis_mw",
+        "battery_pcs_mw",
+        "hydrogen_fuel_cell_mw",
+        "penalty_link_mw",
+        "ammonia_mwh",
+        "compressed_hydrogen_store_mwh",
+        "battery_storage",
+        "accumulated_penalty_mwh",
+        "hydrogen_storage_capacity_t",
+    ]
+
+    component_costs = [
+        col
+        for col in df.columns
+        if (col.startswith("cost_share_") or col.startswith("lcoa_component_"))
+        and col != "cost_share_other_pct"
+    ]
+    interest_rates = [col for col in df.columns if col.startswith("interest_rate_")]
+    tail = ["interest_overrides_applied"]
+
+    ordered = []
+    for section in [headline, land_water, capacities, component_costs, interest_rates, tail]:
+        for col in section:
+            if col in df.columns and col not in ordered:
+                ordered.append(col)
+
+    remaining = [col for col in df.columns if col not in ordered]
+    return df[ordered + remaining]
 
 
 
@@ -308,6 +525,50 @@ def _load_land_table(path: str | Path | None) -> pd.DataFrame | None:
     return df
 
 
+def _solar_base_land_use_from_tech_inputs(tech_inputs: Dict[str, dict]) -> float | None:
+    for key in ("solar", "solar_tracking"):
+        raw = tech_inputs.get(key)
+        if not isinstance(raw, dict):
+            continue
+        value = raw.get("land_use_km2_per_mw")
+        if value is None:
+            continue
+        base_land_use = float(value)
+        if base_land_use > 0:
+            return base_land_use
+    return None
+
+
+def _apply_spatial_solar_density_from_tech_config(
+    land_df: pd.DataFrame | None,
+    tech_inputs: Dict[str, dict],
+) -> pd.DataFrame | None:
+    if land_df is None or land_df.empty:
+        return land_df
+    if "latitude" not in land_df.columns:
+        return land_df
+
+    base_land_use = _solar_base_land_use_from_tech_inputs(tech_inputs)
+    if base_land_use is None:
+        return land_df
+
+    updated = land_df.copy()
+    updated["solar_density_mw_per_km2"] = land_processing._solar_density(
+        updated["latitude"],
+        scale=1.0,
+        base_land_use_km2_per_mw=base_land_use,
+    )
+
+    if "solar_area_km2" in updated.columns:
+        updated["solar_max_capacity"] = (
+            updated["solar_area_km2"] * updated["solar_density_mw_per_km2"]
+        ).clip(lower=0.0)
+        if "wind_max_capacity" in updated.columns:
+            updated["max_capacity"] = updated["wind_max_capacity"] + updated["solar_max_capacity"]
+
+    return updated
+
+
 def _read_country_file(path: str | Path) -> gpd.GeoDataFrame | None:
     try:
         frame = gpd.read_file(path)
@@ -402,6 +663,7 @@ def _apply_land_caps(
     row = _match_land_row(land_df, lat, lon) if land_df is not None else None
     if row is None:
         return None, None
+    setattr(network, "_shared_solar_cap_mw", None)
     total_cap = 0.0
 
     wind_cap = row.get("wind_max_capacity")
@@ -418,6 +680,7 @@ def _apply_land_caps(
             total_cap += solar_cap_val
             _set_generator_cap(network, "solar", solar_cap_val)
             _set_generator_cap(network, "solar_tracking", solar_cap_val)
+            setattr(network, "_shared_solar_cap_mw", solar_cap_val)
 
     if total_cap > 0:
         return total_cap, row
@@ -560,7 +823,9 @@ def run_global(
         land_csv: CSV with at least `Latitude` and `Longitude` columns plus any available
             capacity metadata.
         interest_csv: CSV with `lat`, `lon`, `tech`, `interest_rate` columns to override
-            financing assumptions per technology.
+            financing assumptions per technology. Additional spatial columns such as
+            `build_cost_multiplier`, `land_cost_usd_per_km2_year`, and
+            `water_cost_usd_per_m3` are supported when present.
         tech_yaml: Optional tech-config YAML used to source financing defaults and currency metadata.
         aggregation_count: Snapshot aggregation factor forwarded to the weather loader.
         time_step: Duration of each snapshot in hours.
@@ -571,9 +836,11 @@ def run_global(
     with _quiet_logging(quiet), _override_env("GREEN_LORY_SOLVER_LOG", "0", quiet):
         weather_dir = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
         dataset = lt.all_locations(str(weather_dir), cache_resources=True)
-        land_df = _load_land_table(land_csv or DEFAULT_LAND_CSV)
         interest_df = _load_interest_table(interest_csv or DEFAULT_INTEREST_CSV)
         tech_inputs = _load_tech_inputs(tech_yaml or DEFAULT_TECH_YAML)
+        tech_meta = _load_tech_meta(tech_yaml or DEFAULT_TECH_YAML)
+        land_df = _load_land_table(land_csv or DEFAULT_LAND_CSV)
+        land_df = _apply_spatial_solar_density_from_tech_config(land_df, tech_inputs)
         world = _load_country_shapes()
         store = results_store.Data_store()
 
@@ -606,6 +873,11 @@ def run_global(
             location_params = overrides.get("__location__", {}) if overrides else {}
             water_cost_usd_per_m3 = location_params.get("water_cost_usd_per_m3")
             land_cost_usd_per_km2_year = location_params.get("land_cost_usd_per_km2_year")
+
+            # Apply YAML defaults if location-specific values are missing
+            if water_cost_usd_per_m3 is None:
+                water_cost_usd_per_m3 = tech_meta.get("water_cost_baseline_usd_per_m3")
+            water_usage_m3_per_t = tech_meta.get("water_usage_m3_per_t_nh3")
             
             network = plant_main.generate_network(
                 len(weather_frame),
@@ -631,6 +903,11 @@ def run_global(
                     if gen_name in ["wind", "solar", "solar_tracking"]:
                         capacity = float(network.generators.at[gen_name, "p_nom_opt"])
                         if capacity > 0:
+                            if gen_name in {"solar", "solar_tracking"} and land_row is not None:
+                                solar_density = land_row.get("solar_density_mw_per_km2")
+                                if pd.notna(solar_density) and float(solar_density) > 0:
+                                    land_used_km2 += capacity / float(solar_density)
+                                    continue
                             tech_key = gen_name
                             if tech_key in tech_inputs:
                                 land_use = tech_inputs[tech_key].get("land_use_km2_per_mw")
@@ -647,6 +924,7 @@ def run_global(
                         time_step=time_step,
                         interest_rates=interest_rates,
                         water_cost_usd_per_m3=water_cost_usd_per_m3,
+                        water_usage_m3_per_t=water_usage_m3_per_t,
                         land_cost_usd_per_km2_year=land_cost_usd_per_km2_year,
                         land_used_km2=land_used_km2,
                     )
@@ -687,11 +965,55 @@ def run_global(
                 results.update(_land_metadata_from_row(land_row))
             results["interest_overrides_applied"] = bool(overrides)
 
+            # Headline cost splits (no double counting)
+            headline_splits = _compute_headline_splits(
+                network,
+                tech_inputs,
+                overrides,
+                aggregation_count=aggregation_count,
+                time_step=time_step,
+            )
+            if headline_splits:
+                results.update(headline_splits)
+
+            # Add water/land cost percentages and rescale headline splits to include them
+            currency_code = str(results.get("currency", "USD")).strip().lower()
+            lcoa_col = f"lcoa_{currency_code}_per_t"
+            total_cost_col = f"total_cost_{currency_code}_per_year"
+            water_cost_col = f"water_cost_{currency_code}_per_t"
+            land_cost_col = f"land_cost_{currency_code}_per_t"
+
+            production = results.get("annual_ammonia_production_t")
+            total_cost = results.get(total_cost_col)
+            water_cost_per_t = results.get(water_cost_col)
+            land_cost_per_t = results.get(land_cost_col)
+
+            if production and total_cost:
+                extra_cost = 0.0
+                if water_cost_per_t is not None:
+                    extra_cost += float(water_cost_per_t) * float(production)
+                if land_cost_per_t is not None:
+                    extra_cost += float(land_cost_per_t) * float(production)
+
+                total_with_extras = float(total_cost) + extra_cost
+                if total_with_extras > 0:
+                    if water_cost_per_t is not None:
+                        results["water_cost_pct"] = float(water_cost_per_t) * float(production) / total_with_extras * 100.0
+                    if land_cost_per_t is not None:
+                        results["land_cost_pct"] = float(land_cost_per_t) * float(production) / total_with_extras * 100.0
+
+                    # Rescale headline splits to keep 100% stack including water/land
+                    scale = float(total_cost) / total_with_extras
+                    for key in ("build_cost_pct", "tech_cost_pct", "om_cost_pct", "interest_pct"):
+                        if key in results and results[key] is not None:
+                            results[key] = float(results[key]) * scale
+
             country = _country_for(world, lat, lon)
             store.add_location(lat, lon, country, results)
             progress.update(lat, lon, "done")
 
         df = pd.DataFrame.from_dict(store.collated_results, orient='index')
+        df = _order_results_columns(df)
         if output_csv:
             output_path = _resolve_path(output_csv)
             if output_path is None:
@@ -712,7 +1034,15 @@ def _load_locations_csv(path: str | Path) -> List[Tuple[float, float]]:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the green ammonia model over many locations.")
     parser.add_argument("--locations-csv", type=str, help="CSV with columns lat,lon to restrict the sweep.")
-    parser.add_argument("--interest-csv", type=str, default=None, help="CSV with lat,lon,tech,interest_rate overrides.")
+    parser.add_argument(
+        "--interest-csv",
+        type=str,
+        default=None,
+        help=(
+            "CSV with lat,lon,tech,interest_rate overrides; may also include "
+            "build_cost_multiplier, land_cost_usd_per_km2_year, and water_cost_usd_per_m3."
+        ),
+    )
     parser.add_argument("--land-csv", type=str, default=None, help="Optional override for the land availability CSV.")
     parser.add_argument("--output-csv", type=str, default="results/run_global.csv", help="Where to write aggregated results.")
     parser.add_argument(

@@ -51,6 +51,8 @@ COMPONENT_NAME_MAP = {
     "PenaltyLink": "penalty_link",
     "CompressedH2Store": "compressed_hydrogen_store",
     "Battery": "battery",
+    "BatteryStorage": "battery",
+    "battery_storage": "battery",
     "AccumulatedPenalty": "accumulated_penalty",
 }
 
@@ -200,6 +202,7 @@ def main(
     tech_config_overrides=None,
     interest_rates=None,
     water_cost_usd_per_m3=None,
+    water_usage_m3_per_t=None,
     land_cost_usd_per_km2_year=None,
     land_used_km2=None,
 ):
@@ -285,6 +288,7 @@ def main(
             time_step=time_step,
             interest_rates=interest_rates,
             water_cost_usd_per_m3=water_cost_usd_per_m3,
+            water_usage_m3_per_t=water_usage_m3_per_t,
             land_cost_usd_per_km2_year=land_cost_usd_per_km2_year,
             land_used_km2=land_used_km2,
         )

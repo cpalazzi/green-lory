@@ -457,6 +457,7 @@ def get_results_dict_for_multi_site(
     time_step=1.0,
     interest_rates=None,
     water_cost_usd_per_m3=None,
+    water_usage_m3_per_t=None,
     land_cost_usd_per_km2_year=None,
     land_used_km2=None,
 ):
@@ -495,22 +496,21 @@ def get_results_dict_for_multi_site(
             )
 
         residual_share = other_cost / cost_denominator * 100 if cost_denominator else np.nan
-        dct['cost_share_other_pct'] = residual_share
+        dct['other_cost_pct'] = residual_share
         dct[f'lcoa_component_other_{currency_slug}_per_t'] = (
             other_cost / production if production > 0 else np.nan
         )
         dct['capital_cost_share_pct'] = (
             total_capital / cost_denominator * 100 if cost_denominator else np.nan
         )
-        dct[f'lcoa_component_capital_{currency_slug}_per_t'] = (
-            total_capital / production if production > 0 else np.nan
-        )
         
         # Add water cost per tonne ammonia
         if water_cost_usd_per_m3 is not None and production > 0:
-            water_usage_m3_per_t = 1.5  # Default from YAML; could be passed as parameter
-            water_cost_per_t = float(water_cost_usd_per_m3) * water_usage_m3_per_t
+            if water_usage_m3_per_t is None:
+                water_usage_m3_per_t = 1.5
+            water_cost_per_t = float(water_cost_usd_per_m3) * float(water_usage_m3_per_t)
             dct['water_cost_usd_per_m3'] = float(water_cost_usd_per_m3)
+            dct['water_usage_m3_per_t_nh3'] = float(water_usage_m3_per_t)
             dct[f'water_cost_{currency_slug}_per_t'] = water_cost_per_t
         
         # Add land cost per tonne ammonia
@@ -543,6 +543,13 @@ def get_results_dict_for_multi_site(
     link_capacities = _link_capacity_on_output_basis(n, n.links['p_nom_opt'])
     for component in n.links.index.to_list():
         dct[component] = link_capacities.loc[component]
+    # Consolidate battery PCS charge/discharge into a single reported capacity
+    if 'battery_pcs_charge' in dct or 'battery_pcs_discharge' in dct:
+        charge = float(dct.get('battery_pcs_charge', 0.0) or 0.0)
+        discharge = float(dct.get('battery_pcs_discharge', 0.0) or 0.0)
+        dct['battery_pcs_mw'] = max(charge, discharge)
+        dct.pop('battery_pcs_charge', None)
+        dct.pop('battery_pcs_discharge', None)
     for store in n.stores.index.to_list():
         dct[store] = n.stores.loc[store, 'e_nom_opt'] * aggregation_count * time_step
     dct['hydrogen_storage_capacity'] = (
@@ -684,6 +691,19 @@ def _prepare_linopy_context(network, snapshots):
 def linopy_constraints(network, snapshots):
     """Linopy equivalent of the legacy pyomo_constraints for PyPSA >= 1.0."""
     model, sns = _prepare_linopy_context(network, snapshots)
+
+    shared_solar_cap = getattr(network, "_shared_solar_cap_mw", None)
+    if shared_solar_cap is not None and float(shared_solar_cap) > 0:
+        try:
+            solar_nom = model["Generator-p_nom"].sel(name="solar")
+            solar_tracking_nom = model["Generator-p_nom"].sel(name="solar_tracking")
+        except KeyError:
+            solar_nom = solar_tracking_nom = None
+        if solar_nom is not None and solar_tracking_nom is not None:
+            model.add_constraints(
+                solar_nom + solar_tracking_nom <= float(shared_solar_cap),
+                name="shared_solar_land_cap",
+            )
 
     # Keep the battery interface charger/discharger capacities coupled
     try:

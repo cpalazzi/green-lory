@@ -79,8 +79,8 @@ def _wind_density(latitudes: pd.Series, scale: float = 1.0) -> pd.Series:
     return pd.Series(densities, index=latitudes.index)
 
 
-def _solar_density(latitudes: pd.Series, scale: float = 1.0) -> pd.Series:
-    lat_abs = np.abs(latitudes.to_numpy())
+def _solar_density_raw(latitudes: np.ndarray) -> np.ndarray:
+    lat_abs = np.abs(latitudes)
     beta = np.clip(lat_abs, SOLAR_MIN_TILT_DEG, SOLAR_MAX_TILT_DEG)
     solar_alt = 90.0 - lat_abs - SOLAR_DECLINATION_DEG
     solar_alt = np.clip(solar_alt, SOLAR_MIN_SUN_ALTITUDE_DEG, 89.0)
@@ -98,7 +98,25 @@ def _solar_density(latitudes: pd.Series, scale: float = 1.0) -> pd.Series:
     module_area_m2 = FIRST_SOLAR_MODULE_WIDTH_M * FIRST_SOLAR_MODULE_LENGTH_M
     module_power_mw = FIRST_SOLAR_MODULE_POWER_KW / 1000.0
     area_per_mw_m2 = (module_area_m2 / module_power_mw) / gcr
-    density_mw_per_km2 = 1_000_000.0 / area_per_mw_m2
+    return 1_000_000.0 / area_per_mw_m2
+
+
+def _solar_density(
+    latitudes: pd.Series,
+    scale: float = 1.0,
+    base_land_use_km2_per_mw: float | None = None,
+) -> pd.Series:
+    density_mw_per_km2 = _solar_density_raw(latitudes.to_numpy())
+
+    if base_land_use_km2_per_mw is not None:
+        base_land_use = float(base_land_use_km2_per_mw)
+        if base_land_use <= 0:
+            raise ValueError("base_land_use_km2_per_mw must be positive")
+        target_equator_density = 1.0 / base_land_use
+        model_equator_density = float(_solar_density_raw(np.array([0.0]))[0])
+        if model_equator_density > 0:
+            density_mw_per_km2 *= target_equator_density / model_equator_density
+
     densities = density_mw_per_km2 * scale
     return pd.Series(densities, index=latitudes.index)
 

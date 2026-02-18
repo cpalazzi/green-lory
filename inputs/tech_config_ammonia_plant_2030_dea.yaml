@@ -23,58 +23,78 @@
 currency: EUR
 
 # Global water and land cost parameters
-water_usage_m3_per_t_nh3: 1.5  # Process + cooling water per tonne of ammonia
-water_cost_baseline_usd_per_m3: 2.0  # Baseline desalination cost (coastal reference)
+water_usage_m3_per_t_nh3: 1.5 # Process + cooling water per tonne of ammonia
+water_cost_baseline_usd_per_m3: 2.0 # Baseline desalination cost (coastal reference)
 
 techs:
 
-  # -----------------
-  # Generators
-  # -----------------
+ # -----------------
+ # Generators
+ # -----------------
   solar:
     component_type: generator
-    source_note: solarSingleAxis (DEA 2030)
-    overnight_cost_per_mw: 489130.43
-    tech_cost_per_mw: 415000  # TODO: get DEA value (modules, inverters, wiring)
-    build_cost_per_mw: 74130  # TODO: get DEA value (installation, BOP, civil, grid connection)
-    land_use_km2_per_mw: 0.01  # 100 MW/km² density (Salmon et al.)
+    source_note: DEA 2030 Utility-scale PV
+    overnight_cost_per_mw: 380000 # EUR/MW
+    tech_cost_per_mw: 200000 # (modules, inverters, balance of plant)
+    build_cost_per_mw: 180000 # (installation, grid connection, soft costs)
+    land_use_km2_per_mw: 0.01 # Equator baseline for solar density calibration (100 MW/km² at lat=0); run_global applies latitude-adjusted footprint
     lifetime_years: 40
     interest_rate: 0.1
-    fixed_om_fraction: 0.02
+    fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent
   solar_tracking:
     component_type: generator
-    source_note: solarSingleAxis (DEA 2030)
-    overnight_cost_per_mw: 489130.43
-    tech_cost_per_mw: 415000  # TODO: get DEA value (tracking system adds ~10-15%)
-    build_cost_per_mw: 74130  # TODO: get DEA value
-    land_use_km2_per_mw: 0.01  # Same as fixed solar
+    source_note: DEA 2030 Utility-scale PV tracker
+    overnight_cost_per_mw: 450000
+    tech_cost_per_mw: 260000 # DEA value (tracking system adds ~10-15%)
+    build_cost_per_mw: 190000 # DEA
+    land_use_km2_per_mw: 0.02 # Equator baseline for tracking density calibration (50 MW/km² at lat=0); run_global applies latitude-adjusted footprint
     lifetime_years: 40
     interest_rate: 0.1
-    fixed_om_fraction: 0.02
-  wind:
+    fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent
+  onshore_wind:
     component_type: generator
-    source_note: onshoreWind (DEA 2030)
-    overnight_cost_per_mw: 1250000
-    tech_cost_per_mw: 1050000  # TODO: get DEA value (turbine, nacelle, tower)
-    build_cost_per_mw: 200000  # TODO: get DEA value (foundation, installation, grid, access roads)
-    land_use_km2_per_mw: 0.2  # 5 MW/km² density (Salmon et al., 200 km²/GW)
+    source_note: DEA 2030 Onshore turbines
+    overnight_cost_per_mw: 930000
+    tech_cost_per_mw: 830000
+    build_cost_per_mw: 100000
+    land_use_km2_per_mw: 0.2 # 5 MW/km² density (Salmon et al., 200 km²/GW)
     lifetime_years: 30
     interest_rate: 0.1
-    fixed_om_fraction: 0.02
+    fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent
+  offshore_wind_fixed:
+    component_type: generator
+    source_note: DEA 2030 Offshore Wind AC Fixed, max depth 50m
+    overnight_cost_per_mw: 2390000
+    tech_cost_per_mw: 2220000
+    build_cost_per_mw: 230000
+    land_use_km2_per_mw: 0.2 # 5 MW/km² density (Salmon et al., 200 km²/GW)
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02 # Rounded up DEA
+  offshore_wind_floating:
+    component_type: generator
+    source_note: DEA 2030 Offshore Wind AC Floating, max depth 1000m
+    overnight_cost_per_mw: 3560000
+    tech_cost_per_mw: 3330000
+    build_cost_per_mw: 230000
+    land_use_km2_per_mw: 0.2 # 5 MW/km² density (Salmon et al., 200 km²/GW)
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02 # Rounded up DEA
 
-  # -----------------
-  # Links
-  # -----------------
+ # -----------------
+ # Links
+ # -----------------
   ammonia_synthesis:
     component_type: link
-    source_note: haberAndAirSeparation (DEA 2030)
-    overnight_cost_per_mw: 30304348
-    tech_cost_per_mw: 25758596  # TODO: get DEA value (reactor, catalysts, equipment)
-    build_cost_per_mw: 4545752  # TODO: get DEA value (installation, piping, instrumentation)
-    land_use_km2_per_mw: 0.0005  # Minimal footprint for synthesis unit
+    source_note: DEA 2030 Hydrogen to Ammonia
+    overnight_cost_per_mw: 1526000
+    tech_cost_per_mw: 763000 # reactor, catalysts, air separation unit, etc.
+    build_cost_per_mw: 763000 # installation
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 30
     interest_rate: 0.1
-    fixed_om_fraction: 0.02
+    fixed_om_fraction: 0.03 # DEA
     # Derived from current basic_ammonia_plant/links.csv coefficients:
     # efficiency(bus0->bus1)=6.25 and efficiency2(bus0->bus2)=-7.092
     # Normalised per 1 unit of ammonia output:
@@ -85,11 +105,11 @@ techs:
     overall_efficiency: 0.772
   electrolysis:
     component_type: link
-    source_note: electrolyser (DEA 2030)
-    overnight_cost_per_mw: 1195652.2
-    tech_cost_per_mw: 1016304  # TODO: get DEA value (electrolyzer stack, cell components)
-    build_cost_per_mw: 179348  # TODO: get DEA value (installation, balance of plant)
-    land_use_km2_per_mw: 0.0001  # Compact equipment, minimal space
+    source_note: 2030 DEA AEC 1 GW
+    overnight_cost_per_mw: 669344.0
+    tech_cost_per_mw: 602409.6 # 90% equipment share
+    build_cost_per_mw: 66934.4 # 10% build/installation share
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 25
     interest_rate: 0.1
     fixed_om_fraction: 0.02
@@ -98,37 +118,37 @@ techs:
     overall_efficiency: 0.74
   hydrogen_compression:
     component_type: link
-    source_note: hydrogenCompression (DEA 2030, assumed)
-    overnight_cost_per_mw: 1086.9565
-    tech_cost_per_mw: 978  # TODO: get DEA value (compressor equipment)
-    build_cost_per_mw: 109  # TODO: get DEA value (installation)
-    land_use_km2_per_mw: 0.00005  # Very compact
+    source_note: Computed from 2030 DEA hydrogen storage tanks sheet
+    overnight_cost_per_mw: 495857.87
+    tech_cost_per_mw: 396686.3 # Estimated 80%
+    build_cost_per_mw: 99171.57 # Estimated 20%
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 20
-    interest_rate: 0.0872
+    interest_rate: 0.1
     fixed_om_fraction: 0.02
     carriers_in: {hydrogen: 1.0, power: 0.05}
     carriers_out: {hydrogen_storage: 1.0}
     overall_efficiency: 0.9523809524
   hydrogen_fuel_cell:
     component_type: link
-    source_note: fuelCell (DEA 2030)
+    source_note: fuelCell (no DEA value; converted from Queensland report)
     overnight_cost_per_mw: 2475000
-    tech_cost_per_mw: 2103750  # TODO: get DEA value (fuel cell stack)
-    build_cost_per_mw: 371250  # TODO: get DEA value (BOP, integration)
-    land_use_km2_per_mw: 0.0001  # Compact equipment
+    tech_cost_per_mw: 1980000 # Estimated 80%
+    build_cost_per_mw: 495000 # Estimated 20%
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 20
-    interest_rate: 0.0872
+    interest_rate: 0.1
     fixed_om_fraction: 0.02
     carriers_in: {hydrogen: 2.0}
     carriers_out: {power: 1.0}
     overall_efficiency: 0.5
   hydrogen_from_storage:
     component_type: link
-    source_note: hydrogenBufferWithdrawal (DEA 2030, assumed)
-    overnight_cost_per_mw: 1.0869565
-    tech_cost_per_mw: 0.98  # TODO: get DEA value (valve/regulator)
-    build_cost_per_mw: 0.11  # TODO: get DEA value
-    land_use_km2_per_mw: 0.00001  # Minimal
+    source_note: hydrogenBufferWithdrawal (DEA)
+    overnight_cost_per_mw: 1.00
+    tech_cost_per_mw: 0.90 # TODO: get DEA value (valve/regulator)
+    build_cost_per_mw: 0.10 # TODO: get DEA value
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 20
     interest_rate: 0.05
     fixed_om_fraction: 0.0
@@ -137,26 +157,26 @@ techs:
     overall_efficiency: 1.0
   battery_pcs_charge:
     component_type: link
-    source_note: Battery power conversion system (DEA 2030; PCS from QLD scaled to EUR)
-    overnight_cost_per_mw: 94565.217
-    tech_cost_per_mw: 80380  # TODO: get DEA value (power electronics)
-    build_cost_per_mw: 14185  # TODO: get DEA value (installation, controls)
-    land_use_km2_per_mw: 0.0001  # Compact inverter/PCS
+    source_note: 2030 DEA Lithium Ion Battery (power component)
+    overnight_cost_per_mw: 127333
+    tech_cost_per_mw: 84000
+    build_cost_per_mw: 65000 # DEA assuming 50/50 build cost MWh/MW storage/power split
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 20
-    interest_rate: 0.0872
-    fixed_om_fraction: 0.029
+    interest_rate: 0.1
+    fixed_om_fraction: 0.03 # Rounded up DEA
     carriers_in: {power: 1.0}
     carriers_out: {power_storage: 0.954}
     overall_efficiency: 0.954
   battery_pcs_discharge:
     component_type: link
-    source_note: Battery power conversion system (DEA 2030; PCS from QLD scaled to EUR)
-    overnight_cost_per_mw: 1.0869565
-    tech_cost_per_mw: 0.92  # TODO: get DEA value
-    build_cost_per_mw: 0.17  # TODO: get DEA value
-    land_use_km2_per_mw: 0.00001  # Minimal
+    source_note: Battery power conversion system (discharging direction, no capital cost)
+    overnight_cost_per_mw: 1.00 # Placeholder as PCS is already costed in charge direction and they are bidirectional
+    tech_cost_per_mw: 0.50
+    build_cost_per_mw: 0.50
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 20
-    interest_rate: 0.0872
+    interest_rate: 0.1
     fixed_om_fraction: 0.0
     carriers_in: {power_storage: 1.0}
     carriers_out: {power: 0.954}
@@ -164,58 +184,58 @@ techs:
   penalty_link:
     component_type: link
     source_note: rampPenaltySlack (DEA 2030, assumed)
-    overnight_cost_per_mw: 108695650
-    tech_cost_per_mw: 92391302  # Penalty cost (notional)
-    build_cost_per_mw: 16304348  # Penalty cost (notional)
-    land_use_km2_per_mw: 0.0  # No land use for penalty
+    overnight_cost_per_mw: 100000000
+    tech_cost_per_mw: 80000000
+    build_cost_per_mw: 20000000 
+    land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 1
-    interest_rate: 0.0872
+    interest_rate: 0.1
     fixed_om_fraction: 0.0
     carriers_in: {ramp_penalty: 1.0}
     carriers_out: {ramp_penalty_dest: 1.0}
     overall_efficiency: 1.0
 
-  # -----------------
-  # Stores
-  # -----------------
+ # -----------------
+ # Stores
+ # -----------------
   accumulated_penalty:
     component_type: store
     source_note: rampPenaltySlack (DEA 2030, assumed)
-    overnight_cost_per_mwh: 108695650
-    tech_cost_per_mwh: 92391302  # TODO: Penalty cost (notional)
-    build_cost_per_mwh: 16304348  # TODO: Penalty cost (notional)
+    overnight_cost_per_mwh: 100000000
+    tech_cost_per_mwh: 80000000 # Penalty cost (notional)
+    build_cost_per_mwh: 20000000 # Penalty cost (notional)
     land_use_km2_per_mwh: 0.0
     lifetime_years: 1
-    interest_rate: 0.0872
+    interest_rate: 0.1
     fixed_om_fraction: 0.0
   ammonia:
     component_type: store
-    source_note: ammoniaStorage (DEA 2030)
-    overnight_cost_per_mwh: 89.6
-    tech_cost_per_mwh: 76  # TODO: get DEA value (tank/vessel)
-    build_cost_per_mwh: 14  # TODO: get DEA value (installation, piping)
-    land_use_km2_per_mwh: 0.00001  # Small footprint for storage tank
+    source_note: (no DEA value; converted from Queensland report)
+    overnight_cost_per_mwh: 521.73912
+    tech_cost_per_mwh: 417.3913 # Estimated 80%
+    build_cost_per_mwh: 104.34782 # Estimated 20%
+    land_use_km2_per_mwh: 0.00001 # Minimal
     lifetime_years: 30
     interest_rate: 0.1
     fixed_om_fraction: 0.03
   battery_storage:
     component_type: store
-    source_note: Battery energy storage (DEA 2030; storage from QLD scaled to EUR)
-    overnight_cost_per_mwh: 235869.57
-    tech_cost_per_mwh: 212282  # TODO: get DEA value (battery cells, modules)
-    build_cost_per_mwh: 23588  # TODO: get DEA value (installation, thermal management, BOP)
-    land_use_km2_per_mwh: 0.00005  # Containerized systems, compact footprint
+    source_note: DEA 2030 Lithium Ion Battery
+    overnight_cost_per_mwh: 200000
+    tech_cost_per_mwh: 70000 # Battery storage component
+    build_cost_per_mwh: 65000 # # DEA assuming 50/50 build cost MWh/MW storage/power split (installation, thermal management, BOP)
+    land_use_km2_per_mwh: 0.00005 # Nominal
     lifetime_years: 20
     interest_rate: 0.0872
     fixed_om_fraction: 0.029
     standing_loss_fraction_per_day: 0.001
   compressed_hydrogen_store:
     component_type: store
-    source_note: compressedHydrogenStorage (DEA 2030)
-    overnight_cost_per_mwh: 52173.913
-    tech_cost_per_mwh: 44347  # TODO: get DEA value (pressure vessel, compressor)
-    build_cost_per_mwh: 7827  # TODO: get DEA value (installation, safety systems)
-    land_use_km2_per_mwh: 0.0001  # Underground cavern or aboveground tank
+    source_note: 2030 DEA Hydrogen Storage - Tanks
+    overnight_cost_per_mwh: 25000
+    tech_cost_per_mwh: 17000 # Type I tanks
+    build_cost_per_mwh: 8000 # Installation, equipment, person-hours
+    land_use_km2_per_mwh: 0.0001 # Nominal
     lifetime_years: 30
     interest_rate: 0.1
     fixed_om_fraction: 0.02
