@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 LOCATIONS_CSV="${1:-${ARC_LOCATIONS_CSV:-}}"
-TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_qld.yaml}"
+TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
 INTEREST_CSV="${ARC_INTEREST_CSV:-}"
 LAND_CSV="${ARC_LAND_CSV:-data/20251222_max_capacities.csv}"
 
