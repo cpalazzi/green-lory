@@ -28,6 +28,9 @@ def _link_capacity_on_output_basis(network, series):
 
 
 COST_COMPONENT_SPECS = {
+    "onshore_wind": ("generator", "onshore_wind"),
+    "offshore_wind_fixed": ("generator", "offshore_wind_fixed"),
+    "offshore_wind_floating": ("generator", "offshore_wind_floating"),
     "wind": ("generator", "wind"),
     "solar": ("generator", "solar"),
     "solar_tracking": ("generator", "solar_tracking"),
@@ -38,6 +41,12 @@ COST_COMPONENT_SPECS = {
     "ammonia_store": ("store", "ammonia"),
     "battery": ("store", "battery_storage"),
 }
+
+WIND_VARIANT_GENERATORS = (
+    "onshore_wind",
+    "offshore_wind_fixed",
+    "offshore_wind_floating",
+)
 
 INTEREST_RATE_COLUMN_ALIASES = {
     "electrolysis": "electrolyser",
@@ -705,6 +714,25 @@ def linopy_constraints(network, snapshots):
                 name="shared_solar_land_cap",
             )
 
+    # Keep wind variants in LP form by enforcing one shared linear cap.
+    shared_wind_cap = getattr(network, "_shared_wind_cap_mw", None)
+    if shared_wind_cap is not None and np.isfinite(float(shared_wind_cap)):
+        cap = max(0.0, float(shared_wind_cap))
+        wind_nom_terms = []
+        for generator_name in (*WIND_VARIANT_GENERATORS, "wind"):
+            try:
+                wind_nom_terms.append(model["Generator-p_nom"].sel(name=generator_name))
+            except KeyError:
+                continue
+        if wind_nom_terms:
+            total_wind_nom = wind_nom_terms[0]
+            for term in wind_nom_terms[1:]:
+                total_wind_nom = total_wind_nom + term
+            model.add_constraints(
+                total_wind_nom <= cap,
+                name="shared_wind_land_cap",
+            )
+
     # Keep the battery interface charger/discharger capacities coupled
     try:
         batt_in = model["Link-p_nom"].sel(name="battery_interface_in")
@@ -839,4 +867,3 @@ def convert_network_to_operating(n, ammonia_cost_per_ton=500, aggregation_count=
         results = get_results_dict_for_multi_site(n, aggregation_count, operating=True, time_step=time_step)
 
     return results
-

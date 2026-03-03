@@ -1,4 +1,4 @@
-"""Utilities for deriving land-availability inputs for the run_global workflow.
+"""Utilities for deriving max-capacity inputs for the run_global workflow.
 
 The module aggregates the 0.05° MODIS land-cover tiles to 1° cells, applies
 simple suitability factors for wind/solar siting, and estimates a maximum
@@ -21,10 +21,16 @@ LOGGER = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 DEFAULT_LAND_COVER_FILE = DATA_DIR / "MCD12C1.A2022001.061.2023244164746.hdf"
-DEFAULT_OUTPUT_CSV = DATA_DIR / "20251222_land_max_capacity.csv"
+DEFAULT_BATHYMETRY_FILE = DATA_DIR / "model_bathymetry.nc"
+DEFAULT_OUTPUT_CSV = DATA_DIR / "20251222_max_capacities.csv"
+LEGACY_OUTPUT_CSV = DATA_DIR / "20251222_land_max_capacity.csv"
 EARTH_RADIUS_KM = 6371.0
 MODIS_WATER_CLASS = 0
-WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
+ONSHORE_WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
+OFFSHORE_WIND_FIXED_LAND_USE_KM2_PER_GW = 200.0
+OFFSHORE_WIND_FLOATING_LAND_USE_KM2_PER_GW = 200.0
+OFFSHORE_FIXED_MAX_DEPTH_M = 50.0
+OFFSHORE_FLOATING_MAX_DEPTH_M = 1000.0
 # First Solar Series 6 (2018) constants used in van de Ven et al. (2021) style packing
 FIRST_SOLAR_MODULE_WIDTH_M = 1.21
 FIRST_SOLAR_MODULE_LENGTH_M = 2.06
@@ -53,15 +59,31 @@ FINAL_COLUMNS = [
     "longitude",
     "availability",
     "area",
+    "onshore_land_pct",
+    "offshore_sea_pct",
+    "onshore_area_km2",
+    "offshore_area_km2",
+    "bathymetry_depth_m",
     "wind_availability",
     "solar_availability",
-    "wind_area_km2",
     "solar_area_km2",
-    "onshore_land_pct",
-    "wind_density_mw_per_km2",
+    "wind_area_km2",
+    "onshore_wind_density_mw_per_km2",
+    "offshore_wind_fixed_density_mw_per_km2",
+    "offshore_wind_floating_density_mw_per_km2",
     "solar_density_mw_per_km2",
-    "wind_max_capacity",
+    "wind_density_mw_per_km2",
+    "max_power_solar_mw",
+    "max_power_wind_mw",
+    "max_power_onshore_wind_mw",
+    "max_power_offshore_wind_fixed_mw",
+    "max_power_offshore_wind_floating_mw",
+    "max_capacity_mw",
+    # Backward-compatible aliases used by existing plotting/reporting code.
     "solar_max_capacity",
+    "wind_max_capacity",
+    "offshore_wind_fixed_max_capacity",
+    "offshore_wind_floating_max_capacity",
     "max_capacity",
 ]
 
@@ -73,8 +95,12 @@ def _resolve_path(path: str | Path | None, default: Path) -> Path:
     if not resolved.is_absolute():
         resolved = REPO_ROOT / resolved
     return resolved
-def _wind_density(latitudes: pd.Series, scale: float = 1.0) -> pd.Series:
-    base_density = 1000.0 / WIND_LAND_USE_KM2_PER_GW  # MW per km²
+def _wind_density(
+    latitudes: pd.Series,
+    scale: float = 1.0,
+    land_use_km2_per_gw: float = ONSHORE_WIND_LAND_USE_KM2_PER_GW,
+) -> pd.Series:
+    base_density = 1000.0 / float(land_use_km2_per_gw)  # MW per km²
     densities = np.full(latitudes.shape[0], base_density * scale)
     return pd.Series(densities, index=latitudes.index)
 
@@ -126,6 +152,7 @@ class LandAvailabilityConfig:
     """Runtime knobs for the land-cover aggregation pipeline."""
 
     land_cover_path: Path = DEFAULT_LAND_COVER_FILE
+    bathymetry_path: Path = DEFAULT_BATHYMETRY_FILE
     output_csv: Path = DEFAULT_OUTPUT_CSV
     coarse_degree: float = 1.0
     fine_degree: float = 0.05
@@ -135,6 +162,7 @@ class LandAvailabilityConfig:
     def resolved(self) -> "LandAvailabilityConfig":
         return LandAvailabilityConfig(
             land_cover_path=_resolve_path(self.land_cover_path, DEFAULT_LAND_COVER_FILE),
+            bathymetry_path=_resolve_path(self.bathymetry_path, DEFAULT_BATHYMETRY_FILE),
             output_csv=_resolve_path(self.output_csv, DEFAULT_OUTPUT_CSV),
             coarse_degree=self.coarse_degree,
             fine_degree=self.fine_degree,
@@ -326,6 +354,55 @@ def _aggregate_availability(df: pd.DataFrame) -> pd.DataFrame:
     return availability.drop(columns=["water_fraction"])
 
 
+def _attach_bathymetry_depth(df: pd.DataFrame, bathymetry_path: Path) -> pd.DataFrame:
+    if not bathymetry_path.exists():
+        LOGGER.warning("Bathymetry file %s not found; offshore capacities will be zero.", bathymetry_path)
+        output = df.copy()
+        output["bathymetry_depth_m"] = np.nan
+        return output
+
+    with xr.open_dataset(bathymetry_path) as dataset:
+        variable_name = "depths" if "depths" in dataset.data_vars else next(iter(dataset.data_vars))
+        depth_da = dataset[variable_name]
+        points = xr.Dataset(
+            coords={
+                "points": np.arange(len(df)),
+                "latitude": ("points", df["latitude"].to_numpy()),
+                "longitude": ("points", df["longitude"].to_numpy()),
+            }
+        )
+        selected = depth_da.sel(
+            latitude=points["latitude"],
+            longitude=points["longitude"],
+            method="nearest",
+        )
+
+    output = df.copy()
+    output["bathymetry_depth_m"] = selected.to_numpy().astype(float)
+    return output
+
+
+def _load_legacy_availability(path: Path) -> pd.DataFrame:
+    legacy = pd.read_csv(path)
+    legacy.columns = [col.lower() for col in legacy.columns]
+    required = [
+        "latitude",
+        "longitude",
+        "availability",
+        "area",
+        "wind_availability",
+        "solar_availability",
+        "onshore_land_pct",
+    ]
+    required_set = set(required)
+    missing = required_set - set(legacy.columns)
+    if missing:
+        raise ValueError(
+            f"Legacy availability CSV {path} is missing required columns: {sorted(missing)}"
+        )
+    return legacy[required].copy()
+
+
 def _merge_reference_data(base: pd.DataFrame, reference_path: Path | None) -> pd.DataFrame:
     if reference_path is None:
         return base
@@ -343,6 +420,12 @@ def _merge_reference_data(base: pd.DataFrame, reference_path: Path | None) -> pd
 
     merged = base.merge(reference, on=["latitude", "longitude"], how="left", suffixes=("", "_ref"))
     override_columns = [
+        "max_capacity_mw",
+        "max_power_wind_mw",
+        "max_power_solar_mw",
+        "max_power_onshore_wind_mw",
+        "max_power_offshore_wind_fixed_mw",
+        "max_power_offshore_wind_floating_mw",
         "max_capacity",
         "wind_max_capacity",
         "solar_max_capacity",
@@ -377,26 +460,79 @@ def build_land_availability_table(config: LandAvailabilityConfig | None = None) 
                 "netCDF4 cannot read %s as HDF4; falling back to pyhdf-based reader.",
                 cfg.land_cover_path,
             )
-            availability = _aggregate_availability_from_hdf4(cfg)
+            try:
+                availability = _aggregate_availability_from_hdf4(cfg)
+            except ImportError:
+                if LEGACY_OUTPUT_CSV.exists():
+                    LOGGER.warning(
+                        "pyhdf is unavailable; bootstrapping availability from legacy CSV %s.",
+                        LEGACY_OUTPUT_CSV,
+                    )
+                    availability = _load_legacy_availability(LEGACY_OUTPUT_CSV)
+                else:
+                    raise
         else:
             raise
     availability["area"] = _cell_area_km2(availability["latitude"], cfg.coarse_degree)
+    availability = _attach_bathymetry_depth(availability, cfg.bathymetry_path)
 
-    availability["wind_area_km2"] = availability["wind_availability"] * availability["area"]
-    availability["solar_area_km2"] = availability["solar_availability"] * availability["area"]
-    availability["wind_density_mw_per_km2"] = _wind_density(availability["latitude"], 1.0)
+    availability["offshore_sea_pct"] = (100.0 - availability["onshore_land_pct"]).clip(lower=0.0, upper=100.0)
+    availability["onshore_area_km2"] = availability["area"] * availability["onshore_land_pct"] / 100.0
+    availability["offshore_area_km2"] = availability["area"] * availability["offshore_sea_pct"] / 100.0
+
+    availability["solar_area_km2"] = availability["onshore_area_km2"]
+    availability["wind_area_km2"] = availability["onshore_area_km2"]
+
     availability["solar_density_mw_per_km2"] = _solar_density(availability["latitude"], 1.0)
-    availability["wind_max_capacity"] = (
-        availability["wind_area_km2"] * availability["wind_density_mw_per_km2"]
+    availability["onshore_wind_density_mw_per_km2"] = _wind_density(
+        availability["latitude"], 1.0, ONSHORE_WIND_LAND_USE_KM2_PER_GW
     )
-    availability["solar_max_capacity"] = (
-        availability["solar_area_km2"] * availability["solar_density_mw_per_km2"]
+    availability["offshore_wind_fixed_density_mw_per_km2"] = _wind_density(
+        availability["latitude"], 1.0, OFFSHORE_WIND_FIXED_LAND_USE_KM2_PER_GW
     )
-    availability["wind_max_capacity"] = availability["wind_max_capacity"].clip(lower=0.0)
-    availability["solar_max_capacity"] = availability["solar_max_capacity"].clip(lower=0.0)
-    availability["max_capacity"] = (
-        availability["wind_max_capacity"] + availability["solar_max_capacity"]
+    availability["offshore_wind_floating_density_mw_per_km2"] = _wind_density(
+        availability["latitude"], 1.0, OFFSHORE_WIND_FLOATING_LAND_USE_KM2_PER_GW
     )
+    availability["wind_density_mw_per_km2"] = availability["onshore_wind_density_mw_per_km2"]
+
+    depth_abs = availability["bathymetry_depth_m"].abs()
+    is_ocean = availability["bathymetry_depth_m"] < 0.0
+    fixed_allowed = is_ocean & (depth_abs <= OFFSHORE_FIXED_MAX_DEPTH_M)
+    floating_allowed = is_ocean & (depth_abs > OFFSHORE_FIXED_MAX_DEPTH_M) & (depth_abs <= OFFSHORE_FLOATING_MAX_DEPTH_M)
+
+    availability["max_power_solar_mw"] = (
+        availability["onshore_area_km2"] * availability["solar_density_mw_per_km2"]
+    ).clip(lower=0.0)
+    availability["max_power_onshore_wind_mw"] = (
+        availability["onshore_area_km2"] * availability["onshore_wind_density_mw_per_km2"]
+    ).clip(lower=0.0)
+    availability["max_power_offshore_wind_fixed_mw"] = (
+        availability["offshore_area_km2"]
+        * availability["offshore_wind_fixed_density_mw_per_km2"]
+        * fixed_allowed.astype(float)
+    ).clip(lower=0.0)
+    availability["max_power_offshore_wind_floating_mw"] = (
+        availability["offshore_area_km2"]
+        * availability["offshore_wind_floating_density_mw_per_km2"]
+        * floating_allowed.astype(float)
+    ).clip(lower=0.0)
+    availability["max_power_wind_mw"] = (
+        availability["max_power_onshore_wind_mw"]
+        + availability["max_power_offshore_wind_fixed_mw"]
+        + availability["max_power_offshore_wind_floating_mw"]
+    ).clip(lower=0.0)
+    availability["max_capacity_mw"] = (
+        availability["max_power_solar_mw"]
+        + availability["max_power_wind_mw"]
+    )
+    availability["availability"] = (availability["max_capacity_mw"] > 0).astype(float)
+
+    # Backward-compatible aliases.
+    availability["solar_max_capacity"] = availability["max_power_solar_mw"]
+    availability["wind_max_capacity"] = availability["max_power_wind_mw"]
+    availability["offshore_wind_fixed_max_capacity"] = availability["max_power_offshore_wind_fixed_mw"]
+    availability["offshore_wind_floating_max_capacity"] = availability["max_power_offshore_wind_floating_mw"]
+    availability["max_capacity"] = availability["max_capacity_mw"]
 
     merged = _merge_reference_data(availability, cfg.reference_capacity_csv)
 
@@ -419,12 +555,18 @@ def write_land_availability_table(config: LandAvailabilityConfig | None = None) 
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate the land-availability CSV for run_global.")
+    parser = argparse.ArgumentParser(description="Generate the max-capacities CSV for run_global.")
     parser.add_argument(
         "--land-cover",
         type=str,
         default=None,
         help="Path to the MODIS land-cover .hdf file (HDF4/NetCDF).",
+    )
+    parser.add_argument(
+        "--bathymetry",
+        type=str,
+        default=None,
+        help="Path to the bathymetry NetCDF file used to split offshore fixed/floating wind.",
     )
     parser.add_argument("--output", type=str, default=None, help="Destination CSV path.")
     parser.add_argument(
@@ -452,6 +594,7 @@ def main() -> None:
     args = _parse_args()
     config = LandAvailabilityConfig(
         land_cover_path=_resolve_path(args.land_cover, DEFAULT_LAND_COVER_FILE),
+        bathymetry_path=_resolve_path(args.bathymetry, DEFAULT_BATHYMETRY_FILE),
         output_csv=_resolve_path(args.output, DEFAULT_OUTPUT_CSV) if args.output else DEFAULT_OUTPUT_CSV,
         lat_bounds=(args.min_lat, args.max_lat),
         reference_capacity_csv=_resolve_path(args.reference_csv, DEFAULT_OUTPUT_CSV)

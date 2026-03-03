@@ -1,0 +1,183 @@
+# Canonical technology cost inputs for the basic ammonia plant.
+# Values originate from the Calliope `techs copy.yaml` (Queensland 2030 case).
+# Costs are USD per MW (power devices) or per MWh (energy storage) overnight CAPEX.
+# For link components, enter costs on an output (bus1) basis.
+# Links can have multiple inputs/outputs (e.g. ammonia synthesis consumes both
+# power and hydrogen). For these, provide:
+#   carriers_in:  mapping of *bus names* to required inputs per 1 unit of bus1 output
+#   carriers_out: mapping of *bus names* to outputs per 1 unit of bus1 output
+#   overall_efficiency: optional reference only (checked vs carriers_in/out)
+#
+# Notes:
+# - Use *bus names* (power, hydrogen, ammonia, ...) rather than PyPSA carriers
+#   (AC/Hydrogen/Ammonia) to avoid ambiguity.
+# - The CSV bundle uses carriers electricity_ac and electricity_stored for the
+#   electrical buses; these labels are independent from the bus-name recipes below.
+# - The notebook `notebooks/00_tech_config.ipynb` converts these recipes into
+#   PyPSA link coefficients (efficiency/efficiency2/...) and converts link CAPEX
+#   from MW_out to PyPSA's MW_in basis.
+
+currency: USD
+
+techs:
+
+  # -----------------
+  # Generators
+  # -----------------
+  solar:
+    component_type: generator
+    source_note: solarSingleAxis (Queensland report 2030)
+    overnight_cost_per_mw: 692000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+  solar_tracking:
+    component_type: generator
+    source_note: solarSingleAxis (Queensland report 2030)
+    overnight_cost_per_mw: 692000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+  onshore_wind:
+    component_type: generator
+    source_note: onshoreWind (Queensland report 2030)
+    overnight_cost_per_mw: 1177000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+  offshore_wind_fixed:
+    component_type: generator
+    source_note: Offshore fixed-bottom wind (DEA proxy; no Queensland value)
+    overnight_cost_per_mw: 2390000
+    lifetime_years: 25
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+  offshore_wind_floating:
+    component_type: generator
+    source_note: Offshore floating wind (DEA proxy; no Queensland value)
+    overnight_cost_per_mw: 2800000
+    lifetime_years: 25
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+
+  # -----------------
+  # Links
+  # -----------------
+  ammonia_synthesis:
+    component_type: link
+    source_note: haberAndAirSeparation (Queensland report 2030)
+    overnight_cost_per_mw: 931000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+    # Derived from current basic_ammonia_plant/links.csv coefficients:
+    # efficiency(bus0->bus1)=6.25 and efficiency2(bus0->bus2)=-7.092
+    # Normalised per 1 unit of ammonia output:
+    #   power_in = 1/6.25 = 0.16
+    #   hydrogen_in = 7.092/6.25 = 1.13472
+    carriers_in: {power: 0.16, hydrogen: 1.13472}
+    carriers_out: {ammonia: 1.0}
+    overall_efficiency: 0.772
+  electrolysis:
+    component_type: link
+    source_note: electrolyser (Queensland report 2030)
+    overnight_cost_per_mw: 683000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+    carriers_in: {power: 1.3513513513513513}
+    carriers_out: {hydrogen: 1.0}
+    overall_efficiency: 0.74
+  hydrogen_compression:
+    component_type: link
+    source_note: hydrogenCompression (Queensland report 2030)
+    overnight_cost_per_mw: 1000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+    carriers_in: {hydrogen: 1.0, power: 0.05}
+    carriers_out: {hydrogen_storage: 1.0}
+    overall_efficiency: 0.9523809524
+  hydrogen_fuel_cell:
+    component_type: link
+    source_note: fuelCell (Queensland report 2030)
+    overnight_cost_per_mw: 2277000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+    carriers_in: {hydrogen: 2.0}
+    carriers_out: {power: 1.0}
+    overall_efficiency: 0.5
+  hydrogen_from_storage:
+    component_type: link
+    source_note: hydrogenBufferWithdrawal (assumed low lift)
+    overnight_cost_per_mw: 1
+    lifetime_years: 20
+    interest_rate: 0.05
+    fixed_om_fraction: 0.0
+    carriers_in: {hydrogen_storage: 1.0}
+    carriers_out: {hydrogen: 1.0}
+    overall_efficiency: 1.0
+  battery_pcs_charge:
+    component_type: link
+    source_note: Battery power conversion system (charging direction)
+    overnight_cost_per_mw: 87000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.029
+    carriers_in: {power: 1.0}
+    carriers_out: {power_storage: 0.954}
+    overall_efficiency: 0.954
+  battery_pcs_discharge:
+    component_type: link
+    source_note: Battery power conversion system (discharging direction, no capital cost)
+    overnight_cost_per_mw: 1
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.0
+    carriers_in: {power_storage: 1.0}
+    carriers_out: {power: 0.954}
+    overall_efficiency: 0.954
+  penalty_link:
+    component_type: link
+    source_note: rampPenaltySlack
+    overnight_cost_per_mw: 100000000
+    lifetime_years: 1
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.0
+    carriers_in: {ramp_penalty: 1.0}
+    carriers_out: {ramp_penalty_dest: 1.0}
+    overall_efficiency: 1.0
+
+  # -----------------
+  # Stores
+  # -----------------
+  accumulated_penalty:
+    component_type: store
+    source_note: rampPenaltySlack
+    overnight_cost_per_mwh: 100000000
+    lifetime_years: 1
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.0
+  ammonia:
+    component_type: store
+    source_note: ammoniaStorage (Queensland report 2030)
+    overnight_cost_per_mwh: 480
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02
+  battery_storage:
+    component_type: store
+    source_note: Battery energy storage (0.1% per day standing losses)
+    overnight_cost_per_mwh: 217000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.029
+    standing_loss_fraction_per_day: 0.001
+  compressed_hydrogen_store:
+    component_type: store
+    source_note: compressedHydrogenStorage (Queensland report 2030)
+    overnight_cost_per_mwh: 24000
+    lifetime_years: 20
+    interest_rate: 0.0872
+    fixed_om_fraction: 0.02

@@ -11,6 +11,7 @@
 
 # Allow common source/config/doc formats
 !*.py
+!*.sh
 !*.ipynb
 !*.csv
 !*.md

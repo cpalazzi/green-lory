@@ -91,8 +91,32 @@ def plot_lcoa_heatmap(
     plot_df["cell_id"] = [_cell_id(lat, lon) for lat, lon in zip(plot_df[lat_col], plot_df[lon_col])]
     geojson = _build_cell_geojson(plot_df, lat_col=lat_col, lon_col=lon_col, cell_size_deg=cell_size_deg)
 
-    wind_col = "wind_mw" if "wind_mw" in plot_df.columns else "wind"
+    wind_power_cols = [
+        col
+        for col in (
+            "onshore_wind_mw",
+            "offshore_wind_fixed_mw",
+            "offshore_wind_floating_mw",
+            "wind_mw",
+            "wind",
+        )
+        if col in plot_df.columns
+    ]
+    if wind_power_cols:
+        plot_df["wind_total_mw"] = plot_df[wind_power_cols].fillna(0.0).sum(axis=1)
     solar_col = "solar_mw" if "solar_mw" in plot_df.columns else "solar"
+    wind_cost_cols = [
+        col
+        for col in (
+            "cost_share_onshore_wind_pct",
+            "cost_share_offshore_wind_fixed_pct",
+            "cost_share_offshore_wind_floating_pct",
+            "cost_share_wind_pct",
+        )
+        if col in plot_df.columns
+    ]
+    if wind_cost_cols:
+        plot_df["cost_share_wind_total_pct"] = plot_df[wind_cost_cols].fillna(0.0).sum(axis=1)
     land_onshore_col = (
         "land_onshore_pct"
         if "land_onshore_pct" in plot_df.columns
@@ -104,9 +128,15 @@ def plot_lcoa_heatmap(
         "country",
         color_column,
         "annual_ammonia_demand_mwh",
-        wind_col,
+        "wind_total_mw",
+        "onshore_wind_mw",
+        "offshore_wind_fixed_mw",
+        "offshore_wind_floating_mw",
         solar_col,
-        "cost_share_wind_pct",
+        "cost_share_wind_total_pct",
+        "cost_share_onshore_wind_pct",
+        "cost_share_offshore_wind_fixed_pct",
+        "cost_share_offshore_wind_floating_pct",
         "cost_share_solar_pct",
         "cost_share_electrolyser_pct",
         land_onshore_col,

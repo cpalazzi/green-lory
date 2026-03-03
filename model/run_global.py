@@ -6,12 +6,18 @@ import io
 import logging
 import math
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
+import threading
+import time
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Sequence, Tuple
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 from shapely.geometry import Point
 import yaml
@@ -34,14 +40,20 @@ LOGGER = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEATHER_DIR = REPO_ROOT / "data"
-DEFAULT_LAND_CSV = DEFAULT_WEATHER_DIR / "20251222_land_max_capacity.csv"
+DEFAULT_LAND_CSV = DEFAULT_WEATHER_DIR / "20251222_max_capacities.csv"
 DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "example_finance_overrides_spatial.csv"
-DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_qld.yaml"
+DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_dea.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
 _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
 # Techno-economic inputs are now expected to be pre-processed into the CSV bundle.
 # Interest-rate defaults are therefore not sourced from a runtime YAML file.
 DEFAULT_INTEREST_RATES: Dict[str, float] = {}
+
+WIND_VARIANT_GENERATORS = [
+    "onshore_wind",
+    "offshore_wind_fixed",
+    "offshore_wind_floating",
+]
 
 
 def _annuity_factor(interest_rate: float, lifetime_years: float) -> float:
@@ -343,13 +355,25 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         land_cost_col,
         "land_capacity_cap_mw",
         "land_onshore_pct",
+        "offshore_sea_pct",
         "land_cell_area_km2",
+        "onshore_area_km2",
+        "offshore_area_km2",
+        "bathymetry_depth_m",
         "area_cap_mw",
         "solar_area_used_km2",
         "wind_area_used_km2",
+        "max_power_wind_mw",
+        "max_power_solar_mw",
+        "max_power_onshore_wind_mw",
+        "max_power_offshore_wind_fixed_mw",
+        "max_power_offshore_wind_floating_mw",
     ]
 
     capacities = [
+        "onshore_wind_mw",
+        "offshore_wind_fixed_mw",
+        "offshore_wind_floating_mw",
         "wind_mw",
         "solar_mw",
         "solar_tracking_mw",
@@ -364,7 +388,7 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "penalty_link_mw",
         "ammonia_mwh",
         "compressed_hydrogen_store_mwh",
-        "battery_storage",
+        "battery_storage_mwh",
         "accumulated_penalty_mwh",
         "hydrogen_storage_capacity_t",
     ]
@@ -394,10 +418,15 @@ class _ProgressTracker:
         self.total = total
         self.count = 0
         self.bar_width = 28
+        self._supports_inline = bool(getattr(sys.stderr, "isatty", lambda: False)())
+        self._emit_every = 1
+        if self.total and self.total > 0:
+            # In non-TTY contexts (e.g., notebooks), emit roughly every 1%.
+            self._emit_every = max(1, self.total // 100)
 
     def update(self, lat: float, lon: float, status: str = "") -> None:
         self.count += 1
-        stream = sys.stderr
+        stream = sys.stderr if self._supports_inline else sys.stdout
         if self.total and self.total > 0:
             filled = int(self.bar_width * self.count / self.total)
             bar = "#" * filled + "-" * (self.bar_width - filled)
@@ -409,12 +438,20 @@ class _ProgressTracker:
             newline = True
         suffix = status.upper() if status else ""
         message = f"{prefix} {suffix:>8} lat={lat:7.2f} lon={lon:7.2f}"
-        if self.total and self.total > 0:
+        if self.total and self.total > 0 and self._supports_inline:
             stream.write("\r" + message)
             if newline:
                 stream.write("\n")
         else:
-            stream.write(message + "\n")
+            should_emit = (
+                self.total is None
+                or self.count == 1
+                or (self.total is not None and self.count >= self.total)
+                or self.count % self._emit_every == 0
+                or (status and status.lower() != "done")
+            )
+            if should_emit:
+                stream.write(message + "\n")
         stream.flush()
 
 
@@ -514,8 +551,12 @@ def _load_land_table(path: str | Path | None) -> pd.DataFrame | None:
     if resolved is None:
         return None
     if not resolved.exists():
-        LOGGER.warning("Land-availability CSV %s not found; skipping land caps.", resolved)
-        return None
+        legacy = resolved.parent / "20251222_land_max_capacity.csv"
+        if path in {None, DEFAULT_LAND_CSV} and legacy.exists():
+            resolved = legacy
+        else:
+            LOGGER.warning("Max-capacities CSV %s not found; skipping capacity caps.", resolved)
+            return None
     df = pd.read_csv(resolved)
     df.columns = [col.lower() for col in df.columns]
     expected = {"latitude", "longitude"}
@@ -559,12 +600,24 @@ def _apply_spatial_solar_density_from_tech_config(
         base_land_use_km2_per_mw=base_land_use,
     )
 
-    if "solar_area_km2" in updated.columns:
-        updated["solar_max_capacity"] = (
-            updated["solar_area_km2"] * updated["solar_density_mw_per_km2"]
+    if "onshore_area_km2" in updated.columns:
+        updated["max_power_solar_mw"] = (
+            updated["onshore_area_km2"] * updated["solar_density_mw_per_km2"]
         ).clip(lower=0.0)
-        if "wind_max_capacity" in updated.columns:
-            updated["max_capacity"] = updated["wind_max_capacity"] + updated["solar_max_capacity"]
+        if "max_power_wind_mw" in updated.columns:
+            updated["max_capacity_mw"] = (
+                updated["max_power_wind_mw"]
+                + updated["max_power_solar_mw"]
+            )
+        elif "max_power_onshore_wind_mw" in updated.columns:
+            updated["max_capacity_mw"] = (
+                updated["max_power_onshore_wind_mw"]
+                + updated["max_power_solar_mw"]
+                + updated.get("max_power_offshore_wind_fixed_mw", 0.0)
+                + updated.get("max_power_offshore_wind_floating_mw", 0.0)
+            )
+        # Backward-compatible aliases used by older plotting/report helpers.
+        updated["solar_max_capacity"] = updated["max_power_solar_mw"]
 
     return updated
 
@@ -646,15 +699,115 @@ def _match_land_row(land_df: pd.DataFrame, lat: float, lon: float) -> pd.Series 
     return subset.iloc[0]
 
 
-def _set_generator_cap(network, generator_name: str, cap_value: float) -> float:
-    if cap_value is None or cap_value <= 0:
+LEGACY_POWER_CAP_COLUMN_MAP = {
+    "solar_max_capacity": "solar",
+    "wind_max_capacity": "onshore_wind",
+    "offshore_wind_fixed_max_capacity": "offshore_wind_fixed",
+    "offshore_wind_floating_max_capacity": "offshore_wind_floating",
+}
+
+
+def _set_component_cap(network, tech_name: str, cap_value: float) -> float:
+    if cap_value is None or not np.isfinite(float(cap_value)):
         return 0.0
-    if generator_name not in network.generators.index:
-        return 0.0
-    if not bool(network.generators.at[generator_name, "p_nom_extendable"]):
-        return 0.0
-    network.generators.loc[generator_name, "p_nom_max"] = cap_value
-    return cap_value
+    cap = max(0.0, float(cap_value))
+
+    if tech_name in network.generators.index:
+        if not bool(network.generators.at[tech_name, "p_nom_extendable"]):
+            return 0.0
+        network.generators.loc[tech_name, "p_nom_max"] = cap
+        return cap
+
+    if tech_name in network.links.index:
+        if not bool(network.links.at[tech_name, "p_nom_extendable"]):
+            return 0.0
+        network.links.loc[tech_name, "p_nom_max"] = cap
+        return cap
+
+    if tech_name in network.stores.index:
+        if not bool(network.stores.at[tech_name, "e_nom_extendable"]):
+            return 0.0
+        network.stores.loc[tech_name, "e_nom_max"] = cap
+        return cap
+
+    return 0.0
+
+
+def _extract_capacity_caps_from_row(row: pd.Series) -> Tuple[Dict[str, float], Dict[str, float]]:
+    power_caps: Dict[str, float] = {}
+    energy_caps: Dict[str, float] = {}
+
+    for column in row.index:
+        value = row.get(column)
+        if pd.isna(value):
+            continue
+        key = str(column).strip().lower()
+        if key.startswith("max_power_") and key.endswith("_mw"):
+            tech = key[len("max_power_") : -len("_mw")]
+            if tech:
+                power_caps[tech] = max(0.0, float(value))
+            continue
+        if key.startswith("max_energy_") and key.endswith("_mwh"):
+            tech = key[len("max_energy_") : -len("_mwh")]
+            if tech:
+                energy_caps[tech] = max(0.0, float(value))
+
+    for legacy_col, tech in LEGACY_POWER_CAP_COLUMN_MAP.items():
+        if tech in power_caps:
+            continue
+        value = row.get(legacy_col)
+        if pd.notna(value):
+            power_caps[tech] = max(0.0, float(value))
+
+    return power_caps, energy_caps
+
+
+def _apply_component_caps(
+    network,
+    power_caps: Dict[str, float],
+    energy_caps: Dict[str, float],
+) -> float:
+    setattr(network, "_shared_solar_cap_mw", None)
+    setattr(network, "_shared_wind_cap_mw", None)
+    total_cap = 0.0
+
+    solar_cap = power_caps.get("solar")
+    solar_tracking_cap = power_caps.get("solar_tracking")
+    shared_wind_cap = power_caps.get("wind")
+
+    if shared_wind_cap is not None:
+        setattr(network, "_shared_wind_cap_mw", max(0.0, float(shared_wind_cap)))
+
+    if solar_cap is not None and solar_tracking_cap is None:
+        _set_component_cap(network, "solar", solar_cap)
+        _set_component_cap(network, "solar_tracking", solar_cap)
+        setattr(network, "_shared_solar_cap_mw", float(solar_cap))
+    elif solar_tracking_cap is not None and solar_cap is None:
+        _set_component_cap(network, "solar", solar_tracking_cap)
+        _set_component_cap(network, "solar_tracking", solar_tracking_cap)
+        setattr(network, "_shared_solar_cap_mw", float(solar_tracking_cap))
+    else:
+        if solar_cap is not None:
+            _set_component_cap(network, "solar", solar_cap)
+        if solar_tracking_cap is not None:
+            _set_component_cap(network, "solar_tracking", solar_tracking_cap)
+        if (
+            solar_cap is not None
+            and solar_tracking_cap is not None
+            and abs(float(solar_cap) - float(solar_tracking_cap)) < 1e-9
+        ):
+            setattr(network, "_shared_solar_cap_mw", float(solar_cap))
+
+    for tech, cap in power_caps.items():
+        if tech in {"solar", "solar_tracking", "wind"}:
+            continue
+        _set_component_cap(network, tech, cap)
+
+    for tech, cap in energy_caps.items():
+        _set_component_cap(network, tech, cap)
+
+    total_cap += sum(cap for tech, cap in power_caps.items() if tech != "wind")
+    return total_cap
 
 
 def _apply_land_caps(
@@ -663,38 +816,40 @@ def _apply_land_caps(
     row = _match_land_row(land_df, lat, lon) if land_df is not None else None
     if row is None:
         return None, None
-    setattr(network, "_shared_solar_cap_mw", None)
-    total_cap = 0.0
 
-    wind_cap = row.get("wind_max_capacity")
-    if pd.notna(wind_cap):
-        wind_cap_val = float(wind_cap)
-        if wind_cap_val > 0:
-            total_cap += wind_cap_val
-            _set_generator_cap(network, "wind", wind_cap_val)
+    power_caps, energy_caps = _extract_capacity_caps_from_row(row)
+    has_explicit_power_caps = any(
+        str(col).lower().startswith("max_power_") and str(col).lower().endswith("_mw")
+        for col in row.index
+    )
+    has_legacy_power_caps = any(
+        pd.notna(row.get(col))
+        for col in LEGACY_POWER_CAP_COLUMN_MAP
+    )
+    if has_explicit_power_caps:
+        for tech in WIND_VARIANT_GENERATORS + ["solar"]:
+            power_caps.setdefault(tech, 0.0)
+    elif has_legacy_power_caps:
+        for tech in WIND_VARIANT_GENERATORS:
+            power_caps.setdefault(tech, 0.0)
 
-    solar_cap = row.get("solar_max_capacity")
-    if pd.notna(solar_cap):
-        solar_cap_val = float(solar_cap)
-        if solar_cap_val > 0:
-            total_cap += solar_cap_val
-            _set_generator_cap(network, "solar", solar_cap_val)
-            _set_generator_cap(network, "solar_tracking", solar_cap_val)
-            setattr(network, "_shared_solar_cap_mw", solar_cap_val)
+    if power_caps or energy_caps:
+        total_cap = _apply_component_caps(network, power_caps, energy_caps)
+        return (total_cap if total_cap > 0 else None), row
 
-    if total_cap > 0:
-        return total_cap, row
-
-    fallback = row.get("max_capacity")
+    fallback = row.get("max_capacity_mw")
+    if pd.isna(fallback):
+        fallback = row.get("max_capacity")
     if pd.notna(fallback):
-        fallback_val = float(fallback)
-        fallback_availability = row.get("availability", 1.0)
-        if pd.notna(fallback_availability):
-            fallback_val *= float(fallback_availability)
-        if fallback_val > 0:
-            for gen_name in ("wind", "solar", "solar_tracking"):
-                _set_generator_cap(network, gen_name, fallback_val)
-            return fallback_val, row
+        fallback_val = max(0.0, float(fallback))
+        fallback_caps = {
+            "onshore_wind": fallback_val,
+            "solar": fallback_val,
+            "offshore_wind_fixed": 0.0,
+            "offshore_wind_floating": 0.0,
+        }
+        total_cap = _apply_component_caps(network, fallback_caps, {})
+        return (total_cap if total_cap > 0 else None), row
 
     return None, row
 
@@ -716,22 +871,52 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
         onshore = _maybe("onshore_fraction", 100.0)
     if onshore is not None:
         metadata["land_onshore_pct"] = onshore
+        metadata["offshore_sea_pct"] = max(0.0, 100.0 - onshore)
 
     area = _maybe("area")
     if area is not None:
         metadata["land_cell_area_km2"] = area
 
-    max_capacity = _maybe("max_capacity")
+    onshore_area = _maybe("onshore_area_km2")
+    if onshore_area is not None:
+        metadata["onshore_area_km2"] = onshore_area
+
+    offshore_area = _maybe("offshore_area_km2")
+    if offshore_area is not None:
+        metadata["offshore_area_km2"] = offshore_area
+
+    bathymetry_depth = _maybe("bathymetry_depth_m")
+    if bathymetry_depth is not None:
+        metadata["bathymetry_depth_m"] = bathymetry_depth
+
+    max_capacity = _maybe("max_capacity_mw")
+    if max_capacity is None:
+        max_capacity = _maybe("max_capacity")
     if max_capacity is not None:
         metadata["area_cap_mw"] = max_capacity
 
     solar_area = _maybe("solar_area_km2")
+    if solar_area is None:
+        solar_area = _maybe("onshore_area_km2")
     if solar_area is not None:
         metadata["solar_area_used_km2"] = solar_area
 
     wind_area = _maybe("wind_area_km2")
+    if wind_area is None:
+        wind_area = _maybe("onshore_wind_area_km2")
     if wind_area is not None:
         metadata["wind_area_used_km2"] = wind_area
+
+    for column in row.index:
+        key = str(column).strip().lower()
+        if key.startswith("max_power_") and key.endswith("_mw"):
+            value = _maybe(key)
+            if value is not None:
+                metadata[key] = value
+        if key.startswith("max_energy_") and key.endswith("_mwh"):
+            value = _maybe(key)
+            if value is not None:
+                metadata[key] = value
 
     return metadata
 
@@ -785,6 +970,14 @@ def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggr
     frame = location.concat.copy()
     if "Weights" in frame.columns:
         frame = frame.drop(columns="Weights")
+    if "onshore_wind" not in frame.columns and "wind" in frame.columns:
+        frame["onshore_wind"] = frame["wind"]
+    if "offshore_wind_fixed" not in frame.columns and "wind" in frame.columns:
+        frame["offshore_wind_fixed"] = frame["wind"]
+    if "offshore_wind_floating" not in frame.columns and "wind" in frame.columns:
+        frame["offshore_wind_floating"] = frame["wind"]
+    if "wind" not in frame.columns and "onshore_wind" in frame.columns:
+        frame["wind"] = frame["onshore_wind"]
     if "solar_tracking" not in frame.columns and "solar" in frame.columns:
         frame["solar_tracking"] = frame["solar"]
     defaults = {"grid": 0.0, "ramp_dummy": 1.0}
@@ -797,9 +990,327 @@ def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggr
 
 def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]]:
     if land_df is None:
-        raise ValueError("A land-availability CSV is required when no explicit locations are supplied.")
-    filtered = land_df[land_df.get("availability", 0) > 0]
+        raise ValueError("A max-capacities CSV is required when no explicit locations are supplied.")
+    if "max_capacity_mw" in land_df.columns:
+        filtered = land_df[land_df["max_capacity_mw"] > 0]
+    elif "max_capacity" in land_df.columns:
+        filtered = land_df[land_df["max_capacity"] > 0]
+    elif "availability" in land_df.columns:
+        filtered = land_df[land_df["availability"] > 0]
+    else:
+        filtered = land_df
     return list(zip(filtered["latitude"].astype(float), filtered["longitude"].astype(float)))
+
+
+def _estimate_land_used_km2(
+    network,
+    land_row: pd.Series | None,
+    tech_inputs: Dict[str, dict],
+) -> float | None:
+    if not tech_inputs:
+        return None
+
+    land_used_km2 = 0.0
+    solar_density = None
+    if land_row is not None:
+        raw_density = land_row.get("solar_density_mw_per_km2")
+        if pd.notna(raw_density) and float(raw_density) > 0:
+            solar_density = float(raw_density)
+
+    total_solar_capacity = 0.0
+    for gen_name in ("solar", "solar_tracking"):
+        if gen_name not in network.generators.index:
+            continue
+        value = network.generators.at[gen_name, "p_nom_opt"]
+        if pd.isna(value):
+            continue
+        total_solar_capacity += max(0.0, float(value))
+
+    if total_solar_capacity > 0:
+        if solar_density is not None and solar_density > 0:
+            land_used_km2 += total_solar_capacity / solar_density
+        else:
+            land_use = tech_inputs.get("solar", {}).get("land_use_km2_per_mw")
+            if land_use is not None:
+                land_used_km2 += total_solar_capacity * float(land_use)
+
+    for gen_name in ("onshore_wind", "wind"):
+        if gen_name not in network.generators.index:
+            continue
+        value = network.generators.at[gen_name, "p_nom_opt"]
+        if pd.isna(value):
+            continue
+        capacity = max(0.0, float(value))
+        if capacity <= 0:
+            continue
+        tech_key = "onshore_wind" if "onshore_wind" in tech_inputs else gen_name
+        land_use = tech_inputs.get(tech_key, {}).get("land_use_km2_per_mw")
+        if land_use is not None:
+            land_used_km2 += capacity * float(land_use)
+
+    return land_used_km2
+
+
+def _env_positive_int(name: str) -> int | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        value = int(text)
+    except ValueError:
+        return None
+    if value <= 0:
+        return None
+    return value
+
+
+def _available_cpu_capacity() -> int:
+    for env_var in ("SLURM_CPUS_PER_TASK", "SLURM_CPUS_ON_NODE"):
+        value = _env_positive_int(env_var)
+        if value is not None:
+            return value
+    detected = os.cpu_count()
+    return max(1, int(detected) if detected is not None else 1)
+
+
+def _available_memory_gb(cpu_capacity: int) -> float | None:
+    mem_per_node_mb = _env_positive_int("SLURM_MEM_PER_NODE")
+    if mem_per_node_mb is not None:
+        return float(mem_per_node_mb) / 1024.0
+
+    mem_per_cpu_mb = _env_positive_int("SLURM_MEM_PER_CPU")
+    if mem_per_cpu_mb is not None:
+        return float(mem_per_cpu_mb * cpu_capacity) / 1024.0
+
+    cgroup_limit = Path("/sys/fs/cgroup/memory.max")
+    if cgroup_limit.exists():
+        text = cgroup_limit.read_text().strip()
+        if text.isdigit():
+            limit_bytes = int(text)
+            if 0 < limit_bytes < (1 << 60):
+                return float(limit_bytes) / (1024.0 ** 3)
+
+    try:
+        page_size = int(os.sysconf("SC_PAGE_SIZE"))
+        pages = int(os.sysconf("SC_PHYS_PAGES"))
+        if page_size > 0 and pages > 0:
+            return float(page_size * pages) / (1024.0 ** 3)
+    except (AttributeError, OSError, ValueError):
+        pass
+
+    return None
+
+
+def _validate_resource_request(
+    workers: int,
+    threads_per_worker: int,
+    ram_per_worker_gb: float | None,
+    max_ram_gb: float | None,
+) -> None:
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
+    if threads_per_worker < 1:
+        raise ValueError("threads_per_worker must be >= 1")
+    if ram_per_worker_gb is not None and ram_per_worker_gb <= 0:
+        raise ValueError("ram_per_worker_gb must be > 0 when provided")
+    if max_ram_gb is not None and max_ram_gb <= 0:
+        raise ValueError("max_ram_gb must be > 0 when provided")
+
+    cpu_capacity = _available_cpu_capacity()
+    cpu_required = workers * threads_per_worker
+    if cpu_required > cpu_capacity:
+        raise ValueError(
+            "Requested workers * threads_per_worker exceeds available CPU capacity: "
+            f"{workers} * {threads_per_worker} = {cpu_required} > {cpu_capacity}."
+        )
+
+    requested_ram_gb = None
+    if ram_per_worker_gb is not None:
+        requested_ram_gb = float(ram_per_worker_gb) * float(workers)
+    if max_ram_gb is not None:
+        if requested_ram_gb is not None and requested_ram_gb > float(max_ram_gb):
+            raise ValueError(
+                "Requested RAM is inconsistent: workers * ram_per_worker_gb exceeds max_ram_gb "
+                f"({requested_ram_gb:.2f} > {float(max_ram_gb):.2f})."
+            )
+        if requested_ram_gb is None:
+            requested_ram_gb = float(max_ram_gb)
+
+    if requested_ram_gb is None:
+        return
+
+    available_ram_gb = _available_memory_gb(cpu_capacity)
+    if available_ram_gb is None:
+        raise ValueError(
+            "Unable to detect available machine RAM for validation. "
+            "Set RAM arguments only when system RAM can be detected."
+        )
+    if requested_ram_gb > available_ram_gb:
+        raise ValueError(
+            "Requested RAM exceeds available machine allocation: "
+            f"{requested_ram_gb:.2f} GB > {available_ram_gb:.2f} GB."
+        )
+
+
+def _run_single_location(
+    lat: float,
+    lon: float,
+    dataset: lt.all_locations,
+    interest_df: pd.DataFrame,
+    tech_inputs: Dict[str, dict],
+    tech_meta: Dict[str, float],
+    land_df: pd.DataFrame | None,
+    aggregation_count: int,
+    time_step: float,
+    max_snapshots: int | None,
+    quiet: bool,
+) -> Tuple[str, Dict[str, Any] | None]:
+    try:
+        weather_frame = _build_weather_frame(dataset, lat, lon, aggregation_count)
+        if max_snapshots is not None:
+            weather_frame = weather_frame.iloc[:max_snapshots].copy()
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Skipping location (%s, %s) due to weather extraction error: %s", lat, lon, exc)
+        return "weather", None
+
+    overrides = _interest_overrides(interest_df, lat, lon)
+    interest_rates = _compose_interest_rates(overrides)
+
+    # Extract location-level spatial cost parameters from overrides.
+    location_params = overrides.get("__location__", {}) if overrides else {}
+    water_cost_usd_per_m3 = location_params.get("water_cost_usd_per_m3")
+    land_cost_usd_per_km2_year = location_params.get("land_cost_usd_per_km2_year")
+
+    # Apply YAML defaults if location-specific values are missing.
+    if water_cost_usd_per_m3 is None:
+        water_cost_usd_per_m3 = tech_meta.get("water_cost_baseline_usd_per_m3")
+    water_usage_m3_per_t = tech_meta.get("water_usage_m3_per_t_nh3")
+
+    network = plant_main.generate_network(
+        len(weather_frame),
+        "basic_ammonia_plant",
+        aggregation_count=aggregation_count,
+        time_step=time_step,
+        tech_config_overrides=overrides,
+    )
+    _apply_finance_overrides(
+        network,
+        tech_inputs=tech_inputs,
+        overrides=overrides,
+        aggregation_count=aggregation_count,
+        time_step=time_step,
+    )
+    land_cap, land_row = _apply_land_caps(network, land_df, lat, lon)
+
+    try:
+        with _suppress_solver_streams(quiet):
+            results = plant_main.main(
+                n=network,
+                weather_data=weather_frame,
+                multi_site=True,
+                aggregation_count=aggregation_count,
+                time_step=time_step,
+                interest_rates=interest_rates,
+                water_cost_usd_per_m3=water_cost_usd_per_m3,
+                water_usage_m3_per_t=water_usage_m3_per_t,
+                land_cost_usd_per_km2_year=land_cost_usd_per_km2_year,
+                land_used_km2=None,
+            )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Optimisation failed for (%s, %s): %s", lat, lon, exc)
+        return "solver", None
+
+    land_used_km2 = _estimate_land_used_km2(network, land_row, tech_inputs)
+    if land_used_km2 is not None:
+        results["land_used_km2"] = float(land_used_km2)
+        production_t = results.get("annual_ammonia_production_t")
+        if (
+            land_cost_usd_per_km2_year is not None
+            and production_t is not None
+            and float(production_t) > 0
+        ):
+            currency_code = str(results.get("currency", "USD")).strip().lower()
+            land_cost_per_t = float(land_cost_usd_per_km2_year) * float(land_used_km2) / float(production_t)
+            results["land_cost_usd_per_km2_year"] = float(land_cost_usd_per_km2_year)
+            results[f"land_cost_{currency_code}_per_t"] = land_cost_per_t
+
+    # Backfill explicit currency columns if legacy outputs are returned.
+    currency_code = os.environ.get("GREEN_LORY_CURRENCY", "USD").strip().upper()
+    currency_slug = currency_code.lower()
+    if f"lcoa_{currency_slug}_per_t" not in results:
+        if "lcoa_currency_per_t" in results:
+            results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_currency_per_t"]
+        elif "lcoa_usd_per_t" in results:
+            results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_usd_per_t"]
+    if "currency" not in results:
+        results["currency"] = currency_code
+    if (
+        f"total_cost_{currency_slug}_per_year" not in results
+        and "total_cost_currency_per_year" in results
+    ):
+        results[f"total_cost_{currency_slug}_per_year"] = results[
+            "total_cost_currency_per_year"
+        ]
+    if (
+        f"total_cost_{currency_slug}_per_year" not in results
+        and "total_cost_usd_per_year" in results
+    ):
+        results[f"total_cost_{currency_slug}_per_year"] = results[
+            "total_cost_usd_per_year"
+        ]
+
+    if land_cap is not None:
+        results["land_capacity_cap"] = land_cap
+    if land_row is not None:
+        results.update(_land_metadata_from_row(land_row))
+    results["interest_overrides_applied"] = bool(overrides)
+
+    # Headline cost splits (no double counting).
+    headline_splits = _compute_headline_splits(
+        network,
+        tech_inputs,
+        overrides,
+        aggregation_count=aggregation_count,
+        time_step=time_step,
+    )
+    if headline_splits:
+        results.update(headline_splits)
+
+    # Add water/land cost percentages and rescale headline splits to include them.
+    currency_code = str(results.get("currency", "USD")).strip().lower()
+    total_cost_col = f"total_cost_{currency_code}_per_year"
+    water_cost_col = f"water_cost_{currency_code}_per_t"
+    land_cost_col = f"land_cost_{currency_code}_per_t"
+
+    production = results.get("annual_ammonia_production_t")
+    total_cost = results.get(total_cost_col)
+    water_cost_per_t = results.get(water_cost_col)
+    land_cost_per_t = results.get(land_cost_col)
+
+    if production and total_cost:
+        extra_cost = 0.0
+        if water_cost_per_t is not None:
+            extra_cost += float(water_cost_per_t) * float(production)
+        if land_cost_per_t is not None:
+            extra_cost += float(land_cost_per_t) * float(production)
+
+        total_with_extras = float(total_cost) + extra_cost
+        if total_with_extras > 0:
+            if water_cost_per_t is not None:
+                results["water_cost_pct"] = float(water_cost_per_t) * float(production) / total_with_extras * 100.0
+            if land_cost_per_t is not None:
+                results["land_cost_pct"] = float(land_cost_per_t) * float(production) / total_with_extras * 100.0
+
+            # Rescale headline splits to keep 100% stack including water/land.
+            scale = float(total_cost) / total_with_extras
+            for key in ("build_cost_pct", "tech_cost_pct", "om_cost_pct", "interest_pct"):
+                if key in results and results[key] is not None:
+                    results[key] = float(results[key]) * scale
+
+    return "done", results
 
 
 def run_global(
@@ -813,15 +1324,17 @@ def run_global(
     max_snapshots: int | None = None,
     output_csv: str | Path | None = None,
     quiet: bool = False,
+    threads_per_worker: int | None = None,
+    **_kwargs: Any,  # absorb deprecated workers/ram arguments without error
 ) -> pd.DataFrame:
-    """Run the ammonia plant optimisation for every requested location.
+    """Run the ammonia plant optimisation for every requested location (serial).
 
     Args:
         locations: Iterable of (lat, lon) pairs. If omitted, the function iterates over every
-            coordinate contained in the land-availability CSV.
+            coordinate contained in the max-capacities CSV.
         weather_dir: Directory containing the NetCDF stacks consumed by `location_tools`.
         land_csv: CSV with at least `Latitude` and `Longitude` columns plus any available
-            capacity metadata.
+            max-capacity metadata.
         interest_csv: CSV with `lat`, `lon`, `tech`, `interest_rate` columns to override
             financing assumptions per technology. Additional spatial columns such as
             `build_cost_multiplier`, `land_cost_usd_per_km2_year`, and
@@ -832,195 +1345,286 @@ def run_global(
         max_snapshots: Optional hard cap on the number of weather snapshots to simulate per
             location (useful for quick smoke tests and notebooks).
         output_csv: Optional destination for the aggregated results table.
+        threads_per_worker: Solver thread count (forwarded to GREEN_LORY_SOLVER_THREADS).
     """
+    requested_threads = 1 if threads_per_worker is None else int(threads_per_worker)
+
     with _quiet_logging(quiet), _override_env("GREEN_LORY_SOLVER_LOG", "0", quiet):
-        weather_dir = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
-        dataset = lt.all_locations(str(weather_dir), cache_resources=True)
-        interest_df = _load_interest_table(interest_csv or DEFAULT_INTEREST_CSV)
-        tech_inputs = _load_tech_inputs(tech_yaml or DEFAULT_TECH_YAML)
-        tech_meta = _load_tech_meta(tech_yaml or DEFAULT_TECH_YAML)
-        land_df = _load_land_table(land_csv or DEFAULT_LAND_CSV)
+        weather_dir_path = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
+        land_csv_path = _resolve_path(land_csv or DEFAULT_LAND_CSV)
+        interest_csv_path = _resolve_path(interest_csv or DEFAULT_INTEREST_CSV)
+        tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
+
+        tech_inputs = _load_tech_inputs(tech_yaml_path)
+        tech_meta = _load_tech_meta(tech_yaml_path)
+        land_df = _load_land_table(land_csv_path)
         land_df = _apply_spatial_solar_density_from_tech_config(land_df, tech_inputs)
         world = _load_country_shapes()
         store = results_store.Data_store()
 
         if locations is None:
-            location_iterable: Iterable[Tuple[float, float]] = _default_locations(land_df)
+            location_list = _default_locations(land_df)
         else:
-            location_iterable = locations
+            location_list = [(float(lat), float(lon)) for lat, lon in locations]
 
-        total_locations = len(location_iterable) if hasattr(location_iterable, "__len__") else None
+        total_locations = len(location_list)
         progress = _ProgressTracker(total_locations)
 
-        for lat_value, lon_value in location_iterable:
-            lat = float(lat_value)
-            lon = float(lon_value)
-            status = "run"
-            try:
-                weather_frame = _build_weather_frame(dataset, lat, lon, aggregation_count)
-                if max_snapshots is not None:
-                    weather_frame = weather_frame.iloc[:max_snapshots].copy()
-            except Exception as exc:  # noqa: BLE001
-                status = "weather"
-                LOGGER.warning("Skipping location (%s, %s) due to weather extraction error: %s", lat, lon, exc)
-                progress.update(lat, lon, status)
-                continue
+        with _override_env(
+            "GREEN_LORY_SOLVER_THREADS",
+            str(requested_threads),
+            threads_per_worker is not None,
+        ):
+            dataset = lt.all_locations(str(weather_dir_path), cache_resources=True)
+            interest_df = _load_interest_table(interest_csv_path)
 
-            overrides = _interest_overrides(interest_df, lat, lon)
-            interest_rates = _compose_interest_rates(overrides)
-            
-            # Extract location-level spatial cost parameters from overrides
-            location_params = overrides.get("__location__", {}) if overrides else {}
-            water_cost_usd_per_m3 = location_params.get("water_cost_usd_per_m3")
-            land_cost_usd_per_km2_year = location_params.get("land_cost_usd_per_km2_year")
-
-            # Apply YAML defaults if location-specific values are missing
-            if water_cost_usd_per_m3 is None:
-                water_cost_usd_per_m3 = tech_meta.get("water_cost_baseline_usd_per_m3")
-            water_usage_m3_per_t = tech_meta.get("water_usage_m3_per_t_nh3")
-            
-            network = plant_main.generate_network(
-                len(weather_frame),
-                "basic_ammonia_plant",
-                aggregation_count=aggregation_count,
-                time_step=time_step,
-                tech_config_overrides=overrides,
-            )
-            _apply_finance_overrides(
-                network,
-                tech_inputs=tech_inputs,
-                overrides=overrides,
-                aggregation_count=aggregation_count,
-                time_step=time_step,
-            )
-            land_cap, land_row = _apply_land_caps(network, land_df, lat, lon)
-            
-            # Calculate land used (sum of capacity * land_use_km2)
-            land_used_km2 = None
-            if tech_inputs:
-                land_used_km2 = 0.0
-                for gen_name in network.generators.index:
-                    if gen_name in ["wind", "solar", "solar_tracking"]:
-                        capacity = float(network.generators.at[gen_name, "p_nom_opt"])
-                        if capacity > 0:
-                            if gen_name in {"solar", "solar_tracking"} and land_row is not None:
-                                solar_density = land_row.get("solar_density_mw_per_km2")
-                                if pd.notna(solar_density) and float(solar_density) > 0:
-                                    land_used_km2 += capacity / float(solar_density)
-                                    continue
-                            tech_key = gen_name
-                            if tech_key in tech_inputs:
-                                land_use = tech_inputs[tech_key].get("land_use_km2_per_mw")
-                                if land_use is not None:
-                                    land_used_km2 += capacity * float(land_use)
+            # Open output file for incremental writing (enables progress polling from
+            # parallel workers and provides partial-results recovery on crash).
+            out_fh: Any = None
+            header_written = False
+            if output_csv:
+                output_path = _resolve_path(output_csv) or Path(output_csv)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                out_fh = open(output_path, "w", newline="", encoding="utf-8")
 
             try:
-                with _suppress_solver_streams(quiet):
-                    results = plant_main.main(
-                        n=network,
-                        weather_data=weather_frame,
-                        multi_site=True,
+                for lat, lon in location_list:
+                    status, results = _run_single_location(
+                        lat=lat,
+                        lon=lon,
+                        dataset=dataset,
+                        interest_df=interest_df,
+                        tech_inputs=tech_inputs,
+                        tech_meta=tech_meta,
+                        land_df=land_df,
                         aggregation_count=aggregation_count,
                         time_step=time_step,
-                        interest_rates=interest_rates,
-                        water_cost_usd_per_m3=water_cost_usd_per_m3,
-                        water_usage_m3_per_t=water_usage_m3_per_t,
-                        land_cost_usd_per_km2_year=land_cost_usd_per_km2_year,
-                        land_used_km2=land_used_km2,
+                        max_snapshots=max_snapshots,
+                        quiet=quiet,
                     )
-            except Exception as exc:  # noqa: BLE001
-                status = "solver"
-                LOGGER.warning("Optimisation failed for (%s, %s): %s", lat, lon, exc)
-                progress.update(lat, lon, status)
-                continue
-
-            # Backfill explicit currency columns if legacy outputs are returned.
-            currency_code = os.environ.get("GREEN_LORY_CURRENCY", "USD").strip().upper()
-            currency_slug = currency_code.lower()
-            if f"lcoa_{currency_slug}_per_t" not in results:
-                if "lcoa_currency_per_t" in results:
-                    results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_currency_per_t"]
-                elif "lcoa_usd_per_t" in results:
-                    results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_usd_per_t"]
-            if "currency" not in results:
-                results["currency"] = currency_code
-            if (
-                f"total_cost_{currency_slug}_per_year" not in results
-                and "total_cost_currency_per_year" in results
-            ):
-                results[f"total_cost_{currency_slug}_per_year"] = results[
-                    "total_cost_currency_per_year"
-                ]
-            if (
-                f"total_cost_{currency_slug}_per_year" not in results
-                and "total_cost_usd_per_year" in results
-            ):
-                results[f"total_cost_{currency_slug}_per_year"] = results[
-                    "total_cost_usd_per_year"
-                ]
-
-            if land_cap is not None:
-                results["land_capacity_cap"] = land_cap
-            if land_row is not None:
-                results.update(_land_metadata_from_row(land_row))
-            results["interest_overrides_applied"] = bool(overrides)
-
-            # Headline cost splits (no double counting)
-            headline_splits = _compute_headline_splits(
-                network,
-                tech_inputs,
-                overrides,
-                aggregation_count=aggregation_count,
-                time_step=time_step,
-            )
-            if headline_splits:
-                results.update(headline_splits)
-
-            # Add water/land cost percentages and rescale headline splits to include them
-            currency_code = str(results.get("currency", "USD")).strip().lower()
-            lcoa_col = f"lcoa_{currency_code}_per_t"
-            total_cost_col = f"total_cost_{currency_code}_per_year"
-            water_cost_col = f"water_cost_{currency_code}_per_t"
-            land_cost_col = f"land_cost_{currency_code}_per_t"
-
-            production = results.get("annual_ammonia_production_t")
-            total_cost = results.get(total_cost_col)
-            water_cost_per_t = results.get(water_cost_col)
-            land_cost_per_t = results.get(land_cost_col)
-
-            if production and total_cost:
-                extra_cost = 0.0
-                if water_cost_per_t is not None:
-                    extra_cost += float(water_cost_per_t) * float(production)
-                if land_cost_per_t is not None:
-                    extra_cost += float(land_cost_per_t) * float(production)
-
-                total_with_extras = float(total_cost) + extra_cost
-                if total_with_extras > 0:
-                    if water_cost_per_t is not None:
-                        results["water_cost_pct"] = float(water_cost_per_t) * float(production) / total_with_extras * 100.0
-                    if land_cost_per_t is not None:
-                        results["land_cost_pct"] = float(land_cost_per_t) * float(production) / total_with_extras * 100.0
-
-                    # Rescale headline splits to keep 100% stack including water/land
-                    scale = float(total_cost) / total_with_extras
-                    for key in ("build_cost_pct", "tech_cost_pct", "om_cost_pct", "interest_pct"):
-                        if key in results and results[key] is not None:
-                            results[key] = float(results[key]) * scale
-
-            country = _country_for(world, lat, lon)
-            store.add_location(lat, lon, country, results)
-            progress.update(lat, lon, "done")
+                    if results is not None:
+                        country = _country_for(world, lat, lon)
+                        store.add_location(lat, lon, country, results)
+                        if out_fh is not None:
+                            row = {"latitude": lat, "longitude": lon, "country": country, **results}
+                            row_df = pd.DataFrame([row])
+                            if not header_written:
+                                row_df.to_csv(out_fh, index=False)
+                                header_written = True
+                            else:
+                                row_df.to_csv(out_fh, index=False, header=False)
+                            out_fh.flush()
+                    progress.update(lat, lon, status)
+            finally:
+                dataset.close()
+                if out_fh is not None:
+                    out_fh.close()
 
         df = pd.DataFrame.from_dict(store.collated_results, orient='index')
         df = _order_results_columns(df)
         if output_csv:
-            output_path = _resolve_path(output_csv)
-            if output_path is None:
-                output_path = Path(output_csv)
+            # Rewrite ordered CSV (the incremental file may have unordered columns).
+            output_path = _resolve_path(output_csv) or Path(output_csv)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             df.to_csv(output_path, index=False)
         return df
+
+
+def run_global_subprocess_parallel(
+    locations: Sequence[Tuple[float, float]] | None = None,
+    weather_dir: str | Path | None = None,
+    land_csv: str | Path | None = None,
+    interest_csv: str | Path | None = None,
+    tech_yaml: str | Path | None = None,
+    aggregation_count: int = 1,
+    time_step: float = 1.0,
+    max_snapshots: int | None = None,
+    output_csv: str | Path | None = None,
+    quiet: bool = True,
+    workers: int = 4,
+    threads_per_worker: int = 1,
+) -> pd.DataFrame:
+    """Run the global sweep in parallel using independent OS subprocesses.
+
+    Each subprocess is an independent Python process that runs
+    ``python -m model.run_global`` on its assigned slice of locations, loading
+    all shared data (weather NetCDF, land CSV, tech YAML) exactly once.
+
+    This sidesteps macOS ``spawn`` overhead and GIL/Gurobi-thread contention
+    completely — every subprocess is isolated at the OS level.
+
+    Recommended: ``workers × threads_per_worker ≤ physical_core_count``.
+    Worker logs are written to a temporary directory and the path is printed
+    so you can ``tail -f`` them to monitor per-location progress.
+
+    Args:
+        workers: Number of independent subprocess workers.
+        threads_per_worker: Gurobi thread count per worker
+            (forwarded as GREEN_LORY_SOLVER_THREADS).
+    """
+    n_workers = max(1, int(workers))
+    n_threads = max(1, int(threads_per_worker))
+
+    # Resolve location list before spawning (avoids each subprocess needing land CSV loaded
+    # just to know which locations to handle).
+    land_csv_path = _resolve_path(land_csv or DEFAULT_LAND_CSV)
+    tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
+    interest_csv_path = _resolve_path(interest_csv or DEFAULT_INTEREST_CSV)
+    weather_dir_path = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
+
+    if locations is None:
+        tech_inputs = _load_tech_inputs(tech_yaml_path)
+        land_df = _load_land_table(land_csv_path)
+        land_df = _apply_spatial_solar_density_from_tech_config(land_df, tech_inputs)
+        location_list = _default_locations(land_df)
+    else:
+        location_list = [(float(la), float(lo)) for la, lo in locations]
+
+    n_locs = len(location_list)
+    n_workers = min(n_workers, n_locs)
+    batch_size = math.ceil(n_locs / n_workers)
+    batches = [location_list[i : i + batch_size] for i in range(0, n_locs, batch_size)]
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="green_lory_par_"))
+    print(f"[parallel] {n_workers} workers × {n_threads} threads, "
+          f"{n_locs} locations ({batch_size} per worker)")
+    print(f"[parallel] worker logs → {tmpdir}")
+
+    result_csvs: List[Path] = []
+    procs: List[subprocess.Popen] = []
+    log_fhs: List[Any] = []
+
+    try:
+        for i, batch in enumerate(batches):
+            loc_csv = tmpdir / f"locs_{i:04d}.csv"
+            out_csv = tmpdir / f"results_{i:04d}.csv"
+            log_path = tmpdir / f"worker_{i:04d}.log"
+
+            pd.DataFrame(batch, columns=["lat", "lon"]).to_csv(loc_csv, index=False)
+
+            cmd = [
+                sys.executable, "-m", "model.run_global",
+                "--locations-csv", str(loc_csv),
+                "--output-csv", str(out_csv),
+                "--threads-per-worker", str(n_threads),
+            ]
+            if tech_yaml_path and tech_yaml_path.exists():
+                cmd += ["--tech-yaml", str(tech_yaml_path)]
+            if land_csv_path and land_csv_path.exists():
+                cmd += ["--land-csv", str(land_csv_path)]
+            if interest_csv_path and interest_csv_path.exists():
+                cmd += ["--interest-csv", str(interest_csv_path)]
+            if max_snapshots is not None:
+                cmd += ["--max-snapshots", str(max_snapshots)]
+            if quiet:
+                cmd.append("--quiet")
+
+            env = os.environ.copy()
+            env["GREEN_LORY_SOLVER_THREADS"] = str(n_threads)
+
+            log_fh = open(log_path, "w", encoding="utf-8")
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(REPO_ROOT),
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+                env=env,
+            )
+            procs.append(proc)
+            result_csvs.append(out_csv)
+            log_fhs.append(log_fh)
+            LOGGER.info("Worker %d/%d: PID %d, %d locations", i + 1, n_workers, proc.pid, len(batch))
+
+        # Poll output CSVs every second to drive a tqdm progress bar.
+        try:
+            import warnings as _warnings
+            with _warnings.catch_warnings():
+                _warnings.simplefilter("ignore")  # suppress IProgress/ipywidgets warnings
+                from tqdm.auto import tqdm as _tqdm
+            _have_tqdm = True
+        except ImportError:
+            _have_tqdm = False
+
+        _t0 = time.perf_counter()
+        if _have_tqdm:
+            bar = _tqdm(total=n_locs, desc="Locations solved", unit="loc")
+        else:
+            bar = None
+
+        done = False
+        prev_count = 0
+        while not done:
+            time.sleep(1.0)
+            # Count rows (subtract header) across all output CSVs written so far.
+            count = 0
+            for csv in result_csvs:
+                if csv.exists():
+                    try:
+                        with open(csv, encoding="utf-8") as f:
+                            count += max(0, sum(1 for _ in f) - 1)
+                    except Exception:
+                        pass
+            if bar is not None and count > prev_count:
+                bar.update(count - prev_count)
+                prev_count = count
+
+            # Check if all subprocesses have finished.
+            done = all(p.poll() is not None for p in procs)
+
+        if bar is not None:
+            bar.close()
+
+        # Wait for stragglers and collect return codes.
+        failed_workers = []
+        for i, proc in enumerate(procs):
+            rc = proc.wait()
+            log_fhs[i].close()
+            if rc != 0:
+                failed_workers.append(i)
+                LOGGER.warning(
+                    "Worker %d exited with code %d — check %s",
+                    i, rc, tmpdir / f"worker_{i:04d}.log",
+                )
+
+        if failed_workers:
+            LOGGER.warning(
+                "%d/%d workers failed; their locations will be absent from results.",
+                len(failed_workers), n_workers,
+            )
+
+        # Merge surviving result CSVs.
+        frames = []
+        for csv in result_csvs:
+            if csv.exists():
+                try:
+                    df = pd.read_csv(csv)
+                    if not df.empty:
+                        frames.append(df)
+                except Exception as exc:
+                    LOGGER.warning("Could not read %s: %s", csv, exc)
+
+        if not frames:
+            return pd.DataFrame()
+
+        merged = pd.concat(frames, ignore_index=True)
+        merged = _order_results_columns(merged)
+        elapsed = time.perf_counter() - _t0
+        print(f"[parallel] finished {len(merged)} locations in {elapsed:.0f}s ({elapsed/60:.1f} min)")
+
+        if output_csv:
+            out_path = _resolve_path(output_csv) or Path(output_csv)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            merged.to_csv(out_path, index=False)
+
+        return merged
+
+    finally:
+        for fh in log_fhs:
+            try:
+                fh.close()
+            except Exception:
+                pass
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def _load_locations_csv(path: str | Path) -> List[Tuple[float, float]]:
@@ -1035,6 +1639,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the green ammonia model over many locations.")
     parser.add_argument("--locations-csv", type=str, help="CSV with columns lat,lon to restrict the sweep.")
     parser.add_argument(
+        "--tech-yaml",
+        type=str,
+        default=None,
+        help="Path to the tech-config YAML (overrides the built-in default).",
+    )
+    parser.add_argument(
         "--interest-csv",
         type=str,
         default=None,
@@ -1043,7 +1653,7 @@ if __name__ == "__main__":
             "build_cost_multiplier, land_cost_usd_per_km2_year, and water_cost_usd_per_m3."
         ),
     )
-    parser.add_argument("--land-csv", type=str, default=None, help="Optional override for the land availability CSV.")
+    parser.add_argument("--land-csv", type=str, default=None, help="Optional override for the max-capacities CSV.")
     parser.add_argument("--output-csv", type=str, default="results/run_global.csv", help="Where to write aggregated results.")
     parser.add_argument(
         "--quiet",
@@ -1055,6 +1665,30 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="Limit the number of weather snapshots per location (useful for notebooks/smoke tests).",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of worker processes for location-level multiprocessing.",
+    )
+    parser.add_argument(
+        "--threads-per-worker",
+        type=int,
+        default=None,
+        help="Solver thread count per worker (defaults to solver default when workers=1, else 1).",
+    )
+    parser.add_argument(
+        "--ram-per-worker-gb",
+        type=float,
+        default=None,
+        help="Optional RAM request per worker process (GB) for fail-fast validation.",
+    )
+    parser.add_argument(
+        "--max-ram-gb",
+        type=float,
+        default=None,
+        help="Optional total RAM request (GB) for fail-fast validation.",
     )
     parser.add_argument("--limit", type=int, default=None, help="Optional limit on the number of locations to process.")
     args = parser.parse_args()
@@ -1068,10 +1702,15 @@ if __name__ == "__main__":
 
     results_df = run_global(
         locations=requested_locations,
+        tech_yaml=args.tech_yaml,
         interest_csv=args.interest_csv,
         land_csv=args.land_csv,
         max_snapshots=args.max_snapshots,
         output_csv=args.output_csv,
         quiet=args.quiet,
+        workers=args.workers,
+        threads_per_worker=args.threads_per_worker,
+        ram_per_worker_gb=args.ram_per_worker_gb,
+        max_ram_gb=args.max_ram_gb,
     )
     print(f"Processed {len(results_df)} locations. Results saved to {args.output_csv}.")
