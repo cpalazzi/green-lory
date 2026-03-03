@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=green-lory-global
-#SBATCH --partition=long
+#SBATCH --partition=medium
 #SBATCH --clusters=all
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=370G
-#SBATCH --time=3-00:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=carlo.palazzi@eng.ox.ac.uk
 
