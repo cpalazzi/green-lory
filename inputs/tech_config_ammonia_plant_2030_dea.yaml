@@ -57,9 +57,9 @@ techs:
     lifetime_years: 40
     interest_rate: 0.1
     fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent
-  onshore_wind:
+  wind:
     component_type: generator
-    source_note: DEA 2030 Onshore turbines
+    source_note: DEA 2030 Onshore turbines (single wind profile; offshore cost premiums applied via finance overrides)
     overnight_cost_per_mw: 930000
     tech_cost_per_mw: 827241.322492 # equipment line from DEA
     build_cost_per_mw: 102758.677508 # installation/development + grid connection
@@ -67,26 +67,6 @@ techs:
     lifetime_years: 30
     interest_rate: 0.1
     fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent
-  offshore_wind_fixed:
-    component_type: generator
-    source_note: DEA 2030 Offshore Wind AC Fixed, max depth 50m (component regrouping from DEA line items)
-    overnight_cost_per_mw: 2393134.487352405
-    tech_cost_per_mw: 1811178.579370336 # turbines + array/export cables + substation
-    build_cost_per_mw: 581955.907982069 # foundation + project development
-    land_use_km2_per_mw: 0.2 # 5 MW/km² density (Salmon et al., 200 km²/GW)
-    lifetime_years: 30
-    interest_rate: 0.1
-    fixed_om_fraction: 0.02 # Rounded up DEA
-  offshore_wind_floating:
-    component_type: generator
-    source_note: DEA 2030 Offshore Wind AC Floating, max depth 1000m (component regrouping from DEA line items)
-    overnight_cost_per_mw: 3558133.370750934
-    tech_cost_per_mw: 1722917.3260605389 # turbines + array/export cables + substation
-    build_cost_per_mw: 1835216.0446903952 # foundation + project development
-    land_use_km2_per_mw: 0.2 # 5 MW/km² density (Salmon et al., 200 km²/GW)
-    lifetime_years: 30
-    interest_rate: 0.1
-    fixed_om_fraction: 0.02 # Rounded up DEA
 
  # -----------------
  # Links

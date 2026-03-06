@@ -13,7 +13,6 @@ This folder contains ARC (Oxford) helper scripts for running full global jobs fr
 - `arc/arc_check_run_inputs.sh`: preflight checker for required inputs before submitting a global run.
 - `arc/jobs/01_run_global.sh`: SLURM job script that executes `model.run_global` end-to-end.
 - `arc/submit_global_run.sh`: convenience wrapper to run preflight + submit the SLURM job.
-- `scripts/make_flat_finance_overrides.py`: generates a flat finance CSV from the spatial template coverage.
 
 ## Typical ARC Workflow
 
@@ -38,9 +37,30 @@ bash arc/arc_check_run_inputs.sh
 ```
 
 ### 4. Submit full global run
+
+Single job (all longitudes):
 ```bash
 cd /data/engs-df-green-ammonia/engs2523/green-lory
 bash arc/submit_global_run.sh full-global-2030
+```
+
+**Recommended: 4 parallel quadrant jobs** (splits by longitude, each ~20 hours):
+```bash
+cd /data/engs-df-green-ammonia/engs2523/green-lory
+bash arc/submit_global_run.sh full-global-2030 --quadrants
+```
+
+This submits 4 SLURM jobs with longitude bounds:
+- `west2`: [-180, -90)
+- `west1`: [-90, 0)
+- `east1`: [0, 90)
+- `east2`: [90, 180)
+
+After all quadrant jobs complete, use the results combiner cell in notebook 03
+or merge manually:
+```bash
+cat results/full-global-2030-*/run_global_*.csv | head -1 > combined.csv
+tail -q -n +2 results/full-global-2030-*/run_global_*.csv >> combined.csv
 ```
 
 Or submit directly:
@@ -63,34 +83,11 @@ cd /data/engs-df-green-ammonia/engs2523/green-lory
 bash arc/submit_global_run.sh full-global-2030 --finance-mode spatial
 ```
 
-Flat finance CSV:
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_global_run.sh full-global-2030 --finance-mode flat
-```
-
 Custom finance CSV:
 ```bash
 cd /data/engs-df-green-ammonia/engs2523/green-lory
 bash arc/submit_global_run.sh full-global-2030 --finance-mode custom --interest-csv inputs/my_finance.csv
 ```
-
-Optional: enforce a single global flat rate (e.g. 8%)
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-ARC_FLAT_INTEREST_RATE=0.08 bash arc/submit_global_run.sh full-global-2030 --finance-mode flat
-```
-
-### 6. Parallelize inside `run_global`
-
-`model.run_global` now supports multiprocessing directly. Control process and thread budgets through ARC env vars:
-
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-ARC_WORKERS=8 ARC_THREADS_PER_WORKER=2 ARC_RAM_PER_WORKER_GB=20 bash arc/submit_global_run.sh full-global-2030-flat --finance-mode flat
-```
-
-`run_global` fails fast when requested workers/threads/RAM exceed detected machine allocation.
 
 ## Password-based interactive usage (VS Code agent friendly)
 If you are entering password for each SSH command, use single-command SSH invocations from your local terminal and provide password when prompted:
@@ -112,20 +109,17 @@ You can override defaults without editing scripts:
 - `ARC_REPO_DIR` (default: `$ARC_WORK_BASE/green-lory`)
 - `ARC_ENV_PREFIX` (default: `$ARC_WORK_BASE/envs/green-lory-env`)
 - `ARC_ANACONDA_MODULE` (default: `Anaconda3/2024.06-1`)
-- `ARC_TECH_YAML` (default: `inputs/tech_config_ammonia_plant_2030_qld.yaml`)
+- `ARC_TECH_YAML` (default: `inputs/tech_config_ammonia_plant_2030_dea.yaml`)
 - `ARC_INTEREST_CSV` (default: unset / no overrides)
-- `ARC_FINANCE_MODE` (default: `none`; alternatives: `spatial`, `flat`, `custom`)
-- `ARC_FLAT_INTEREST_RATE` (optional constant flat CoC for all tech/location rows)
+- `ARC_FINANCE_MODE` (default: `none`; alternatives: `spatial`, `custom`)
 - `ARC_LAND_CSV` (default: `data/20251222_max_capacities.csv`)
 - `ARC_LOCATIONS_CSV` (optional location subset)
 - `ARC_MAX_SNAPSHOTS` (optional smoke-test cap)
 - `ARC_LIMIT` (optional location cap)
 - `ARC_OUTPUT_CSV` (optional explicit output path)
 - `ARC_QUIET` (default: `1`)
-- `ARC_WORKERS` (default: `1`)
-- `ARC_THREADS_PER_WORKER` (default: `1`)
-- `ARC_RAM_PER_WORKER_GB` (optional per-worker RAM request for preflight validation)
-- `ARC_MAX_RAM_GB` (optional total RAM request for preflight validation)
+- `ARC_THREADS_PER_WORKER` (default: all available CPUs)
+- `ARC_LON_MIN` / `ARC_LON_MAX` (optional longitude bounds for segmented runs)
 
 ## Notes
 - `arc/jobs/01_run_global.sh` writes outputs under `results/<run-label>/` by default.

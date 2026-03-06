@@ -22,9 +22,6 @@ def _apply_unit_suffixes(location_results: Dict[str, Any]) -> Dict[str, Any]:
 
     # Component capacities/energies: names originate from network component labels.
     mw_components = {
-        "onshore_wind",
-        "offshore_wind_fixed",
-        "offshore_wind_floating",
         "wind",
         "solar",
         "solar_tracking",

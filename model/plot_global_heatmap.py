@@ -94,9 +94,6 @@ def plot_lcoa_heatmap(
     wind_power_cols = [
         col
         for col in (
-            "onshore_wind_mw",
-            "offshore_wind_fixed_mw",
-            "offshore_wind_floating_mw",
             "wind_mw",
             "wind",
         )
@@ -108,9 +105,6 @@ def plot_lcoa_heatmap(
     wind_cost_cols = [
         col
         for col in (
-            "cost_share_onshore_wind_pct",
-            "cost_share_offshore_wind_fixed_pct",
-            "cost_share_offshore_wind_floating_pct",
             "cost_share_wind_pct",
         )
         if col in plot_df.columns
@@ -129,14 +123,8 @@ def plot_lcoa_heatmap(
         color_column,
         "annual_ammonia_demand_mwh",
         "wind_total_mw",
-        "onshore_wind_mw",
-        "offshore_wind_fixed_mw",
-        "offshore_wind_floating_mw",
         solar_col,
         "cost_share_wind_total_pct",
-        "cost_share_onshore_wind_pct",
-        "cost_share_offshore_wind_fixed_pct",
-        "cost_share_offshore_wind_floating_pct",
         "cost_share_solar_pct",
         "cost_share_electrolyser_pct",
         land_onshore_col,

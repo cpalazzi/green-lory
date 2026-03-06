@@ -6,11 +6,7 @@ import io
 import logging
 import math
 import os
-import shutil
-import subprocess
 import sys
-import tempfile
-import threading
 import time
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -49,11 +45,7 @@ _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
 # Interest-rate defaults are therefore not sourced from a runtime YAML file.
 DEFAULT_INTEREST_RATES: Dict[str, float] = {}
 
-WIND_VARIANT_GENERATORS = [
-    "onshore_wind",
-    "offshore_wind_fixed",
-    "offshore_wind_floating",
-]
+WIND_GENERATORS = ["wind"]
 
 
 def _annuity_factor(interest_rate: float, lifetime_years: float) -> float:
@@ -365,15 +357,9 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "wind_area_used_km2",
         "max_power_wind_mw",
         "max_power_solar_mw",
-        "max_power_onshore_wind_mw",
-        "max_power_offshore_wind_fixed_mw",
-        "max_power_offshore_wind_floating_mw",
     ]
 
     capacities = [
-        "onshore_wind_mw",
-        "offshore_wind_fixed_mw",
-        "offshore_wind_floating_mw",
         "wind_mw",
         "solar_mw",
         "solar_tracking_mw",
@@ -609,13 +595,6 @@ def _apply_spatial_solar_density_from_tech_config(
                 updated["max_power_wind_mw"]
                 + updated["max_power_solar_mw"]
             )
-        elif "max_power_onshore_wind_mw" in updated.columns:
-            updated["max_capacity_mw"] = (
-                updated["max_power_onshore_wind_mw"]
-                + updated["max_power_solar_mw"]
-                + updated.get("max_power_offshore_wind_fixed_mw", 0.0)
-                + updated.get("max_power_offshore_wind_floating_mw", 0.0)
-            )
         # Backward-compatible aliases used by older plotting/report helpers.
         updated["solar_max_capacity"] = updated["max_power_solar_mw"]
 
@@ -701,9 +680,7 @@ def _match_land_row(land_df: pd.DataFrame, lat: float, lon: float) -> pd.Series 
 
 LEGACY_POWER_CAP_COLUMN_MAP = {
     "solar_max_capacity": "solar",
-    "wind_max_capacity": "onshore_wind",
-    "offshore_wind_fixed_max_capacity": "offshore_wind_fixed",
-    "offshore_wind_floating_max_capacity": "offshore_wind_floating",
+    "wind_max_capacity": "wind",
 }
 
 
@@ -827,10 +804,10 @@ def _apply_land_caps(
         for col in LEGACY_POWER_CAP_COLUMN_MAP
     )
     if has_explicit_power_caps:
-        for tech in WIND_VARIANT_GENERATORS + ["solar"]:
+        for tech in WIND_GENERATORS + ["solar"]:
             power_caps.setdefault(tech, 0.0)
     elif has_legacy_power_caps:
-        for tech in WIND_VARIANT_GENERATORS:
+        for tech in WIND_GENERATORS:
             power_caps.setdefault(tech, 0.0)
 
     if power_caps or energy_caps:
@@ -843,10 +820,8 @@ def _apply_land_caps(
     if pd.notna(fallback):
         fallback_val = max(0.0, float(fallback))
         fallback_caps = {
-            "onshore_wind": fallback_val,
+            "wind": fallback_val,
             "solar": fallback_val,
-            "offshore_wind_fixed": 0.0,
-            "offshore_wind_floating": 0.0,
         }
         total_cap = _apply_component_caps(network, fallback_caps, {})
         return (total_cap if total_cap > 0 else None), row
@@ -970,12 +945,6 @@ def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggr
     frame = location.concat.copy()
     if "Weights" in frame.columns:
         frame = frame.drop(columns="Weights")
-    if "onshore_wind" not in frame.columns and "wind" in frame.columns:
-        frame["onshore_wind"] = frame["wind"]
-    if "offshore_wind_fixed" not in frame.columns and "wind" in frame.columns:
-        frame["offshore_wind_fixed"] = frame["wind"]
-    if "offshore_wind_floating" not in frame.columns and "wind" in frame.columns:
-        frame["offshore_wind_floating"] = frame["wind"]
     if "wind" not in frame.columns and "onshore_wind" in frame.columns:
         frame["wind"] = frame["onshore_wind"]
     if "solar_tracking" not in frame.columns and "solar" in frame.columns:
@@ -1034,7 +1003,7 @@ def _estimate_land_used_km2(
             if land_use is not None:
                 land_used_km2 += total_solar_capacity * float(land_use)
 
-    for gen_name in ("onshore_wind", "wind"):
+    for gen_name in ("wind",):
         if gen_name not in network.generators.index:
             continue
         value = network.generators.at[gen_name, "p_nom_opt"]
@@ -1043,116 +1012,11 @@ def _estimate_land_used_km2(
         capacity = max(0.0, float(value))
         if capacity <= 0:
             continue
-        tech_key = "onshore_wind" if "onshore_wind" in tech_inputs else gen_name
-        land_use = tech_inputs.get(tech_key, {}).get("land_use_km2_per_mw")
+        land_use = tech_inputs.get("wind", {}).get("land_use_km2_per_mw")
         if land_use is not None:
             land_used_km2 += capacity * float(land_use)
 
     return land_used_km2
-
-
-def _env_positive_int(name: str) -> int | None:
-    raw = os.environ.get(name)
-    if raw is None:
-        return None
-    text = str(raw).strip()
-    if not text:
-        return None
-    try:
-        value = int(text)
-    except ValueError:
-        return None
-    if value <= 0:
-        return None
-    return value
-
-
-def _available_cpu_capacity() -> int:
-    for env_var in ("SLURM_CPUS_PER_TASK", "SLURM_CPUS_ON_NODE"):
-        value = _env_positive_int(env_var)
-        if value is not None:
-            return value
-    detected = os.cpu_count()
-    return max(1, int(detected) if detected is not None else 1)
-
-
-def _available_memory_gb(cpu_capacity: int) -> float | None:
-    mem_per_node_mb = _env_positive_int("SLURM_MEM_PER_NODE")
-    if mem_per_node_mb is not None:
-        return float(mem_per_node_mb) / 1024.0
-
-    mem_per_cpu_mb = _env_positive_int("SLURM_MEM_PER_CPU")
-    if mem_per_cpu_mb is not None:
-        return float(mem_per_cpu_mb * cpu_capacity) / 1024.0
-
-    cgroup_limit = Path("/sys/fs/cgroup/memory.max")
-    if cgroup_limit.exists():
-        text = cgroup_limit.read_text().strip()
-        if text.isdigit():
-            limit_bytes = int(text)
-            if 0 < limit_bytes < (1 << 60):
-                return float(limit_bytes) / (1024.0 ** 3)
-
-    try:
-        page_size = int(os.sysconf("SC_PAGE_SIZE"))
-        pages = int(os.sysconf("SC_PHYS_PAGES"))
-        if page_size > 0 and pages > 0:
-            return float(page_size * pages) / (1024.0 ** 3)
-    except (AttributeError, OSError, ValueError):
-        pass
-
-    return None
-
-
-def _validate_resource_request(
-    workers: int,
-    threads_per_worker: int,
-    ram_per_worker_gb: float | None,
-    max_ram_gb: float | None,
-) -> None:
-    if workers < 1:
-        raise ValueError("workers must be >= 1")
-    if threads_per_worker < 1:
-        raise ValueError("threads_per_worker must be >= 1")
-    if ram_per_worker_gb is not None and ram_per_worker_gb <= 0:
-        raise ValueError("ram_per_worker_gb must be > 0 when provided")
-    if max_ram_gb is not None and max_ram_gb <= 0:
-        raise ValueError("max_ram_gb must be > 0 when provided")
-
-    cpu_capacity = _available_cpu_capacity()
-    cpu_required = workers * threads_per_worker
-    if cpu_required > cpu_capacity:
-        raise ValueError(
-            "Requested workers * threads_per_worker exceeds available CPU capacity: "
-            f"{workers} * {threads_per_worker} = {cpu_required} > {cpu_capacity}."
-        )
-
-    requested_ram_gb = None
-    if ram_per_worker_gb is not None:
-        requested_ram_gb = float(ram_per_worker_gb) * float(workers)
-    if max_ram_gb is not None:
-        if requested_ram_gb is not None and requested_ram_gb > float(max_ram_gb):
-            raise ValueError(
-                "Requested RAM is inconsistent: workers * ram_per_worker_gb exceeds max_ram_gb "
-                f"({requested_ram_gb:.2f} > {float(max_ram_gb):.2f})."
-            )
-        if requested_ram_gb is None:
-            requested_ram_gb = float(max_ram_gb)
-
-    if requested_ram_gb is None:
-        return
-
-    available_ram_gb = _available_memory_gb(cpu_capacity)
-    if available_ram_gb is None:
-        raise ValueError(
-            "Unable to detect available machine RAM for validation. "
-            "Set RAM arguments only when system RAM can be detected."
-        )
-    if requested_ram_gb > available_ram_gb:
-        raise ValueError(
-            "Requested RAM exceeds available machine allocation: "
-            f"{requested_ram_gb:.2f} GB > {available_ram_gb:.2f} GB."
-        )
 
 
 def _run_single_location(
@@ -1325,7 +1189,8 @@ def run_global(
     output_csv: str | Path | None = None,
     quiet: bool = False,
     threads_per_worker: int | None = None,
-    **_kwargs: Any,  # absorb deprecated workers/ram arguments without error
+    lon_min: float | None = None,
+    lon_max: float | None = None,
 ) -> pd.DataFrame:
     """Run the ammonia plant optimisation for every requested location (serial).
 
@@ -1346,6 +1211,8 @@ def run_global(
             location (useful for quick smoke tests and notebooks).
         output_csv: Optional destination for the aggregated results table.
         threads_per_worker: Solver thread count (forwarded to GREEN_LORY_SOLVER_THREADS).
+        lon_min: Optional minimum longitude bound (inclusive) for location filtering.
+        lon_max: Optional maximum longitude bound (exclusive) for location filtering.
     """
     requested_threads = 1 if threads_per_worker is None else int(threads_per_worker)
 
@@ -1367,6 +1234,13 @@ def run_global(
         else:
             location_list = [(float(lat), float(lon)) for lat, lon in locations]
 
+        # Apply longitude segmentation if bounds are specified.
+        if lon_min is not None or lon_max is not None:
+            lo = float(lon_min) if lon_min is not None else -180.0
+            hi = float(lon_max) if lon_max is not None else 180.0
+            location_list = [(la, lo_) for la, lo_ in location_list if lo <= lo_ < hi]
+            LOGGER.info("Longitude filter [%.1f, %.1f): %d locations", lo, hi, len(location_list))
+
         total_locations = len(location_list)
         progress = _ProgressTracker(total_locations)
 
@@ -1378,8 +1252,8 @@ def run_global(
             dataset = lt.all_locations(str(weather_dir_path), cache_resources=True)
             interest_df = _load_interest_table(interest_csv_path)
 
-            # Open output file for incremental writing (enables progress polling from
-            # parallel workers and provides partial-results recovery on crash).
+            # Open output file for incremental writing (provides partial-results
+            # recovery on crash and progress monitoring via file size).
             out_fh: Any = None
             header_written = False
             if output_csv:
@@ -1430,204 +1304,8 @@ def run_global(
         return df
 
 
-def run_global_subprocess_parallel(
-    locations: Sequence[Tuple[float, float]] | None = None,
-    weather_dir: str | Path | None = None,
-    land_csv: str | Path | None = None,
-    interest_csv: str | Path | None = None,
-    tech_yaml: str | Path | None = None,
-    aggregation_count: int = 1,
-    time_step: float = 1.0,
-    max_snapshots: int | None = None,
-    output_csv: str | Path | None = None,
-    quiet: bool = True,
-    workers: int = 4,
-    threads_per_worker: int = 1,
-) -> pd.DataFrame:
-    """Run the global sweep in parallel using independent OS subprocesses.
-
-    Each subprocess is an independent Python process that runs
-    ``python -m model.run_global`` on its assigned slice of locations, loading
-    all shared data (weather NetCDF, land CSV, tech YAML) exactly once.
-
-    This sidesteps macOS ``spawn`` overhead and GIL/Gurobi-thread contention
-    completely — every subprocess is isolated at the OS level.
-
-    Recommended: ``workers × threads_per_worker ≤ physical_core_count``.
-    Worker logs are written to a temporary directory and the path is printed
-    so you can ``tail -f`` them to monitor per-location progress.
-
-    Args:
-        workers: Number of independent subprocess workers.
-        threads_per_worker: Gurobi thread count per worker
-            (forwarded as GREEN_LORY_SOLVER_THREADS).
-    """
-    n_workers = max(1, int(workers))
-    n_threads = max(1, int(threads_per_worker))
-
-    # Resolve location list before spawning (avoids each subprocess needing land CSV loaded
-    # just to know which locations to handle).
-    land_csv_path = _resolve_path(land_csv or DEFAULT_LAND_CSV)
-    tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
-    interest_csv_path = _resolve_path(interest_csv or DEFAULT_INTEREST_CSV)
-    weather_dir_path = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
-
-    if locations is None:
-        tech_inputs = _load_tech_inputs(tech_yaml_path)
-        land_df = _load_land_table(land_csv_path)
-        land_df = _apply_spatial_solar_density_from_tech_config(land_df, tech_inputs)
-        location_list = _default_locations(land_df)
-    else:
-        location_list = [(float(la), float(lo)) for la, lo in locations]
-
-    n_locs = len(location_list)
-    n_workers = min(n_workers, n_locs)
-    batch_size = math.ceil(n_locs / n_workers)
-    batches = [location_list[i : i + batch_size] for i in range(0, n_locs, batch_size)]
-
-    tmpdir = Path(tempfile.mkdtemp(prefix="green_lory_par_"))
-    print(f"[parallel] {n_workers} workers × {n_threads} threads, "
-          f"{n_locs} locations ({batch_size} per worker)")
-    print(f"[parallel] worker logs → {tmpdir}")
-
-    result_csvs: List[Path] = []
-    procs: List[subprocess.Popen] = []
-    log_fhs: List[Any] = []
-
-    try:
-        for i, batch in enumerate(batches):
-            loc_csv = tmpdir / f"locs_{i:04d}.csv"
-            out_csv = tmpdir / f"results_{i:04d}.csv"
-            log_path = tmpdir / f"worker_{i:04d}.log"
-
-            pd.DataFrame(batch, columns=["lat", "lon"]).to_csv(loc_csv, index=False)
-
-            cmd = [
-                sys.executable, "-m", "model.run_global",
-                "--locations-csv", str(loc_csv),
-                "--output-csv", str(out_csv),
-                "--threads-per-worker", str(n_threads),
-            ]
-            if tech_yaml_path and tech_yaml_path.exists():
-                cmd += ["--tech-yaml", str(tech_yaml_path)]
-            if land_csv_path and land_csv_path.exists():
-                cmd += ["--land-csv", str(land_csv_path)]
-            if interest_csv_path and interest_csv_path.exists():
-                cmd += ["--interest-csv", str(interest_csv_path)]
-            if max_snapshots is not None:
-                cmd += ["--max-snapshots", str(max_snapshots)]
-            if quiet:
-                cmd.append("--quiet")
-
-            env = os.environ.copy()
-            env["GREEN_LORY_SOLVER_THREADS"] = str(n_threads)
-
-            log_fh = open(log_path, "w", encoding="utf-8")
-            proc = subprocess.Popen(
-                cmd,
-                cwd=str(REPO_ROOT),
-                stdout=log_fh,
-                stderr=subprocess.STDOUT,
-                env=env,
-            )
-            procs.append(proc)
-            result_csvs.append(out_csv)
-            log_fhs.append(log_fh)
-            LOGGER.info("Worker %d/%d: PID %d, %d locations", i + 1, n_workers, proc.pid, len(batch))
-
-        # Poll output CSVs every second to drive a tqdm progress bar.
-        try:
-            import warnings as _warnings
-            with _warnings.catch_warnings():
-                _warnings.simplefilter("ignore")  # suppress IProgress/ipywidgets warnings
-                from tqdm.auto import tqdm as _tqdm
-            _have_tqdm = True
-        except ImportError:
-            _have_tqdm = False
-
-        _t0 = time.perf_counter()
-        if _have_tqdm:
-            bar = _tqdm(total=n_locs, desc="Locations solved", unit="loc")
-        else:
-            bar = None
-
-        done = False
-        prev_count = 0
-        while not done:
-            time.sleep(1.0)
-            # Count rows (subtract header) across all output CSVs written so far.
-            count = 0
-            for csv in result_csvs:
-                if csv.exists():
-                    try:
-                        with open(csv, encoding="utf-8") as f:
-                            count += max(0, sum(1 for _ in f) - 1)
-                    except Exception:
-                        pass
-            if bar is not None and count > prev_count:
-                bar.update(count - prev_count)
-                prev_count = count
-
-            # Check if all subprocesses have finished.
-            done = all(p.poll() is not None for p in procs)
-
-        if bar is not None:
-            bar.close()
-
-        # Wait for stragglers and collect return codes.
-        failed_workers = []
-        for i, proc in enumerate(procs):
-            rc = proc.wait()
-            log_fhs[i].close()
-            if rc != 0:
-                failed_workers.append(i)
-                LOGGER.warning(
-                    "Worker %d exited with code %d — check %s",
-                    i, rc, tmpdir / f"worker_{i:04d}.log",
-                )
-
-        if failed_workers:
-            LOGGER.warning(
-                "%d/%d workers failed; their locations will be absent from results.",
-                len(failed_workers), n_workers,
-            )
-
-        # Merge surviving result CSVs.
-        frames = []
-        for csv in result_csvs:
-            if csv.exists():
-                try:
-                    df = pd.read_csv(csv)
-                    if not df.empty:
-                        frames.append(df)
-                except Exception as exc:
-                    LOGGER.warning("Could not read %s: %s", csv, exc)
-
-        if not frames:
-            return pd.DataFrame()
-
-        merged = pd.concat(frames, ignore_index=True)
-        merged = _order_results_columns(merged)
-        elapsed = time.perf_counter() - _t0
-        print(f"[parallel] finished {len(merged)} locations in {elapsed:.0f}s ({elapsed/60:.1f} min)")
-
-        if output_csv:
-            out_path = _resolve_path(output_csv) or Path(output_csv)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            merged.to_csv(out_path, index=False)
-
-        return merged
-
-    finally:
-        for fh in log_fhs:
-            try:
-                fh.close()
-            except Exception:
-                pass
-        shutil.rmtree(tmpdir, ignore_errors=True)
-
-
-def _load_locations_csv(path: str | Path) -> List[Tuple[float, float]]:
+def load_locations_csv(path: str | Path) -> List[Tuple[float, float]]:
+    """Read a CSV with ``lat`` and ``lon`` columns and return a list of (lat, lon) tuples."""
     df = pd.read_csv(path)
     for column in ("lat", "lon"):
         if column not in df.columns:
@@ -1667,34 +1345,18 @@ if __name__ == "__main__":
         help="Limit the number of weather snapshots per location (useful for notebooks/smoke tests).",
     )
     parser.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="Number of worker processes for location-level multiprocessing.",
-    )
-    parser.add_argument(
         "--threads-per-worker",
         type=int,
         default=None,
-        help="Solver thread count per worker (defaults to solver default when workers=1, else 1).",
-    )
-    parser.add_argument(
-        "--ram-per-worker-gb",
-        type=float,
-        default=None,
-        help="Optional RAM request per worker process (GB) for fail-fast validation.",
-    )
-    parser.add_argument(
-        "--max-ram-gb",
-        type=float,
-        default=None,
-        help="Optional total RAM request (GB) for fail-fast validation.",
+        help="Solver thread count (forwarded to GREEN_LORY_SOLVER_THREADS).",
     )
     parser.add_argument("--limit", type=int, default=None, help="Optional limit on the number of locations to process.")
+    parser.add_argument("--lon-min", type=float, default=None, help="Minimum longitude (inclusive) for location filtering.")
+    parser.add_argument("--lon-max", type=float, default=None, help="Maximum longitude (exclusive) for location filtering.")
     args = parser.parse_args()
 
     if args.locations_csv:
-        requested_locations = _load_locations_csv(args.locations_csv)
+        requested_locations = load_locations_csv(args.locations_csv)
         if args.limit is not None:
             requested_locations = requested_locations[: args.limit]
     else:
@@ -1708,9 +1370,8 @@ if __name__ == "__main__":
         max_snapshots=args.max_snapshots,
         output_csv=args.output_csv,
         quiet=args.quiet,
-        workers=args.workers,
         threads_per_worker=args.threads_per_worker,
-        ram_per_worker_gb=args.ram_per_worker_gb,
-        max_ram_gb=args.max_ram_gb,
+        lon_min=args.lon_min,
+        lon_max=args.lon_max,
     )
     print(f"Processed {len(results_df)} locations. Results saved to {args.output_csv}.")

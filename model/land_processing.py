@@ -26,11 +26,7 @@ DEFAULT_OUTPUT_CSV = DATA_DIR / "20251222_max_capacities.csv"
 LEGACY_OUTPUT_CSV = DATA_DIR / "20251222_land_max_capacity.csv"
 EARTH_RADIUS_KM = 6371.0
 MODIS_WATER_CLASS = 0
-ONSHORE_WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
-OFFSHORE_WIND_FIXED_LAND_USE_KM2_PER_GW = 200.0
-OFFSHORE_WIND_FLOATING_LAND_USE_KM2_PER_GW = 200.0
-OFFSHORE_FIXED_MAX_DEPTH_M = 50.0
-OFFSHORE_FLOATING_MAX_DEPTH_M = 1000.0
+WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
 # First Solar Series 6 (2018) constants used in van de Ven et al. (2021) style packing
 FIRST_SOLAR_MODULE_WIDTH_M = 1.21
 FIRST_SOLAR_MODULE_LENGTH_M = 2.06
@@ -68,22 +64,14 @@ FINAL_COLUMNS = [
     "solar_availability",
     "solar_area_km2",
     "wind_area_km2",
-    "onshore_wind_density_mw_per_km2",
-    "offshore_wind_fixed_density_mw_per_km2",
-    "offshore_wind_floating_density_mw_per_km2",
-    "solar_density_mw_per_km2",
     "wind_density_mw_per_km2",
+    "solar_density_mw_per_km2",
     "max_power_solar_mw",
     "max_power_wind_mw",
-    "max_power_onshore_wind_mw",
-    "max_power_offshore_wind_fixed_mw",
-    "max_power_offshore_wind_floating_mw",
     "max_capacity_mw",
     # Backward-compatible aliases used by existing plotting/reporting code.
     "solar_max_capacity",
     "wind_max_capacity",
-    "offshore_wind_fixed_max_capacity",
-    "offshore_wind_floating_max_capacity",
     "max_capacity",
 ]
 
@@ -98,7 +86,7 @@ def _resolve_path(path: str | Path | None, default: Path) -> Path:
 def _wind_density(
     latitudes: pd.Series,
     scale: float = 1.0,
-    land_use_km2_per_gw: float = ONSHORE_WIND_LAND_USE_KM2_PER_GW,
+    land_use_km2_per_gw: float = WIND_LAND_USE_KM2_PER_GW,
 ) -> pd.Series:
     base_density = 1000.0 / float(land_use_km2_per_gw)  # MW per km²
     densities = np.full(latitudes.shape[0], base_density * scale)
@@ -423,9 +411,6 @@ def _merge_reference_data(base: pd.DataFrame, reference_path: Path | None) -> pd
         "max_capacity_mw",
         "max_power_wind_mw",
         "max_power_solar_mw",
-        "max_power_onshore_wind_mw",
-        "max_power_offshore_wind_fixed_mw",
-        "max_power_offshore_wind_floating_mw",
         "max_capacity",
         "wind_max_capacity",
         "solar_max_capacity",
@@ -481,45 +466,18 @@ def build_land_availability_table(config: LandAvailabilityConfig | None = None) 
     availability["offshore_area_km2"] = availability["area"] * availability["offshore_sea_pct"] / 100.0
 
     availability["solar_area_km2"] = availability["onshore_area_km2"]
-    availability["wind_area_km2"] = availability["onshore_area_km2"]
+    availability["wind_area_km2"] = availability["onshore_area_km2"] + availability["offshore_area_km2"]
 
     availability["solar_density_mw_per_km2"] = _solar_density(availability["latitude"], 1.0)
-    availability["onshore_wind_density_mw_per_km2"] = _wind_density(
-        availability["latitude"], 1.0, ONSHORE_WIND_LAND_USE_KM2_PER_GW
+    availability["wind_density_mw_per_km2"] = _wind_density(
+        availability["latitude"], 1.0, WIND_LAND_USE_KM2_PER_GW
     )
-    availability["offshore_wind_fixed_density_mw_per_km2"] = _wind_density(
-        availability["latitude"], 1.0, OFFSHORE_WIND_FIXED_LAND_USE_KM2_PER_GW
-    )
-    availability["offshore_wind_floating_density_mw_per_km2"] = _wind_density(
-        availability["latitude"], 1.0, OFFSHORE_WIND_FLOATING_LAND_USE_KM2_PER_GW
-    )
-    availability["wind_density_mw_per_km2"] = availability["onshore_wind_density_mw_per_km2"]
-
-    depth_abs = availability["bathymetry_depth_m"].abs()
-    is_ocean = availability["bathymetry_depth_m"] < 0.0
-    fixed_allowed = is_ocean & (depth_abs <= OFFSHORE_FIXED_MAX_DEPTH_M)
-    floating_allowed = is_ocean & (depth_abs > OFFSHORE_FIXED_MAX_DEPTH_M) & (depth_abs <= OFFSHORE_FLOATING_MAX_DEPTH_M)
 
     availability["max_power_solar_mw"] = (
         availability["onshore_area_km2"] * availability["solar_density_mw_per_km2"]
     ).clip(lower=0.0)
-    availability["max_power_onshore_wind_mw"] = (
-        availability["onshore_area_km2"] * availability["onshore_wind_density_mw_per_km2"]
-    ).clip(lower=0.0)
-    availability["max_power_offshore_wind_fixed_mw"] = (
-        availability["offshore_area_km2"]
-        * availability["offshore_wind_fixed_density_mw_per_km2"]
-        * fixed_allowed.astype(float)
-    ).clip(lower=0.0)
-    availability["max_power_offshore_wind_floating_mw"] = (
-        availability["offshore_area_km2"]
-        * availability["offshore_wind_floating_density_mw_per_km2"]
-        * floating_allowed.astype(float)
-    ).clip(lower=0.0)
     availability["max_power_wind_mw"] = (
-        availability["max_power_onshore_wind_mw"]
-        + availability["max_power_offshore_wind_fixed_mw"]
-        + availability["max_power_offshore_wind_floating_mw"]
+        availability["wind_area_km2"] * availability["wind_density_mw_per_km2"]
     ).clip(lower=0.0)
     availability["max_capacity_mw"] = (
         availability["max_power_solar_mw"]
@@ -530,8 +488,6 @@ def build_land_availability_table(config: LandAvailabilityConfig | None = None) 
     # Backward-compatible aliases.
     availability["solar_max_capacity"] = availability["max_power_solar_mw"]
     availability["wind_max_capacity"] = availability["max_power_wind_mw"]
-    availability["offshore_wind_fixed_max_capacity"] = availability["max_power_offshore_wind_fixed_mw"]
-    availability["offshore_wind_floating_max_capacity"] = availability["max_power_offshore_wind_floating_mw"]
     availability["max_capacity"] = availability["max_capacity_mw"]
 
     merged = _merge_reference_data(availability, cfg.reference_capacity_csv)

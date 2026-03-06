@@ -90,17 +90,14 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
 export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
 export GREEN_LORY_SOLVER_LOG="${GREEN_LORY_SOLVER_LOG:-0}"
-# Memory rather than CPUs is the binding constraint: each worker loads the full
-# weather NetCDF stack independently.  For serial runs (WORKERS=1) all CPUs
-# are available as solver threads.
-export ARC_WORKERS="${ARC_WORKERS:-1}"
+# All CPUs are available as solver threads for the serial run.
 export ARC_THREADS_PER_WORKER="${ARC_THREADS_PER_WORKER:-${CPUS}}"
-export ARC_RAM_PER_WORKER_GB="${ARC_RAM_PER_WORKER_GB:-}"
-export ARC_MAX_RAM_GB="${ARC_MAX_RAM_GB:-}"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 export ARC_OUTPUT_CSV="${ARC_OUTPUT_CSV:-results/${RUN_LABEL}/run_global_${RUN_LABEL}_${STAMP}.csv}"
 export ARC_QUIET="${ARC_QUIET:-1}"
+export ARC_LON_MIN="${ARC_LON_MIN:-}"
+export ARC_LON_MAX="${ARC_LON_MAX:-}"
 
 LOGFILE="logs/arc-${RUN_LABEL}-${STAMP}.log"
 echo "Run label: $RUN_LABEL"
@@ -112,16 +109,13 @@ env | grep -E '^(ARC_|GREEN_LORY_|GRB_LICENSE_FILE|OMP_NUM_THREADS|MKL_NUM_THREA
 python - <<'PY' 2>&1 | tee -a "$LOGFILE"
 import os
 import pandas as pd
-from model.run_global import run_global, run_global_subprocess_parallel
+from model.run_global import run_global
 
 locations = None
 locations_csv = os.environ.get("ARC_LOCATIONS_CSV", "").strip()
 limit_raw = os.environ.get("ARC_LIMIT", "").strip()
 max_snapshots_raw = os.environ.get("ARC_MAX_SNAPSHOTS", "").strip()
-workers_raw = os.environ.get("ARC_WORKERS", "1").strip()
 threads_raw = os.environ.get("ARC_THREADS_PER_WORKER", "1").strip()
-ram_per_worker_raw = os.environ.get("ARC_RAM_PER_WORKER_GB", "").strip()
-max_ram_raw = os.environ.get("ARC_MAX_RAM_GB", "").strip()
 
 if locations_csv:
     df = pd.read_csv(locations_csv)
@@ -147,12 +141,13 @@ if limit_raw:
 max_snapshots = int(max_snapshots_raw) if max_snapshots_raw else None
 quiet_raw = os.environ.get("ARC_QUIET", "1").strip().lower()
 quiet = quiet_raw not in {"0", "false", "no"}
-workers = int(workers_raw) if workers_raw else 1
 threads_per_worker = int(threads_raw) if threads_raw else None
-ram_per_worker_gb = float(ram_per_worker_raw) if ram_per_worker_raw else None
-max_ram_gb = float(max_ram_raw) if max_ram_raw else None
+lon_min_raw = os.environ.get("ARC_LON_MIN", "").strip()
+lon_max_raw = os.environ.get("ARC_LON_MAX", "").strip()
+lon_min = float(lon_min_raw) if lon_min_raw else None
+lon_max = float(lon_max_raw) if lon_max_raw else None
 
-_common = dict(
+result_df = run_global(
     locations=locations,
     land_csv=os.environ.get("ARC_LAND_CSV"),
     interest_csv=(os.environ.get("ARC_INTEREST_CSV") or "").strip() or None,
@@ -160,18 +155,10 @@ _common = dict(
     max_snapshots=max_snapshots,
     output_csv=os.environ.get("ARC_OUTPUT_CSV"),
     quiet=quiet,
+    threads_per_worker=threads_per_worker,
+    lon_min=lon_min,
+    lon_max=lon_max,
 )
-if workers > 1:
-    result_df = run_global_subprocess_parallel(
-        **_common,
-        workers=workers,
-        threads_per_worker=threads_per_worker or 1,
-    )
-else:
-    result_df = run_global(
-        **_common,
-        threads_per_worker=threads_per_worker,
-    )
 
 print(f"Processed {len(result_df)} locations")
 print(f"Saved: {os.environ.get('ARC_OUTPUT_CSV')}")

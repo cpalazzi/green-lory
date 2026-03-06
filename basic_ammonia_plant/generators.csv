@@ -1,7 +1,5 @@
 name,bus,control,p_nom,p_nom_extendable,marginal_cost,capital_cost,comment
-onshore_wind,power,Slack,0.0,True,0.0,157599.06031579236,Onshore wind profile injected on the Power bus.
-offshore_wind_fixed,power,PQ,0.0,True,0.0,157599.06031579236,Offshore fixed-bottom wind profile injected on the Power bus.
-offshore_wind_floating,power,PQ,0.0,True,0.0,157599.06031579236,Offshore floating wind profile injected on the Power bus.
+wind,power,Slack,0.0,True,0.0,157599.06031579236,Wind profile injected on the Power bus.
 solar,power,PQ,0.0,True,0.0,59800.799944048755,Fixed tilt PV resource represented via weather data.
 solar_tracking,power,PQ,0.0,False,0.0,59800.799944048755,Slot for tracking PV profiles (kept non-extendable by default).
 grid,power,PQ,0.0,False,0.0,1000000000.0,Placeholder for grid imports; prohibitively expensive to discourage use.

@@ -36,11 +36,8 @@ COMPONENT_NAME_MAP = {
     "HydrogenStorage": "hydrogen_storage",
     "RampPenalty": "ramp_penalty",
     "RampPenaltyDest": "ramp_penalty_dest",
-    "Wind": "onshore_wind",
-    "wind": "onshore_wind",
-    "OnshoreWind": "onshore_wind",
-    "OffshoreWindFixed": "offshore_wind_fixed",
-    "OffshoreWindFloating": "offshore_wind_floating",
+    "Wind": "wind",
+    "OnshoreWind": "wind",
     "Solar": "solar",
     "SolarTracking": "solar_tracking",
     "Grid": "grid",
@@ -61,11 +58,7 @@ COMPONENT_NAME_MAP = {
 }
 
 WEATHER_PROFILE_ALIASES = {
-    "onshore_wind": ("wind",),
-    "offshore_wind_fixed": ("wind", "onshore_wind"),
-    "offshore_wind_floating": ("wind", "onshore_wind"),
     "solar_tracking": ("solar",),
-    "wind": ("onshore_wind",),
 }
 
 

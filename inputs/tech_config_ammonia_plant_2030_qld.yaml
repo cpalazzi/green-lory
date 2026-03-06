@@ -3,8 +3,7 @@
 # tech_cost/build_cost splits are inferred from DEA per-technology split ratios and
 # scaled to the QLD overnight cost.
 # TODO(data): Replace inferred split ratios with real Queensland EPC/BOP/build-cost
-# evidence where available. Priority candidates are offshore_wind_fixed,
-# offshore_wind_floating, ammonia_synthesis, battery_storage,
+# evidence where available. Priority candidates are ammonia_synthesis, battery_storage,
 # hydrogen_from_storage, and battery_pcs_discharge.
 
 currency: USD
@@ -31,34 +30,14 @@ techs:
     lifetime_years: 20
     interest_rate: 0.0872
     fixed_om_fraction: 0.02
-  onshore_wind:
+  wind:
     component_type: generator
-    source_note: onshoreWind (Queensland report 2030)
+    source_note: onshoreWind (Queensland report 2030; single wind profile, offshore premiums via finance overrides)
     overnight_cost_per_mw: 1177000
     tech_cost_per_mw: 1046949.501692
     build_cost_per_mw: 130050.498308
     land_use_km2_per_mw: 0.2
     lifetime_years: 20
-    interest_rate: 0.0872
-    fixed_om_fraction: 0.02
-  offshore_wind_fixed:
-    component_type: generator
-    source_note: Offshore fixed-bottom wind (DEA proxy; no Queensland value) # TODO(data): replace proxy cost and split with Queensland-specific benchmark
-    overnight_cost_per_mw: 2390000
-    tech_cost_per_mw: 1808806.328091
-    build_cost_per_mw: 581193.671909
-    land_use_km2_per_mw: 0.2
-    lifetime_years: 25
-    interest_rate: 0.0872
-    fixed_om_fraction: 0.02
-  offshore_wind_floating:
-    component_type: generator
-    source_note: Offshore floating wind (DEA proxy; no Queensland value) # TODO(data): replace proxy cost and split with Queensland-specific benchmark
-    overnight_cost_per_mw: 2800000
-    tech_cost_per_mw: 1355814.414554
-    build_cost_per_mw: 1444185.585446
-    land_use_km2_per_mw: 0.2
-    lifetime_years: 25
     interest_rate: 0.0872
     fixed_om_fraction: 0.02
   ammonia_synthesis:

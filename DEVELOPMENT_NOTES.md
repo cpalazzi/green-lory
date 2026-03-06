@@ -11,10 +11,16 @@ This file is the technical reference for architecture, modeling conventions, cos
 - `model/auxiliary.py`: constraint hooks, weather IO helpers, reporting transforms
 - `model/location_tools.py`: weather/location geospatial utilities
 - `model/land_processing.py`: land/bathymetry-based max-capacity preprocessing
+- `model/data_store.py`: results accumulator for multi-location runs
+- `model/plot_global_heatmap.py`: choropleth visualisation of global sweep outputs
 - `basic_ammonia_plant/*.csv`: canonical PyPSA topology and techno-economic tables used at runtime
 - `inputs/tech_config_ammonia_plant_2030_*.yaml`: scenario assumptions compiled into plant CSVs by notebook
 - `notebooks/00_tech_config.ipynb`: YAML -> CSV compiler for costs/efficiencies/link recipes
-- `notebooks/0*_*.ipynb`: execution and analysis workflows
+- `notebooks/01_max_capacities.ipynb`: land/bathymetry capacity preprocessing
+- `notebooks/02_single_site_run.ipynb`: single-location solve and timeseries visualisation
+- `notebooks/03_global_run.ipynb`: global sweep + quadrant results combiner
+- `notebooks/04_global_finance_overrides_run.ipynb`: global sweep with spatial finance overrides
+- `notebooks/05_run_analysis.ipynb`: post-run comparative analysis
 
 ## Canonical Modeling Conventions
 
@@ -102,7 +108,43 @@ Use `year=2030` and `est=ctrl` for baseline config derivations.
 - Link basis consistency (YAML output basis vs PyPSA input basis).
 - Explicit comments for assumptions, proxies, and conversions.
 
-## Config Completion Status (as of 2026-02-27)
+## Wind Technology Simplification (2026-03)
+
+The three wind generator variants (`onshore_wind`, `offshore_wind_fixed`, `offshore_wind_floating`)
+have been consolidated into a single `wind` generator. Rationale: only one wind NetCDF profile
+exists (`WindPowers*.nc`); the three generators used identical capacity factors.
+
+Offshore cost differentiation should be applied via `build_cost_multiplier` in the finance
+overrides CSV rather than through separate generator technologies.
+
+## Offshore Build Cost Overrides (planned)
+
+The `build_cost_multiplier` column in finance overrides CSV is already wired into
+`run_global.py`. To add depth/distance-based offshore premiums:
+
+1. Create a preprocessing script that reads bathymetry depth from `model_bathymetry.nc`
+   and distance-to-coast from a coastline shapefile.
+2. Apply multipliers per location, e.g.:
+   - Shallow fixed-bottom (< 50m depth): `build_cost_multiplier` ~1.5
+   - Floating (50–1000m): `build_cost_multiplier` ~2.0
+   - Additional remoteness factor based on distance-to-shore
+3. Write the resulting overrides CSV to `inputs/` and pass via `--finance-mode custom --interest-csv <path>`.
+
+This keeps the model architecture clean: cost differentiation lives in data, not in generator topology.
+
+## Longitude Segmentation for Parallel SLURM Runs (2026-03)
+
+`run_global()` accepts `lon_min`/`lon_max` parameters to filter locations by longitude.
+The ARC submit wrapper supports `--quadrants` to submit 4 parallel jobs:
+- `west2`: [-180, -90)
+- `west1`: [-90, 0)
+- `east1`: [0, 90)
+- `east2`: [90, 180)
+
+Each quadrant runs independently on a 48-CPU `medium` node (~20h each vs ~80h serial).
+Results are merged using the combiner cell in notebook 03 or `pd.concat` on the CSVs.
+
+## Config Completion Status (as of 2026-03-06)
 
 ### Completed
 1. DEA split arithmetic reconciled (`overnight = tech + build`) across all configured technologies.
@@ -110,17 +152,18 @@ Use `year=2030` and `est=ctrl` for baseline config derivations.
 3. Datasheet-derived split updates applied for:
 - solar
 - solar tracking
-- onshore wind
-- offshore wind fixed
-- offshore wind floating
+- wind (consolidated from onshore/offshore variants)
 - hydrogen compression
 4. Updated DEA split ratios mirrored into QLD structured config while keeping QLD overnight costs fixed.
+5. Wind simplification: 3 generators → 1 `wind` generator across all model files, YAML configs, and notebooks.
+6. Dead code removed: `model/tech_config.py`, `model/storage_cost_comparison.py`.
 
 ### Remaining data gaps
 1. `hydrogen_from_storage`: placeholder CAPEX/split (no direct valve/regulator line identified).
 2. `hydrogen_fuel_cell`: no direct imported DEA line identified; still proxy-converted.
 3. `ammonia` storage: still proxy-based pending direct DEA source.
 4. QLD-specific EPC/build breakdown evidence is still needed for fully local split localization.
+5. Offshore build cost multipliers not yet generated (see "Offshore Build Cost Overrides" section).
 
 ## ARC Cluster Operations
 
@@ -142,7 +185,9 @@ Use `year=2030` and `est=ctrl` for baseline config derivations.
 2. `sbatch arc/build-green-lory-env` (if env not already built)
 3. `source arc/load_green_lory_env.sh`
 4. `bash arc/arc_check_run_inputs.sh`
-5. `bash arc/submit_global_run.sh <run-label>`
+5. `bash arc/submit_global_run.sh <run-label> --quadrants` (4 parallel longitude quadrant jobs)
+
+Single-job alternative (slower): `bash arc/submit_global_run.sh <run-label>`
 
 ### SSH command style for interactive agents (password-entry compatible)
 Prefer one remote command per SSH invocation when driving from local automation/agent sessions:
@@ -170,10 +215,8 @@ This keeps each command explicit and works well when password must be entered pe
 - `ARC_LIMIT`
 - `ARC_OUTPUT_CSV`
 - `ARC_QUIET`
-- `ARC_WORKERS`
 - `ARC_THREADS_PER_WORKER`
-- `ARC_RAM_PER_WORKER_GB`
-- `ARC_MAX_RAM_GB`
+- `ARC_LON_MIN`, `ARC_LON_MAX` (longitude segmentation bounds)
 - `ARC_ANACONDA_MODULE`
 - `ARC_ENV_PREFIX`
 - `ARC_GROUP`, `ARC_WORK_BASE`, `ARC_REPO_DIR`
