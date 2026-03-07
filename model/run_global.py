@@ -104,6 +104,72 @@ def _load_tech_meta(path: str | Path | None) -> Dict[str, float]:
     return meta
 
 
+def _apply_yaml_base_costs(
+    network,
+    tech_inputs: Dict[str, dict],
+    aggregation_count: int,
+    time_step: float,
+) -> None:
+    """Unconditionally set capital_cost for every tech using YAML defaults.
+
+    This ensures the network always reflects the current tech config, regardless
+    of whether per-location finance overrides are present.  _apply_finance_overrides
+    may later adjust individual techs where an override CSV provides different
+    interest_rate or build_cost_multiplier values.
+
+    Convention:
+    - YAML overnight costs are quoted on an output basis (MW_out / MWh_out).
+    - PyPSA Links are sized on bus0 (input) MW, so link capital_cost is
+      converted to per-MW_in/year by multiplying by bus0→bus1 efficiency.
+    - Stores are scaled by time_step * aggregation_count to match
+      generate_network() scaling.
+    """
+    if not tech_inputs:
+        return
+
+    store_scale = float(time_step) * float(aggregation_count)
+
+    for name, raw in tech_inputs.items():
+        if not isinstance(raw, dict):
+            continue
+        component_type = str(raw.get("component_type", "")).lower()
+        lifetime_years = float(raw.get("lifetime_years", 20.0))
+        interest_rate = float(raw.get("interest_rate", 0.07))
+        fixed_om_fraction = float(raw.get("fixed_om_fraction", 0.0))
+
+        if component_type in {"generator", "link"}:
+            overnight = raw.get("overnight_cost_per_mw")
+            if overnight is None:
+                continue
+            annual_out = _annualised_capital_cost(
+                float(overnight), interest_rate, lifetime_years, fixed_om_fraction
+            )
+
+            if component_type == "generator":
+                if name in network.generators.index:
+                    network.generators.loc[name, "capital_cost"] = annual_out
+                continue
+
+            # Link: YAML cost is per MW_out on bus1; convert to per MW_in on bus0.
+            if name in network.links.index:
+                efficiency = float(network.links.loc[name, "efficiency"])
+                if efficiency <= 0:
+                    raise ValueError(
+                        f"Link '{name}' has non-positive efficiency; cannot compute capital_cost"
+                    )
+                network.links.loc[name, "capital_cost"] = annual_out * efficiency
+
+        elif component_type == "store":
+            overnight = raw.get("overnight_cost_per_mwh")
+            if overnight is None:
+                continue
+            annual = _annualised_capital_cost(
+                float(overnight), interest_rate, lifetime_years, fixed_om_fraction
+            )
+            if name in network.stores.index:
+                network.stores.loc[name, "capital_cost"] = annual * store_scale
+
+
 def _apply_finance_overrides(
     network,
     tech_inputs: Dict[str, dict],
@@ -111,13 +177,15 @@ def _apply_finance_overrides(
     aggregation_count: int,
     time_step: float,
 ) -> None:
-    """Apply per-tech interest_rate and build_cost_multiplier overrides by recomputing capital_cost.
+    """Apply per-location interest_rate and build_cost_multiplier overrides.
+
+    Called AFTER _apply_yaml_base_costs to adjust capital_cost where the finance
+    override CSV specifies a different interest_rate or build_cost_multiplier.
 
     Convention:
-    - YAML overnight costs are quoted on an HHV output basis.
     - Build cost multiplier applies to build_cost (labor + remoteness sensitive).
     - PyPSA Links are sized on an input basis (bus0 MW_in), so link capital_cost
-      must be USD/MW_in/year.
+      must be currency/MW_in/year.
     - Stores are scaled in generate_network() by time_step * aggregation_count;
       we mirror that scaling here so the objective remains consistent.
     """
@@ -958,6 +1026,13 @@ def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggr
 
 
 def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]]:
+    """Return (lat, lon) pairs for all viable land cells.
+
+    Filters:
+    1. ``max_capacity_mw > 0`` (or legacy equivalents).
+    2. ``onshore_land_pct > 0`` when the column exists — pure open-ocean cells
+       cannot host an ammonia plant and would waste solver time.
+    """
     if land_df is None:
         raise ValueError("A max-capacities CSV is required when no explicit locations are supplied.")
     if "max_capacity_mw" in land_df.columns:
@@ -968,6 +1043,18 @@ def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]
         filtered = land_df[land_df["availability"] > 0]
     else:
         filtered = land_df
+
+    # Exclude pure-ocean cells (no land at all).
+    if "onshore_land_pct" in filtered.columns:
+        before = len(filtered)
+        filtered = filtered[filtered["onshore_land_pct"] > 0]
+        skipped = before - len(filtered)
+        if skipped:
+            LOGGER.info(
+                "Skipped %d pure-ocean cells (onshore_land_pct == 0); %d land/coastal cells remain.",
+                skipped, len(filtered),
+            )
+
     return list(zip(filtered["latitude"].astype(float), filtered["longitude"].astype(float)))
 
 
@@ -1060,6 +1147,14 @@ def _run_single_location(
         time_step=time_step,
         tech_config_overrides=overrides,
     )
+    # Always apply YAML default costs first (the CSV bundle may be stale).
+    _apply_yaml_base_costs(
+        network,
+        tech_inputs=tech_inputs,
+        aggregation_count=aggregation_count,
+        time_step=time_step,
+    )
+    # Then apply per-location finance overrides on top (if any).
     _apply_finance_overrides(
         network,
         tech_inputs=tech_inputs,
