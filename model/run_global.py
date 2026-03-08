@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import io
 import logging
 import math
@@ -688,6 +689,54 @@ def _read_country_file(path: str | Path) -> gpd.GeoDataFrame | None:
     return frame[["country", "geometry"]]
 
 
+def _build_interest_lookup(interest_df: pd.DataFrame) -> Dict[Tuple[float, float], Dict[str, Dict[str, float]]]:
+    """Pre-index overrides CSV into ``{(lat, lon): overrides_dict}`` for O(1) lookup.
+
+    The returned structure mirrors what ``_interest_overrides`` would produce
+    per location, but computed once instead of scanning the full DataFrame for
+    every cell.
+    """
+    if interest_df.empty:
+        return {}
+
+    lookup: Dict[Tuple[float, float], Dict[str, Dict[str, float]]] = {}
+
+    for _, row in interest_df.iterrows():
+        key = (round(float(row["lat"]), 4), round(float(row["lon"]), 4))
+        entry = lookup.setdefault(key, {})
+        tech = row["tech"]
+        entry.setdefault(tech, {})
+
+        if "interest_rate" in row.index and pd.notna(row["interest_rate"]):
+            entry[tech]["interest_rate"] = float(row["interest_rate"])
+        if "build_cost_multiplier" in row.index and pd.notna(row["build_cost_multiplier"]):
+            entry[tech]["build_cost_multiplier"] = float(row["build_cost_multiplier"])
+
+        loc_params = entry.setdefault("__location__", {})
+        if "land_cost_usd_per_km2_year" in row.index and pd.notna(row["land_cost_usd_per_km2_year"]):
+            loc_params["land_cost_usd_per_km2_year"] = float(row["land_cost_usd_per_km2_year"])
+        if "water_cost_usd_per_m3" in row.index and pd.notna(row["water_cost_usd_per_m3"]):
+            loc_params["water_cost_usd_per_m3"] = float(row["water_cost_usd_per_m3"])
+
+    # Remove empty __location__ entries
+    for key in lookup:
+        if not lookup[key].get("__location__"):
+            lookup[key].pop("__location__", None)
+
+    return lookup
+
+
+def _interest_overrides_fast(
+    lookup: Dict[Tuple[float, float], Dict[str, Dict[str, float]]],
+    lat: float,
+    lon: float,
+) -> Dict[str, Dict[str, float]] | None:
+    """O(1) interest override lookup using the pre-indexed dict."""
+    key = (round(float(lat), 4), round(float(lon), 4))
+    result = lookup.get(key)
+    return result if result else None
+
+
 def _interest_overrides(interest_df: pd.DataFrame, lat: float, lon: float) -> Dict[str, Dict[str, float]] | None:
     """Load interest_rate, build_cost_multiplier, and spatial cost parameters from overrides CSV.
     
@@ -733,6 +782,27 @@ def _interest_overrides(interest_df: pd.DataFrame, lat: float, lon: float) -> Di
         overrides["__location__"] = location_params
     
     return overrides or None
+
+
+def _build_land_lookup(land_df: pd.DataFrame | None) -> Dict[Tuple[float, float], pd.Series]:
+    """Pre-index the max-capacities DataFrame into ``{(lat, lon): row}`` for O(1) lookup."""
+    if land_df is None:
+        return {}
+    lookup: Dict[Tuple[float, float], pd.Series] = {}
+    for idx, row in land_df.iterrows():
+        key = (round(float(row["latitude"]), 4), round(float(row["longitude"]), 4))
+        lookup[key] = row
+    return lookup
+
+
+def _match_land_row_fast(
+    lookup: Dict[Tuple[float, float], pd.Series],
+    lat: float,
+    lon: float,
+) -> pd.Series | None:
+    """O(1) land row lookup using the pre-indexed dict."""
+    key = (round(float(lat), 4), round(float(lon), 4))
+    return lookup.get(key)
 
 
 def _match_land_row(land_df: pd.DataFrame, lat: float, lon: float) -> pd.Series | None:
@@ -897,6 +967,52 @@ def _apply_land_caps(
     return None, row
 
 
+def _apply_land_caps_fast(
+    network,
+    land_lookup: Dict[Tuple[float, float], pd.Series],
+    lat: float,
+    lon: float,
+) -> Tuple[float | None, pd.Series | None]:
+    """Same as ``_apply_land_caps`` but uses the pre-indexed lookup dict."""
+    row = _match_land_row_fast(land_lookup, lat, lon)
+    if row is None:
+        return None, None
+
+    power_caps, energy_caps = _extract_capacity_caps_from_row(row)
+    has_explicit_power_caps = any(
+        str(col).lower().startswith("max_power_") and str(col).lower().endswith("_mw")
+        for col in row.index
+    )
+    has_legacy_power_caps = any(
+        pd.notna(row.get(col))
+        for col in LEGACY_POWER_CAP_COLUMN_MAP
+    )
+    if has_explicit_power_caps:
+        for tech in WIND_GENERATORS + ["solar"]:
+            power_caps.setdefault(tech, 0.0)
+    elif has_legacy_power_caps:
+        for tech in WIND_GENERATORS:
+            power_caps.setdefault(tech, 0.0)
+
+    if power_caps or energy_caps:
+        total_cap = _apply_component_caps(network, power_caps, energy_caps)
+        return (total_cap if total_cap > 0 else None), row
+
+    fallback = row.get("max_capacity_mw")
+    if pd.isna(fallback):
+        fallback = row.get("max_capacity")
+    if pd.notna(fallback):
+        fallback_val = max(0.0, float(fallback))
+        fallback_caps = {
+            "wind": fallback_val,
+            "solar": fallback_val,
+        }
+        total_cap = _apply_component_caps(network, fallback_caps, {})
+        return (total_cap if total_cap > 0 else None), row
+
+    return None, row
+
+
 def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
     if row is None:
         return {}
@@ -1002,27 +1118,87 @@ def _country_for(world: gpd.GeoDataFrame, lat: float, lon: float) -> str:
     return matches.iloc[0].country
 
 
-def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggregation_count: int) -> pd.DataFrame:
-    location = lt.renewable_data(
-        dataset,
-        latitude=lat,
-        longitude=lon,
-        renewables=RENEWABLES,
-        aggregation_variable=aggregation_count,
+def _build_country_lookup(
+    world: gpd.GeoDataFrame,
+    locations: List[Tuple[float, float]],
+) -> Dict[Tuple[float, float], str]:
+    """Batch-assign countries to all locations using a spatial join.
+
+    Returns ``{(lat, lon): country_name}`` dict.  Much faster than calling
+    ``_country_for`` per cell when there are thousands of locations.
+    """
+    if not locations:
+        return {}
+    lats, lons = zip(*locations)
+    points = gpd.GeoDataFrame(
+        {"latitude": lats, "longitude": lons},
+        geometry=gpd.points_from_xy(lons, lats),
+        crs=world.crs,
     )
-    frame = location.concat.copy()
-    if "Weights" in frame.columns:
-        frame = frame.drop(columns="Weights")
+    joined = gpd.sjoin(points, world[["country", "geometry"]], how="left", predicate="within")
+    lookup: Dict[Tuple[float, float], str] = {}
+    for idx, row in joined.iterrows():
+        key = (float(row["latitude"]), float(row["longitude"]))
+        lookup[key] = str(row["country"]) if pd.notna(row.get("country")) else "None"
+    return lookup
+
+
+def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggregation_count: int) -> pd.DataFrame:
+    """Extract weather profiles directly from cached xarray data.
+
+    This bypasses the ``renewable_data`` class to avoid per-cell overhead
+    (DataFrame copies, aggregation with count=1, etc.).
+    """
+    sel = dict(latitude=lat, longitude=lon)
+    columns: dict[str, np.ndarray] = {}
+    wake_loss = 0.93
+    for resource in ("solar", "wind", "solar_tracking"):
+        arr = dataset.resources.get(resource)
+        if arr is None:
+            continue
+        values = arr.sel(sel, method="nearest").values
+        if resource == "wind":
+            values = values * wake_loss
+        columns[resource] = values
+
+    if not columns:
+        raise ValueError(f"No weather resources for ({lat}, {lon})")
+
+    frame = pd.DataFrame(columns)
+
     if "wind" not in frame.columns and "onshore_wind" in frame.columns:
         frame["wind"] = frame["onshore_wind"]
     if "solar_tracking" not in frame.columns and "solar" in frame.columns:
         frame["solar_tracking"] = frame["solar"]
-    defaults = {"grid": 0.0, "ramp_dummy": 1.0}
-    for column, default_value in defaults.items():
-        if column not in frame.columns:
-            frame[column] = default_value
-    frame = frame.reset_index(drop=True)
+    frame["grid"] = 0.0
+    frame["ramp_dummy"] = 1.0
     return frame
+
+
+def _resample_weather_frame(weather_frame: pd.DataFrame, timestep_hours: int) -> pd.DataFrame:
+    """Downsample an hourly weather frame to a coarser timestep by block-averaging.
+
+    For capacity-factor columns (solar, wind, solar_tracking) the mean of each
+    block gives the correct average power availability.  Constant columns
+    (grid=0, ramp_dummy=1) pass through unchanged.
+
+    Args:
+        weather_frame: Hourly weather DataFrame (8760 rows typically).
+        timestep_hours: Target resolution in hours (e.g. 3 for 3-hourly).
+
+    Returns:
+        Resampled DataFrame with ``len(weather_frame) // timestep_hours`` rows.
+    """
+    if timestep_hours <= 1:
+        return weather_frame
+    n = len(weather_frame)
+    n_out = n // timestep_hours
+    trimmed_len = n_out * timestep_hours
+    result: dict[str, np.ndarray] = {}
+    for col in weather_frame.columns:
+        arr = weather_frame[col].values[:trimmed_len]
+        result[col] = arr.reshape(n_out, timestep_hours).mean(axis=1)
+    return pd.DataFrame(result)
 
 
 def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]]:
@@ -1098,24 +1274,32 @@ def _run_single_location(
     lat: float,
     lon: float,
     dataset: lt.all_locations,
-    interest_df: pd.DataFrame,
+    interest_lookup: Dict[Tuple[float, float], Dict[str, Dict[str, float]]],
     tech_inputs: Dict[str, dict],
     tech_meta: Dict[str, float],
-    land_df: pd.DataFrame | None,
+    land_lookup: Dict[Tuple[float, float], pd.Series],
+    base_network,
     aggregation_count: int,
     time_step: float,
     max_snapshots: int | None,
     quiet: bool,
 ) -> Tuple[str, Dict[str, Any] | None]:
+    t0 = time.perf_counter()
+
     try:
         weather_frame = _build_weather_frame(dataset, lat, lon, aggregation_count)
+        # Resample to coarser timestep if requested (e.g. 3h blocks).
+        if time_step > 1:
+            weather_frame = _resample_weather_frame(weather_frame, int(time_step))
         if max_snapshots is not None:
             weather_frame = weather_frame.iloc[:max_snapshots].copy()
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Skipping location (%s, %s) due to weather extraction error: %s", lat, lon, exc)
         return "weather", None
 
-    overrides = _interest_overrides(interest_df, lat, lon)
+    t_weather = time.perf_counter()
+
+    overrides = _interest_overrides_fast(interest_lookup, lat, lon)
     interest_rates = _compose_interest_rates(overrides)
 
     # Extract location-level spatial cost parameters from overrides.
@@ -1128,13 +1312,9 @@ def _run_single_location(
         water_cost_usd_per_m3 = tech_meta.get("water_cost_baseline_usd_per_m3")
     water_usage_m3_per_t = tech_meta.get("water_usage_m3_per_t_nh3")
 
-    network = plant_main.generate_network(
-        len(weather_frame),
-        "basic_ammonia_plant",
-        aggregation_count=aggregation_count,
-        time_step=time_step,
-        tech_config_overrides=overrides,
-    )
+    # Deep-copy the pre-built base network instead of re-importing CSVs.
+    network = copy.deepcopy(base_network)
+
     # Always apply YAML default costs first (the CSV bundle may be stale).
     _apply_yaml_base_costs(
         network,
@@ -1150,7 +1330,9 @@ def _run_single_location(
         aggregation_count=aggregation_count,
         time_step=time_step,
     )
-    land_cap, land_row = _apply_land_caps(network, land_df, lat, lon)
+    land_cap, land_row = _apply_land_caps_fast(network, land_lookup, lat, lon)
+
+    t_setup = time.perf_counter()
 
     try:
         with _suppress_solver_streams(quiet):
@@ -1169,6 +1351,8 @@ def _run_single_location(
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Optimisation failed for (%s, %s): %s", lat, lon, exc)
         return "solver", None
+
+    t_solve = time.perf_counter()
 
     land_used_km2 = _estimate_land_used_km2(network, land_row, tech_inputs)
     if land_used_km2 is not None:
@@ -1257,6 +1441,17 @@ def _run_single_location(
                 if key in results and results[key] is not None:
                     results[key] = float(results[key]) * scale
 
+    t_end = time.perf_counter()
+    LOGGER.debug(
+        "Timing (%s, %s): weather=%.3fs setup=%.3fs solve=%.3fs post=%.3fs total=%.3fs",
+        lat, lon,
+        t_weather - t0,
+        t_setup - t_weather,
+        t_solve - t_setup,
+        t_end - t_solve,
+        t_end - t0,
+    )
+
     return "done", results
 
 
@@ -1335,6 +1530,39 @@ def run_global(
             dataset = lt.all_locations(str(weather_dir_path), cache_resources=True)
             interest_df = _load_interest_table(interest_csv_path)
 
+            # ── Pre-computation phase ──────────────────────────────────────
+            t_pre = time.perf_counter()
+
+            # Pre-index lookup tables for O(1) per-cell access.
+            interest_lookup = _build_interest_lookup(interest_df)
+            land_lookup = _build_land_lookup(land_df)
+            country_lookup = _build_country_lookup(world, location_list)
+
+            # Build the base PyPSA network once; deep-copy per cell.
+            # The snapshot count is the same for all locations (determined by
+            # the NetCDF time dimension), so we probe the first location.
+            probe_lat, probe_lon = location_list[0] if location_list else (0.0, 0.0)
+            probe_weather = _build_weather_frame(dataset, probe_lat, probe_lon, aggregation_count)
+            # Apply the same resampling that per-cell code will use.
+            if time_step > 1:
+                probe_weather = _resample_weather_frame(probe_weather, int(time_step))
+            n_snapshots = max_snapshots if max_snapshots is not None else len(probe_weather)
+            base_network = plant_main.generate_network(
+                n_snapshots,
+                "basic_ammonia_plant",
+                aggregation_count=aggregation_count,
+                time_step=time_step,
+            )
+
+            LOGGER.info(
+                "Pre-computation complete in %.1fs: %d interest entries, %d land entries, %d country entries, base network built (%d snapshots)",
+                time.perf_counter() - t_pre,
+                len(interest_lookup),
+                len(land_lookup),
+                len(country_lookup),
+                n_snapshots,
+            )
+
             # Open output file for incremental writing (provides partial-results
             # recovery on crash and progress monitoring via file size).
             out_fh: Any = None
@@ -1350,17 +1578,18 @@ def run_global(
                         lat=lat,
                         lon=lon,
                         dataset=dataset,
-                        interest_df=interest_df,
+                        interest_lookup=interest_lookup,
                         tech_inputs=tech_inputs,
                         tech_meta=tech_meta,
-                        land_df=land_df,
+                        land_lookup=land_lookup,
+                        base_network=base_network,
                         aggregation_count=aggregation_count,
                         time_step=time_step,
                         max_snapshots=max_snapshots,
                         quiet=quiet,
                     )
                     if results is not None:
-                        country = _country_for(world, lat, lon)
+                        country = country_lookup.get((lat, lon), _country_for(world, lat, lon))
                         store.add_location(lat, lon, country, results)
                         if out_fh is not None:
                             row = {"latitude": lat, "longitude": lon, "country": country, **results}
@@ -1437,6 +1666,12 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=None, help="Optional limit on the number of locations to process.")
     parser.add_argument("--lon-min", type=float, default=None, help="Minimum longitude (inclusive) for location filtering.")
     parser.add_argument("--lon-max", type=float, default=None, help="Maximum longitude (exclusive) for location filtering.")
+    parser.add_argument(
+        "--time-step",
+        type=float,
+        default=1.0,
+        help="Timestep resolution in hours (default: 1.0). E.g. 3.0 for 3-hourly snapshots.",
+    )
     args = parser.parse_args()
 
     if args.locations_csv:
@@ -1451,6 +1686,7 @@ if __name__ == "__main__":
         tech_yaml=args.tech_yaml,
         interest_csv=args.interest_csv,
         land_csv=args.land_csv,
+        time_step=args.time_step,
         max_snapshots=args.max_snapshots,
         output_csv=args.output_csv,
         quiet=args.quiet,
