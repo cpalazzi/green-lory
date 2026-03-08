@@ -178,7 +178,7 @@ Results are merged using the combiner cell in notebook 03 or `pd.concat` on the 
 
 ### ARC script layout
 - `arc/arc_initial_setup.sh`: one-time ARC bootstrap (clone/update + optional env build submission).
-- `arc/build-green-lory-env`: SLURM env build job.
+- `arc/build-green-lory-env.sh`: SLURM env build job.
 - `arc/load_green_lory_env.sh`: module + conda activation helper for interactive shell use.
 - `arc/arc_check_run_inputs.sh`: preflight check for required inputs before run submission.
 - `arc/jobs/01_run_global.sh`: full global run SLURM job.
@@ -186,7 +186,7 @@ Results are merged using the combiner cell in notebook 03 or `pd.concat` on the 
 
 ### Recommended ARC run sequence
 1. `bash arc/arc_initial_setup.sh`
-2. `sbatch arc/build-green-lory-env` (if env not already built)
+2. `sbatch arc/build-green-lory-env.sh` (if env not already built)
 3. `source arc/load_green_lory_env.sh`
 4. `bash arc/arc_check_run_inputs.sh`
 5. `bash arc/submit_global_run.sh <run-label> --quadrants` (4 parallel longitude quadrant jobs)

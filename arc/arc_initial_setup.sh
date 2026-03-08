@@ -46,11 +46,11 @@ if command -v sbatch >/dev/null 2>&1; then
   if [[ "$submit_env" =~ ^[Yy]$ ]]; then
     job_out=$(sbatch \
       --export=ALL,ARC_GROUP="$ARC_GROUP",ARC_WORK_BASE="$ARC_WORK_BASE",ARC_REPO_DIR="$ARC_REPO_DIR",ARC_ENV_PREFIX="$ARC_ENV_PREFIX",ARC_LICENSE_DIR="$ARC_LICENSE_DIR" \
-      "$ARC_REPO_DIR/arc/build-green-lory-env")
+      "$ARC_REPO_DIR/arc/build-green-lory-env.sh")
     printf "Submitted: %s\n" "$job_out"
   else
     printf "Skip env build. Run later with:\n"
-    printf "  cd %s && sbatch arc/build-green-lory-env\n" "$ARC_REPO_DIR"
+    printf "  cd %s && sbatch arc/build-green-lory-env.sh\n" "$ARC_REPO_DIR"
   fi
 else
   printf "sbatch not available in this shell. Run from ARC login node.\n"

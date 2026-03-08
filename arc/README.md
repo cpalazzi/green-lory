@@ -8,7 +8,7 @@ This folder contains ARC (Oxford) helper scripts for running full global jobs fr
 
 ## Files
 - `arc/arc_initial_setup.sh`: one-time setup on ARC login node (clone/update repo, directories, optional env-build submission).
-- `arc/build-green-lory-env`: SLURM job script that creates/refreshes the conda env and installs dependencies.
+- `arc/build-green-lory-env.sh`: SLURM job script that creates/refreshes the conda env and installs dependencies.
 - `arc/load_green_lory_env.sh`: shell helper to load modules + activate the conda env for interactive ARC sessions.
 - `arc/arc_check_run_inputs.sh`: preflight checker for required inputs before submitting a global run.
 - `arc/jobs/01_run_global.sh`: SLURM job script that executes `model.run_global` end-to-end.
@@ -26,7 +26,7 @@ bash green-lory/arc/arc_initial_setup.sh
 ### 2. Build/refresh environment
 ```bash
 cd /data/engs-df-green-ammonia/engs2523/green-lory
-sbatch arc/build-green-lory-env
+sbatch arc/build-green-lory-env.sh
 ```
 
 ### 3. Optional interactive check with conda env loaded
