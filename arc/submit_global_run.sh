@@ -68,7 +68,7 @@ case "$FINANCE_MODE" in
     unset ARC_INTEREST_CSV || true
     ;;
   spatial)
-    export ARC_INTEREST_CSV="${INTEREST_CSV_OVERRIDE:-inputs/example_finance_overrides_spatial.csv}"
+    export ARC_INTEREST_CSV="${INTEREST_CSV_OVERRIDE:-inputs/spatial_cost_inputs.csv}"
     ;;
   custom)
     if [[ -z "$INTEREST_CSV_OVERRIDE" ]]; then

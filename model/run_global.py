@@ -37,7 +37,7 @@ LOGGER = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEATHER_DIR = REPO_ROOT / "data"
 DEFAULT_LAND_CSV = DEFAULT_WEATHER_DIR / "20251222_max_capacities.csv"
-DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "example_finance_overrides_spatial.csv"
+DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "spatial_cost_inputs.csv"
 DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_dea.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
 _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
@@ -1026,12 +1026,11 @@ def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggr
 
 
 def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]]:
-    """Return (lat, lon) pairs for all viable land cells.
+    """Return (lat, lon) pairs for all cells with positive capacity.
 
-    Filters:
-    1. ``max_capacity_mw > 0`` (or legacy equivalents).
-    2. ``onshore_land_pct > 0`` when the column exists — pure open-ocean cells
-       cannot host an ammonia plant and would waste solver time.
+    Filters on ``max_capacity_mw > 0`` (or legacy equivalents).
+    Ocean cells are included — offshore cost premiums are handled via
+    ``build_cost_multiplier`` in the spatial cost inputs CSV.
     """
     if land_df is None:
         raise ValueError("A max-capacities CSV is required when no explicit locations are supplied.")
@@ -1043,17 +1042,6 @@ def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]
         filtered = land_df[land_df["availability"] > 0]
     else:
         filtered = land_df
-
-    # Exclude pure-ocean cells (no land at all).
-    if "onshore_land_pct" in filtered.columns:
-        before = len(filtered)
-        filtered = filtered[filtered["onshore_land_pct"] > 0]
-        skipped = before - len(filtered)
-        if skipped:
-            LOGGER.info(
-                "Skipped %d pure-ocean cells (onshore_land_pct == 0); %d land/coastal cells remain.",
-                skipped, len(filtered),
-            )
 
     return list(zip(filtered["latitude"].astype(float), filtered["longitude"].astype(float)))
 
@@ -1422,8 +1410,9 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help=(
-            "CSV with lat,lon,tech,interest_rate overrides; may also include "
-            "build_cost_multiplier, land_cost_usd_per_km2_year, and water_cost_usd_per_m3."
+            "Spatial cost inputs CSV (lat,lon,tech,interest_rate); may also include "
+            "build_cost_multiplier, land_cost_usd_per_km2_year, and water_cost_usd_per_m3. "
+            "Generate with notebook 02_spatial_cost_inputs."
         ),
     )
     parser.add_argument("--land-csv", type=str, default=None, help="Optional override for the max-capacities CSV.")

@@ -7,7 +7,7 @@ This file is the technical reference for architecture, modeling conventions, cos
 
 ## Repository Architecture
 - `model/main.py`: single-site orchestration and PyPSA solve entrypoint
-- `model/run_global.py`: multi-location orchestration, finance overrides, output assembly
+- `model/run_global.py`: multi-location orchestration, spatial cost inputs, output assembly
 - `model/auxiliary.py`: constraint hooks, weather IO helpers, reporting transforms
 - `model/location_tools.py`: weather/location geospatial utilities
 - `model/land_processing.py`: land/bathymetry-based max-capacity preprocessing
@@ -17,9 +17,9 @@ This file is the technical reference for architecture, modeling conventions, cos
 - `inputs/tech_config_ammonia_plant_2030_*.yaml`: scenario assumptions compiled into plant CSVs by notebook
 - `notebooks/00_tech_config.ipynb`: YAML -> CSV compiler for costs/efficiencies/link recipes
 - `notebooks/01_max_capacities.ipynb`: land/bathymetry capacity preprocessing
-- `notebooks/02_single_site_run.ipynb`: single-location solve and timeseries visualisation
-- `notebooks/03_global_run.ipynb`: global sweep + quadrant results combiner
-- `notebooks/04_global_finance_overrides_run.ipynb`: global sweep with spatial finance overrides
+- `notebooks/02_spatial_cost_inputs.ipynb`: generate per-location cost overrides CSV (offshore multipliers, etc.)
+- `notebooks/03_single_site_run.ipynb`: single-location solve and timeseries visualisation
+- `notebooks/04_global_run.ipynb`: global sweep + quadrant results combiner
 - `notebooks/05_run_analysis.ipynb`: post-run comparative analysis
 
 ## Canonical Modeling Conventions
@@ -59,12 +59,12 @@ This file is the technical reference for architecture, modeling conventions, cos
   - `tech_cost_per_mw/mwh`
   - `build_cost_per_mw/mwh`
   - `overnight_cost_per_mw/mwh` retained for validation
-- Spatial override inputs via `inputs/example_finance_overrides_spatial.csv`:
+- Spatial cost inputs via `inputs/spatial_cost_inputs.csv`:
   - `interest_rate`
   - `build_cost_multiplier`
   - `land_cost_usd_per_km2_year`
   - `water_cost_usd_per_m3`
-- `model/run_global.py` recomputes annualized costs under finance overrides.
+- `model/run_global.py` recomputes annualized costs under spatial cost overrides.
 - Water and land cost effects are propagated into results and LCOA reporting.
 
 ### Cost split reporting behavior
@@ -117,18 +117,22 @@ exists (`WindPowers*.nc`); the three generators used identical capacity factors.
 Offshore cost differentiation should be applied via `build_cost_multiplier` in the finance
 overrides CSV rather than through separate generator technologies.
 
-## Offshore Build Cost Overrides (planned)
+## Offshore Build Cost Overrides
 
-The `build_cost_multiplier` column in finance overrides CSV is already wired into
-`run_global.py`. To add depth/distance-based offshore premiums:
+The `build_cost_multiplier` column in the spatial cost inputs CSV is wired into
+`run_global.py`. Notebook `02_spatial_cost_inputs.ipynb` generates a base overrides
+CSV that applies `build_cost_multiplier = 2.0` for all techs at pure-ocean locations
+(`onshore_land_pct == 0`).
 
-1. Create a preprocessing script that reads bathymetry depth from `model_bathymetry.nc`
-   and distance-to-coast from a coastline shapefile.
-2. Apply multipliers per location, e.g.:
+<!-- TODO: vary offshore costs by distance-to-coast and fixed/floating wind depth bands -->
+
+Planned refinements:
+1. Read bathymetry depth from `model_bathymetry.nc` and distance-to-coast.
+2. Apply graduated multipliers per location, e.g.:
    - Shallow fixed-bottom (< 50m depth): `build_cost_multiplier` ~1.5
    - Floating (50–1000m): `build_cost_multiplier` ~2.0
    - Additional remoteness factor based on distance-to-shore
-3. Write the resulting overrides CSV to `inputs/` and pass via `--finance-mode custom --interest-csv <path>`.
+3. Differentiate wind cost from other techs (wind turbines have larger offshore premium).
 
 This keeps the model architecture clean: cost differentiation lives in data, not in generator topology.
 
@@ -222,6 +226,42 @@ This keeps each command explicit and works well when password must be entered pe
 - `ARC_GROUP`, `ARC_WORK_BASE`, `ARC_REPO_DIR`
 
 Default production behavior is full sweep (`run_global`) with output written under `results/<run-label>/`.
+
+## ARC Sync Policy (rsync)
+
+Do **not** use `git pull` on ARC to keep code in sync — the ARC repo clone may
+have uncommitted data files, results, or environment artefacts that create merge
+conflicts.  Instead, use `rsync` from the local machine:
+
+```bash
+# Push code + inputs to ARC (excludes data, results, .venv, __pycache__):
+rsync -avz --delete \
+  --exclude '.venv/' \
+  --exclude '__pycache__/' \
+  --exclude '.git/' \
+  --exclude 'data/*.nc' \
+  --exclude 'data/*.hdf' \
+  --exclude 'data/*.geojson' \
+  --exclude 'results/' \
+  --exclude 'logs/' \
+  --exclude 'notebooks/' \
+  ./ engs2523@arc-login.arc.ox.ac.uk:/data/engs-df-green-ammonia/engs2523/green-lory/
+```
+
+For large data files (max_capacities CSV, weather NetCDFs), use explicit `scp`:
+
+```bash
+scp data/20251222_max_capacities.csv \
+  engs2523@arc-login.arc.ox.ac.uk:/data/engs-df-green-ammonia/engs2523/green-lory/data/
+```
+
+Pull results back after ARC jobs complete:
+
+```bash
+rsync -avz \
+  engs2523@arc-login.arc.ox.ac.uk:/data/engs-df-green-ammonia/engs2523/green-lory/results/ \
+  ./results/
+```
 
 ## Documentation Governance
 - Keep only two canonical docs at repo root:

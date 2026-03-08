@@ -1,5 +1,5 @@
 name,bus,carrier,e_nom_extendable,e_nom_max,e_initial,e_cyclic,capital_cost,standing_loss,comment
-ammonia,ammonia,Ammonia,True,10000000.0,0.05,True,12.192700643435996,0.0,Tracks cumulative ammonia output; extendable to avoid binding storage.
-compressed_hydrogen_store,hydrogen_storage,Hydrogen,True,10000000.0,0.05,True,6578.047729438323,0.0,Hydrogen buffer tied to compression/withdrawal links.
-battery_storage,power_storage,electricity_stored,True,10000000.0,0.05,True,32165.373836861345,0.001,Battery energy storage with 0.1% per day standing losses.
-accumulated_penalty,ramp_penalty_dest,electricity_ac,True,10000000.0,0.0,False,118173910.68000007,0.0,Integrator store capturing penalty link output for reporting.
+ammonia,ammonia,Ammonia,True,10000000.0,0.05,True,70.99786723359074,0.0,Tracks cumulative ammonia output; extendable to avoid binding storage.
+compressed_hydrogen_store,hydrogen_storage,Hydrogen,True,10000000.0,0.05,True,3151.9812063158474,0.0,Hydrogen buffer tied to compression/withdrawal links.
+battery_storage,power_storage,electricity_stored,True,10000000.0,0.05,True,19039.75122043095,0.001,Battery energy storage with 0.1% per day standing losses.
+accumulated_penalty,ramp_penalty_dest,electricity_ac,True,10000000.0,0.0,False,109999999.99999993,0.0,Integrator store capturing penalty link output for reporting.

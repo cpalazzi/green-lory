@@ -47,7 +47,7 @@ def plot_lcoa_heatmap(
     csv_path: str | Path,
     color_column: str = "auto",
     cell_size_deg: float = 1.0,
-    color_scale: str = "Cividis",
+    color_scale: str = "Viridis_r",
 ):
     csv_path = Path(csv_path)
     df = pd.read_csv(csv_path)
@@ -162,8 +162,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--color-scale",
         type=str,
-        default="Cividis",
-        help="Plotly colour scale name (e.g., Viridis, Inferno, Cividis).",
+        default="Viridis_r",
+        help="Plotly colour scale name (e.g., Viridis, Viridis_r, Inferno, Cividis).",
     )
     return parser.parse_args()
 
