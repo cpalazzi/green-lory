@@ -221,6 +221,7 @@ This keeps each command explicit and works well when password must be entered pe
 - `ARC_QUIET`
 - `ARC_THREADS_PER_WORKER`
 - `ARC_LON_MIN`, `ARC_LON_MAX` (longitude segmentation bounds)
+- `ARC_TIME_STEP` (timestep resolution in hours, default 1.0)
 - `ARC_ANACONDA_MODULE`
 - `ARC_ENV_PREFIX`
 - `ARC_GROUP`, `ARC_WORK_BASE`, `ARC_REPO_DIR`

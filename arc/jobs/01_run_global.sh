@@ -98,6 +98,7 @@ export ARC_OUTPUT_CSV="${ARC_OUTPUT_CSV:-results/${RUN_LABEL}/run_global_${RUN_L
 export ARC_QUIET="${ARC_QUIET:-1}"
 export ARC_LON_MIN="${ARC_LON_MIN:-}"
 export ARC_LON_MAX="${ARC_LON_MAX:-}"
+export ARC_TIME_STEP="${ARC_TIME_STEP:-1.0}"
 
 LOGFILE="logs/arc-${RUN_LABEL}-${STAMP}.log"
 echo "Run label: $RUN_LABEL"
@@ -146,12 +147,15 @@ lon_min_raw = os.environ.get("ARC_LON_MIN", "").strip()
 lon_max_raw = os.environ.get("ARC_LON_MAX", "").strip()
 lon_min = float(lon_min_raw) if lon_min_raw else None
 lon_max = float(lon_max_raw) if lon_max_raw else None
+time_step_raw = os.environ.get("ARC_TIME_STEP", "1.0").strip()
+time_step = float(time_step_raw) if time_step_raw else 1.0
 
 result_df = run_global(
     locations=locations,
     land_csv=os.environ.get("ARC_LAND_CSV"),
     interest_csv=(os.environ.get("ARC_INTEREST_CSV") or "").strip() or None,
     tech_yaml=os.environ.get("ARC_TECH_YAML"),
+    time_step=time_step,
     max_snapshots=max_snapshots,
     output_csv=os.environ.get("ARC_OUTPUT_CSV"),
     quiet=quiet,
