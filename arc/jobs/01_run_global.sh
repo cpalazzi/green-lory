@@ -20,7 +20,7 @@ fi
 RUN_LABEL="$1"
 LOCATIONS_ARG="${2:-${ARC_LOCATIONS_CSV:-}}"
 
-set +u
+set +eu
 if [ -f /etc/profile ]; then
   source /etc/profile
 fi
@@ -31,9 +31,9 @@ if [ -f /etc/profile.d/lmod.sh ]; then
   source /etc/profile.d/lmod.sh
 fi
 if ! command -v module >/dev/null 2>&1; then
-  source /usr/share/lmod/lmod/init/bash
+  source /usr/share/lmod/lmod/init/bash || true
 fi
-set -u
+set -eu
 
 ARC_ANACONDA_MODULE="${ARC_ANACONDA_MODULE:-Anaconda3/2024.06-1}"
 module purge
