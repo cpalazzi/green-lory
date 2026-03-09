@@ -48,7 +48,18 @@ def plot_lcoa_heatmap(
     color_column: str = "auto",
     cell_size_deg: float = 1.0,
     color_scale: str = "Viridis_r",
+    range_color: tuple[float, float] | None = None,
+    percentile_clip: tuple[float, float] = (0.02, 0.98),
 ):
+    """Render a global LCOA choropleth heatmap.
+
+    Args:
+        range_color: Explicit (min, max) for the colour scale.  If *None*
+            (default), the range is auto-clipped to *percentile_clip* quantiles
+            so that extreme outliers (e.g. Antarctic cells) do not dominate.
+        percentile_clip: (lo, hi) quantiles used when *range_color* is None.
+            Set to (0.0, 1.0) to use the full data range.
+    """
     csv_path = Path(csv_path)
     df = pd.read_csv(csv_path)
     df.columns = [col.lower() for col in df.columns]
@@ -87,6 +98,14 @@ def plot_lcoa_heatmap(
     plot_df = df.dropna(subset=[color_column]).copy()
     if plot_df.empty:
         raise ValueError("No rows with colour metric available.")
+
+    # Compute colour range: explicit override or percentile clip.
+    if range_color is None:
+        lo_q, hi_q = percentile_clip
+        range_color = (
+            float(plot_df[color_column].quantile(lo_q)),
+            float(plot_df[color_column].quantile(hi_q)),
+        )
 
     plot_df["cell_id"] = [_cell_id(lat, lon) for lat, lon in zip(plot_df[lat_col], plot_df[lon_col])]
     geojson = _build_cell_geojson(plot_df, lat_col=lat_col, lon_col=lon_col, cell_size_deg=cell_size_deg)
@@ -139,6 +158,7 @@ def plot_lcoa_heatmap(
         color=color_column,
         map_style="carto-positron",
         color_continuous_scale=color_scale,
+        range_color=range_color,
         opacity=0.9,
         hover_data=hover_data or None,
         center=dict(lat=0.0, lon=0.0),
