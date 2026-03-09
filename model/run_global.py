@@ -446,7 +446,7 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "ammonia_synthesis_mw",
         "battery_pcs_mw",
         "hydrogen_fuel_cell_mw",
-        "penalty_link_mw",
+        "penalty_link_mwh",
         "ammonia_mwh",
         "compressed_hydrogen_store_mwh",
         "battery_storage_mwh",
@@ -1298,7 +1298,11 @@ def _run_single_location(
     time_step: float,
     max_snapshots: int | None,
     quiet: bool,
+    fail_fast: bool = False,
 ) -> Tuple[str, Dict[str, Any] | None]:
+    """Run optimisation for a single (lat, lon).  With fail_fast=True any exception
+    propagates immediately instead of being swallowed — use for debugging.
+    """
     t0 = time.perf_counter()
 
     try:
@@ -1309,6 +1313,8 @@ def _run_single_location(
         if max_snapshots is not None:
             weather_frame = weather_frame.iloc[:max_snapshots].copy()
     except Exception as exc:  # noqa: BLE001
+        if fail_fast:
+            raise RuntimeError(f"Weather extraction failed at ({lat}, {lon}): {exc}") from exc
         LOGGER.warning("Skipping location (%s, %s) due to weather extraction error: %s", lat, lon, exc)
         return "weather", None
 
@@ -1348,6 +1354,8 @@ def _run_single_location(
         )
         land_cap, land_row = _apply_land_caps_fast(network, land_lookup, lat, lon)
     except Exception as exc:  # noqa: BLE001
+        if fail_fast:
+            raise RuntimeError(f"Network setup failed at ({lat}, {lon}): {exc}") from exc
         LOGGER.warning("Network setup failed for (%s, %s): %s", lat, lon, exc)
         return "setup", None
 
@@ -1368,6 +1376,8 @@ def _run_single_location(
                 land_used_km2=None,
             )
     except Exception as exc:  # noqa: BLE001
+        if fail_fast:
+            raise RuntimeError(f"Optimisation failed at ({lat}, {lon}): {exc}") from exc
         LOGGER.warning("Optimisation failed for (%s, %s): %s", lat, lon, exc)
         return "solver", None
 
@@ -1484,6 +1494,7 @@ def _worker_init(
     time_step: float,
     max_snapshots: int | None,
     quiet: bool,
+    fail_fast: bool = False,
 ) -> None:
     """Initialise per-worker state.  Called once when each pool worker starts.
 
@@ -1501,13 +1512,22 @@ def _worker_init(
     _WORKER_STATE["time_step"] = time_step
     _WORKER_STATE["max_snapshots"] = max_snapshots
     _WORKER_STATE["quiet"] = quiet
+    _WORKER_STATE["fail_fast"] = fail_fast
 
 
 def _worker_task(lat_lon: Tuple[float, float]) -> Tuple[float, float, str, Dict[str, Any] | None]:
-    """Entry point for pool workers.  Returns (lat, lon, status, results)."""
+    """Entry point for pool workers.  Returns (lat, lon, status, results).
+
+    With fail_fast=True (set via _worker_init / _WORKER_STATE) any exception
+    propagates out of the worker.  The pool pickles it and re-raises it in the
+    parent at the imap_unordered iteration point — giving an immediate, full
+    traceback rather than a silent skip.
+    """
     lat, lon = lat_lon
     ws = _WORKER_STATE
-    try:
+    fail_fast = ws.get("fail_fast", False)
+    if fail_fast:
+        # Let any exception propagate — pool will re-raise it in the parent.
         status, results = _run_single_location(
             lat=lat,
             lon=lon,
@@ -1521,10 +1541,28 @@ def _worker_task(lat_lon: Tuple[float, float]) -> Tuple[float, float, str, Dict[
             time_step=ws["time_step"],
             max_snapshots=ws["max_snapshots"],
             quiet=ws["quiet"],
+            fail_fast=True,
         )
-    except Exception as exc:  # noqa: BLE001
-        LOGGER.error("Unhandled error in worker at (%s, %s): %s", lat, lon, exc, exc_info=True)
-        status, results = "error", None
+    else:
+        try:
+            status, results = _run_single_location(
+                lat=lat,
+                lon=lon,
+                dataset=ws["dataset"],
+                interest_lookup=ws["interest_lookup"],
+                tech_inputs=ws["tech_inputs"],
+                tech_meta=ws["tech_meta"],
+                land_lookup=ws["land_lookup"],
+                base_network=ws["base_network"],
+                aggregation_count=ws["aggregation_count"],
+                time_step=ws["time_step"],
+                max_snapshots=ws["max_snapshots"],
+                quiet=ws["quiet"],
+                fail_fast=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Unhandled error in worker at (%s, %s): %s", lat, lon, exc, exc_info=True)
+            status, results = "error", None
     return lat, lon, status, results
 
 
@@ -1543,8 +1581,9 @@ def run_global(
     num_workers: int = 1,
     lon_min: float | None = None,
     lon_max: float | None = None,
+    fail_fast: bool = False,
 ) -> pd.DataFrame:
-    """Run the ammonia plant optimisation for every requested location (serial).
+    """Run the ammonia plant optimisation for every requested location.
 
     Args:
         locations: Iterable of (lat, lon) pairs. If omitted, the function iterates over every
@@ -1565,6 +1604,9 @@ def run_global(
         threads_per_worker: Solver thread count (forwarded to GREEN_LORY_SOLVER_THREADS).
         lon_min: Optional minimum longitude bound (inclusive) for location filtering.
         lon_max: Optional maximum longitude bound (exclusive) for location filtering.
+        fail_fast: When True any per-location failure (weather, setup, or solver) raises
+            immediately with a full traceback instead of being logged and skipped.  Use
+            during development/debugging; leave False for production batch runs.
     """
     requested_threads = 1 if threads_per_worker is None else int(threads_per_worker)
 
@@ -1681,6 +1723,7 @@ def run_global(
                         initargs=(
                             interest_lookup, land_lookup, base_network,
                             tech_inputs, tech_meta, aggregation_count, time_step, max_snapshots, quiet,
+                            fail_fast,
                         ),
                     ) as pool:
                         try:
@@ -1694,6 +1737,8 @@ def run_global(
                                     _write_csv_row(lat, lon, country, results)
                                 progress.update(lat, lon, status)
                         except Exception as _pool_exc:  # noqa: BLE001 – WorkerLostError, pickling errors, etc.
+                            if fail_fast:
+                                raise
                             _dropped = [loc for loc in location_list if loc not in _received]
                             LOGGER.error(
                                 "Pool iteration aborted after %d/%d locations: %s — "
@@ -1731,8 +1776,11 @@ def run_global(
                                 time_step=time_step,
                                 max_snapshots=max_snapshots,
                                 quiet=quiet,
+                                fail_fast=fail_fast,
                             )
                         except Exception as exc:  # noqa: BLE001
+                            if fail_fast:
+                                raise
                             LOGGER.error(
                                 "Unhandled error at (%s, %s) — skipping: %s",
                                 lat, lon, exc, exc_info=True,
@@ -1822,6 +1870,12 @@ if __name__ == "__main__":
         default=1,
         help="Number of parallel worker processes (default: 1 = serial). Set >1 to enable multiprocessing.",
     )
+    parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        default=False,
+        help="Raise immediately on any per-location failure instead of logging and skipping.",
+    )
     args = parser.parse_args()
 
     if args.locations_csv:
@@ -1844,5 +1898,6 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         lon_min=args.lon_min,
         lon_max=args.lon_max,
+        fail_fast=args.fail_fast,
     )
     print(f"Processed {len(results_df)} locations. Results saved to {args.output_csv}.")

@@ -34,7 +34,6 @@ def _apply_unit_suffixes(location_results: Dict[str, Any]) -> Dict[str, Any]:
         "battery_interface_in",
         "battery_interface_out",
         "hydrogen_fuel_cell",
-        "penalty_link",
     }
     mwh_components = {
         "ammonia",
@@ -42,6 +41,8 @@ def _apply_unit_suffixes(location_results: Dict[str, Any]) -> Dict[str, Any]:
         "battery",
         "battery_storage",
         "accumulated_penalty",
+        # penalty_link is reported as total annual energy used (MWh), not capacity
+        "penalty_link",
     }
     for key in keys:
         key_lower = str(key).lower()

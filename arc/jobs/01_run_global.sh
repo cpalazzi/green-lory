@@ -101,6 +101,7 @@ export ARC_QUIET="${ARC_QUIET:-1}"
 export ARC_LON_MIN="${ARC_LON_MIN:-}"
 export ARC_LON_MAX="${ARC_LON_MAX:-}"
 export ARC_TIME_STEP="${ARC_TIME_STEP:-1.0}"
+export ARC_FAIL_FAST="${ARC_FAIL_FAST:-0}"  # set to 1 to raise immediately on any location failure
 
 LOGFILE="logs/arc-${RUN_LABEL}-${STAMP}.log"
 echo "Run label: $RUN_LABEL"
@@ -154,6 +155,8 @@ time_step_raw = os.environ.get("ARC_TIME_STEP", "1.0").strip()
 time_step = float(time_step_raw) if time_step_raw else 1.0
 num_workers_raw = os.environ.get("ARC_NUM_WORKERS", "1").strip()
 num_workers = int(num_workers_raw) if num_workers_raw else 1
+fail_fast_raw = os.environ.get("ARC_FAIL_FAST", "0").strip().lower()
+fail_fast = fail_fast_raw in {"1", "true", "yes"}
 
 result_df = run_global(
     locations=locations,
@@ -168,6 +171,7 @@ result_df = run_global(
     num_workers=num_workers,
     lon_min=lon_min,
     lon_max=lon_max,
+    fail_fast=fail_fast,
 )
 
 print(f"Processed {len(result_df)} locations")

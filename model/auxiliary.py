@@ -545,6 +545,13 @@ def get_results_dict_for_multi_site(
     link_capacities = _link_capacity_on_output_basis(n, n.links['p_nom_opt'])
     for component in n.links.index.to_list():
         dct[component] = link_capacities.loc[component]
+    # penalty_link: report total annual energy flowing through the slack link (MWh)
+    # rather than its optimised capacity (MW) — energy used is more meaningful than
+    # the size of the fictitious relief valve.
+    if 'penalty_link' in n.links.index and not n.links_t.p0.empty and 'penalty_link' in n.links_t.p0.columns:
+        dct['penalty_link'] = float(n.links_t.p0['penalty_link'].sum()) * time_step
+    elif 'penalty_link' in n.links.index:
+        dct['penalty_link'] = 0.0
     # Consolidate battery PCS charge/discharge into a single reported capacity
     if 'battery_pcs_charge' in dct or 'battery_pcs_discharge' in dct:
         charge = float(dct.get('battery_pcs_charge', 0.0) or 0.0)
