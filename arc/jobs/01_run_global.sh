@@ -90,8 +90,10 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
 export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
 export GREEN_LORY_SOLVER_LOG="${GREEN_LORY_SOLVER_LOG:-0}"
-# All CPUs are available as solver threads for the serial run.
-export ARC_THREADS_PER_WORKER="${ARC_THREADS_PER_WORKER:-${CPUS}}"
+# Default: 4 Gurobi threads per worker, 12 parallel workers (= 48 CPUs).
+# Override with ARC_THREADS_PER_WORKER and ARC_NUM_WORKERS env vars.
+export ARC_THREADS_PER_WORKER="${ARC_THREADS_PER_WORKER:-4}"
+export ARC_NUM_WORKERS="${ARC_NUM_WORKERS:-$((CPUS / ARC_THREADS_PER_WORKER))}"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 export ARC_OUTPUT_CSV="${ARC_OUTPUT_CSV:-results/${RUN_LABEL}/run_global_${RUN_LABEL}_${STAMP}.csv}"
@@ -105,6 +107,7 @@ echo "Run label: $RUN_LABEL"
 echo "Log file:  $LOGFILE"
 echo "Output:    $ARC_OUTPUT_CSV"
 
+echo "Workers: ARC_NUM_WORKERS=${ARC_NUM_WORKERS}, ARC_THREADS_PER_WORKER=${ARC_THREADS_PER_WORKER}" | tee -a "$LOGFILE"
 env | grep -E '^(ARC_|GREEN_LORY_|GRB_LICENSE_FILE|OMP_NUM_THREADS|MKL_NUM_THREADS|OPENBLAS_NUM_THREADS)' | sort | tee -a "$LOGFILE"
 
 python - <<'PY' 2>&1 | tee -a "$LOGFILE"
@@ -149,6 +152,8 @@ lon_min = float(lon_min_raw) if lon_min_raw else None
 lon_max = float(lon_max_raw) if lon_max_raw else None
 time_step_raw = os.environ.get("ARC_TIME_STEP", "1.0").strip()
 time_step = float(time_step_raw) if time_step_raw else 1.0
+num_workers_raw = os.environ.get("ARC_NUM_WORKERS", "1").strip()
+num_workers = int(num_workers_raw) if num_workers_raw else 1
 
 result_df = run_global(
     locations=locations,
@@ -160,6 +165,7 @@ result_df = run_global(
     output_csv=os.environ.get("ARC_OUTPUT_CSV"),
     quiet=quiet,
     threads_per_worker=threads_per_worker,
+    num_workers=num_workers,
     lon_min=lon_min,
     lon_max=lon_max,
 )

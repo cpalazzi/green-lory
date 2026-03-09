@@ -6,6 +6,7 @@ import copy
 import io
 import logging
 import math
+import multiprocessing
 import os
 import sys
 import time
@@ -47,6 +48,11 @@ _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
 DEFAULT_INTEREST_RATES: Dict[str, float] = {}
 
 WIND_GENERATORS = ["wind"]
+
+# Module-level state populated by _worker_init() in each pool worker process.
+_WORKER_STATE: Dict[str, Any] = {}
+# Loaded once by the main process before forking; inherited by workers via CoW.
+_SHARED_DATASET: Any = None
 
 
 def _annuity_factor(interest_rate: float, lifetime_years: float) -> float:
@@ -1459,6 +1465,60 @@ def _run_single_location(
     return "done", results
 
 
+def _worker_init(
+    interest_lookup: Dict,
+    land_lookup: Dict,
+    base_network: Any,
+    tech_inputs: Dict[str, dict],
+    tech_meta: Dict[str, float],
+    aggregation_count: int,
+    time_step: float,
+    max_snapshots: int | None,
+    quiet: bool,
+) -> None:
+    """Initialise per-worker state.  Called once when each pool worker starts.
+
+    The dataset is inherited from the parent process via fork (copy-on-write),
+    so we do not re-open it here.  This keeps memory usage at a constant ~15 GB
+    regardless of the number of workers.
+    """
+    _WORKER_STATE["dataset"] = _SHARED_DATASET  # CoW-inherited from parent
+    _WORKER_STATE["interest_lookup"] = interest_lookup
+    _WORKER_STATE["land_lookup"] = land_lookup
+    _WORKER_STATE["base_network"] = base_network
+    _WORKER_STATE["tech_inputs"] = tech_inputs
+    _WORKER_STATE["tech_meta"] = tech_meta
+    _WORKER_STATE["aggregation_count"] = aggregation_count
+    _WORKER_STATE["time_step"] = time_step
+    _WORKER_STATE["max_snapshots"] = max_snapshots
+    _WORKER_STATE["quiet"] = quiet
+
+
+def _worker_task(lat_lon: Tuple[float, float]) -> Tuple[float, float, str, Dict[str, Any] | None]:
+    """Entry point for pool workers.  Returns (lat, lon, status, results)."""
+    lat, lon = lat_lon
+    ws = _WORKER_STATE
+    try:
+        status, results = _run_single_location(
+            lat=lat,
+            lon=lon,
+            dataset=ws["dataset"],
+            interest_lookup=ws["interest_lookup"],
+            tech_inputs=ws["tech_inputs"],
+            tech_meta=ws["tech_meta"],
+            land_lookup=ws["land_lookup"],
+            base_network=ws["base_network"],
+            aggregation_count=ws["aggregation_count"],
+            time_step=ws["time_step"],
+            max_snapshots=ws["max_snapshots"],
+            quiet=ws["quiet"],
+        )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error("Unhandled error in worker at (%s, %s): %s", lat, lon, exc, exc_info=True)
+        status, results = "error", None
+    return lat, lon, status, results
+
+
 def run_global(
     locations: Sequence[Tuple[float, float]] | None = None,
     weather_dir: str | Path | None = None,
@@ -1471,6 +1531,7 @@ def run_global(
     output_csv: str | Path | None = None,
     quiet: bool = False,
     threads_per_worker: int | None = None,
+    num_workers: int = 1,
     lon_min: float | None = None,
     lon_max: float | None = None,
 ) -> pd.DataFrame:
@@ -1531,7 +1592,6 @@ def run_global(
             str(requested_threads),
             threads_per_worker is not None,
         ):
-            dataset = lt.all_locations(str(weather_dir_path), cache_resources=True)
             interest_df = _load_interest_table(interest_csv_path)
 
             # ── Pre-computation phase ──────────────────────────────────────
@@ -1543,10 +1603,14 @@ def run_global(
             country_lookup = _build_country_lookup(world, location_list)
 
             # Build the base PyPSA network once; deep-copy per cell.
-            # The snapshot count is the same for all locations (determined by
-            # the NetCDF time dimension), so we probe the first location.
+            # Load all weather data into RAM here in the main process.  For the
+            # parallel path the forked workers inherit the loaded numpy arrays
+            # via copy-on-write at zero extra RAM cost.  For the serial path the
+            # same object is used directly.
+            global _SHARED_DATASET
+            _SHARED_DATASET = lt.all_locations(str(weather_dir_path), cache_resources=True)
             probe_lat, probe_lon = location_list[0] if location_list else (0.0, 0.0)
-            probe_weather = _build_weather_frame(dataset, probe_lat, probe_lon, aggregation_count)
+            probe_weather = _build_weather_frame(_SHARED_DATASET, probe_lat, probe_lon, aggregation_count)
             # Apply the same resampling that per-cell code will use.
             if time_step > 1:
                 probe_weather = _resample_weather_frame(probe_weather, int(time_step))
@@ -1576,44 +1640,76 @@ def run_global(
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 out_fh = open(output_path, "w", newline="", encoding="utf-8")
 
+            def _write_csv_row(lat: float, lon: float, country: str, res: Dict[str, Any]) -> None:
+                nonlocal header_written
+                if out_fh is None:
+                    return
+                row = {"latitude": lat, "longitude": lon, "country": country, **res}
+                row_df = pd.DataFrame([row])
+                if not header_written:
+                    row_df.to_csv(out_fh, index=False)
+                    header_written = True
+                else:
+                    row_df.to_csv(out_fh, index=False, header=False)
+                out_fh.flush()
+
             try:
-                for lat, lon in location_list:
-                    try:
-                        status, results = _run_single_location(
-                            lat=lat,
-                            lon=lon,
-                            dataset=dataset,
-                            interest_lookup=interest_lookup,
-                            tech_inputs=tech_inputs,
-                            tech_meta=tech_meta,
-                            land_lookup=land_lookup,
-                            base_network=base_network,
-                            aggregation_count=aggregation_count,
-                            time_step=time_step,
-                            max_snapshots=max_snapshots,
-                            quiet=quiet,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        LOGGER.error(
-                            "Unhandled error at (%s, %s) — skipping: %s",
-                            lat, lon, exc, exc_info=True,
-                        )
-                        status, results = "error", None
-                    if results is not None:
-                        country = country_lookup.get((lat, lon), _country_for(world, lat, lon))
-                        store.add_location(lat, lon, country, results)
-                        if out_fh is not None:
-                            row = {"latitude": lat, "longitude": lon, "country": country, **results}
-                            row_df = pd.DataFrame([row])
-                            if not header_written:
-                                row_df.to_csv(out_fh, index=False)
-                                header_written = True
-                            else:
-                                row_df.to_csv(out_fh, index=False, header=False)
-                            out_fh.flush()
-                    progress.update(lat, lon, status)
+                if num_workers > 1:
+                    # ── Parallel path: dataset loaded once, shared via fork CoW ──
+                    LOGGER.info(
+                        "Starting parallel run: %d workers x %d threads = %d CPUs",
+                        num_workers, requested_threads, num_workers * requested_threads,
+                    )
+                    _mp_ctx = multiprocessing.get_context("fork" if sys.platform != "win32" else "spawn")
+                    with _mp_ctx.Pool(
+                        processes=num_workers,
+                        initializer=_worker_init,
+                        initargs=(
+                            interest_lookup, land_lookup, base_network,
+                            tech_inputs, tech_meta, aggregation_count, time_step, max_snapshots, quiet,
+                        ),
+                    ) as pool:
+                        for lat, lon, status, results in pool.imap_unordered(
+                            _worker_task, location_list, chunksize=2,
+                        ):
+                            if results is not None:
+                                country = country_lookup.get((lat, lon), _country_for(world, lat, lon))
+                                store.add_location(lat, lon, country, results)
+                                _write_csv_row(lat, lon, country, results)
+                            progress.update(lat, lon, status)
+                else:
+                    # ── Serial path: use _SHARED_DATASET directly ──
+                    for lat, lon in location_list:
+                        try:
+                            status, results = _run_single_location(
+                                lat=lat,
+                                lon=lon,
+                                dataset=_SHARED_DATASET,
+                                interest_lookup=interest_lookup,
+                                tech_inputs=tech_inputs,
+                                tech_meta=tech_meta,
+                                land_lookup=land_lookup,
+                                base_network=base_network,
+                                aggregation_count=aggregation_count,
+                                time_step=time_step,
+                                max_snapshots=max_snapshots,
+                                quiet=quiet,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            LOGGER.error(
+                                "Unhandled error at (%s, %s) — skipping: %s",
+                                lat, lon, exc, exc_info=True,
+                            )
+                            status, results = "error", None
+                        if results is not None:
+                            country = country_lookup.get((lat, lon), _country_for(world, lat, lon))
+                            store.add_location(lat, lon, country, results)
+                            _write_csv_row(lat, lon, country, results)
+                        progress.update(lat, lon, status)
             finally:
-                dataset.close()
+                if _SHARED_DATASET is not None:
+                    _SHARED_DATASET.close()
+                    _SHARED_DATASET = None
                 if out_fh is not None:
                     out_fh.close()
 
@@ -1683,6 +1779,12 @@ if __name__ == "__main__":
         default=1.0,
         help="Timestep resolution in hours (default: 1.0). E.g. 3.0 for 3-hourly snapshots.",
     )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=1,
+        help="Number of parallel worker processes (default: 1 = serial). Set >1 to enable multiprocessing.",
+    )
     args = parser.parse_args()
 
     if args.locations_csv:
@@ -1702,6 +1804,7 @@ if __name__ == "__main__":
         output_csv=args.output_csv,
         quiet=args.quiet,
         threads_per_worker=args.threads_per_worker,
+        num_workers=args.num_workers,
         lon_min=args.lon_min,
         lon_max=args.lon_max,
     )
