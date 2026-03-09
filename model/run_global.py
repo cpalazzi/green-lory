@@ -1670,6 +1670,11 @@ def run_global(
                         num_workers, requested_threads, num_workers * requested_threads,
                     )
                     _mp_ctx = multiprocessing.get_context("fork" if sys.platform != "win32" else "spawn")
+                    # Track submitted vs received so any worker-process deaths
+                    # (SIGKILL / OOM) produce a retryable _failed_<ts>.csv rather
+                    # than silently dropping locations.  chunksize=1 ensures at most
+                    # one location is lost per worker death (vs two with chunksize=2).
+                    _received: set[tuple[float, float]] = set()
                     with _mp_ctx.Pool(
                         processes=num_workers,
                         initializer=_worker_init,
@@ -1678,14 +1683,37 @@ def run_global(
                             tech_inputs, tech_meta, aggregation_count, time_step, max_snapshots, quiet,
                         ),
                     ) as pool:
-                        for lat, lon, status, results in pool.imap_unordered(
-                            _worker_task, location_list, chunksize=2,
-                        ):
-                            if results is not None:
-                                country = country_lookup.get((lat, lon), _country_for(world, lat, lon))
-                                store.add_location(lat, lon, country, results)
-                                _write_csv_row(lat, lon, country, results)
-                            progress.update(lat, lon, status)
+                        try:
+                            for lat, lon, status, results in pool.imap_unordered(
+                                _worker_task, location_list, chunksize=1,
+                            ):
+                                _received.add((lat, lon))
+                                if results is not None:
+                                    country = country_lookup.get((lat, lon), _country_for(world, lat, lon))
+                                    store.add_location(lat, lon, country, results)
+                                    _write_csv_row(lat, lon, country, results)
+                                progress.update(lat, lon, status)
+                        except Exception as _pool_exc:  # noqa: BLE001 – WorkerLostError, pickling errors, etc.
+                            _dropped = [loc for loc in location_list if loc not in _received]
+                            LOGGER.error(
+                                "Pool iteration aborted after %d/%d locations: %s — "
+                                "%d location(s) were never processed.",
+                                len(_received), len(location_list), _pool_exc, len(_dropped),
+                            )
+                            if _dropped and output_csv:
+                                from datetime import datetime as _dt  # noqa: PLC0415
+                                _ts = _dt.now().strftime("%Y%m%d-%H%M%S")
+                                _failed_path = Path(output_csv).with_stem(
+                                    Path(output_csv).stem + f"_failed_{_ts}"
+                                )
+                                pd.DataFrame(_dropped, columns=["lat", "lon"]).to_csv(
+                                    _failed_path, index=False
+                                )
+                                LOGGER.error(
+                                    "Dropped locations written to %s — resubmit with "
+                                    "--locations-csv '%s'",
+                                    _failed_path, _failed_path,
+                                )
                 else:
                     # ── Serial path: use _SHARED_DATASET directly ──
                     for lat, lon in location_list:
