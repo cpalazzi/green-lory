@@ -1120,8 +1120,9 @@ def _country_for(world: gpd.GeoDataFrame, lat: float, lon: float) -> str:
     point = Point(lon, lat)
     matches = world[world.intersects(point)]
     if matches.empty:
-        return "None"
-    return matches.iloc[0].country
+        return ""
+    country = matches.iloc[0].country
+    return str(country) if pd.notna(country) else ""
 
 
 def _build_country_lookup(
@@ -1132,6 +1133,12 @@ def _build_country_lookup(
 
     Returns ``{(lat, lon): country_name}`` dict.  Much faster than calling
     ``_country_for`` per cell when there are thousands of locations.
+
+    Uses ``predicate="intersects"`` (rather than ``"within"``) so that cells
+    whose centroid falls exactly on a polygon boundary (common at high latitudes
+    and small-island coastlines) are correctly assigned a country rather than
+    left unmatched.  When a point intersects multiple polygons (border cells),
+    the first matched country is kept.
     """
     if not locations:
         return {}
@@ -1141,11 +1148,13 @@ def _build_country_lookup(
         geometry=gpd.points_from_xy(lons, lats),
         crs=world.crs,
     )
-    joined = gpd.sjoin(points, world[["country", "geometry"]], how="left", predicate="within")
+    joined = gpd.sjoin(points, world[["country", "geometry"]], how="left", predicate="intersects")
+    # A point on a shared border may match multiple polygons → keep first hit.
+    joined = joined[~joined.index.duplicated(keep="first")]
     lookup: Dict[Tuple[float, float], str] = {}
     for idx, row in joined.iterrows():
         key = (float(row["latitude"]), float(row["longitude"]))
-        lookup[key] = str(row["country"]) if pd.notna(row.get("country")) else "None"
+        lookup[key] = str(row["country"]) if pd.notna(row.get("country")) else ""
     return lookup
 
 
