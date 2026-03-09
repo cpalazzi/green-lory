@@ -134,7 +134,7 @@ _submit_one() {
   fi
   # Display to stderr so capturing stdout returns only the job ID
   echo "$out" >&2
-  awk '{print $NF}' <<<"$out"  # stdout: job ID only
+  awk '{print $4}' <<<"$out"  # stdout: job ID only ("Submitted batch job <ID> on cluster htc")
 }
 
 if $QUADRANTS || $PHASED; then
