@@ -44,7 +44,7 @@ for QUAD in west2 west1 east1 east2; do
       "$REPO_DIR/arc/jobs/01_run_global.sh" \
       "$JOB_LABEL" \
       "$CSV" \
-      | awk '{print $NF}'
+      | awk '{print $4}'
   )
   echo "  Submitted $QUAD → SLURM job $JOB_ID"
 done
