@@ -1299,38 +1299,42 @@ def _run_single_location(
 
     t_weather = time.perf_counter()
 
-    overrides = _interest_overrides_fast(interest_lookup, lat, lon)
-    interest_rates = _compose_interest_rates(overrides)
+    try:
+        overrides = _interest_overrides_fast(interest_lookup, lat, lon)
+        interest_rates = _compose_interest_rates(overrides)
 
-    # Extract location-level spatial cost parameters from overrides.
-    location_params = overrides.get("__location__", {}) if overrides else {}
-    water_cost_usd_per_m3 = location_params.get("water_cost_usd_per_m3")
-    land_cost_usd_per_km2_year = location_params.get("land_cost_usd_per_km2_year")
+        # Extract location-level spatial cost parameters from overrides.
+        location_params = overrides.get("__location__", {}) if overrides else {}
+        water_cost_usd_per_m3 = location_params.get("water_cost_usd_per_m3")
+        land_cost_usd_per_km2_year = location_params.get("land_cost_usd_per_km2_year")
 
-    # Apply YAML defaults if location-specific values are missing.
-    if water_cost_usd_per_m3 is None:
-        water_cost_usd_per_m3 = tech_meta.get("water_cost_baseline_usd_per_m3")
-    water_usage_m3_per_t = tech_meta.get("water_usage_m3_per_t_nh3")
+        # Apply YAML defaults if location-specific values are missing.
+        if water_cost_usd_per_m3 is None:
+            water_cost_usd_per_m3 = tech_meta.get("water_cost_baseline_usd_per_m3")
+        water_usage_m3_per_t = tech_meta.get("water_usage_m3_per_t_nh3")
 
-    # Deep-copy the pre-built base network instead of re-importing CSVs.
-    network = copy.deepcopy(base_network)
+        # Deep-copy the pre-built base network instead of re-importing CSVs.
+        network = copy.deepcopy(base_network)
 
-    # Always apply YAML default costs first (the CSV bundle may be stale).
-    _apply_yaml_base_costs(
-        network,
-        tech_inputs=tech_inputs,
-        aggregation_count=aggregation_count,
-        time_step=time_step,
-    )
-    # Then apply per-location finance overrides on top (if any).
-    _apply_finance_overrides(
-        network,
-        tech_inputs=tech_inputs,
-        overrides=overrides,
-        aggregation_count=aggregation_count,
-        time_step=time_step,
-    )
-    land_cap, land_row = _apply_land_caps_fast(network, land_lookup, lat, lon)
+        # Always apply YAML default costs first (the CSV bundle may be stale).
+        _apply_yaml_base_costs(
+            network,
+            tech_inputs=tech_inputs,
+            aggregation_count=aggregation_count,
+            time_step=time_step,
+        )
+        # Then apply per-location finance overrides on top (if any).
+        _apply_finance_overrides(
+            network,
+            tech_inputs=tech_inputs,
+            overrides=overrides,
+            aggregation_count=aggregation_count,
+            time_step=time_step,
+        )
+        land_cap, land_row = _apply_land_caps_fast(network, land_lookup, lat, lon)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Network setup failed for (%s, %s): %s", lat, lon, exc)
+        return "setup", None
 
     t_setup = time.perf_counter()
 
@@ -1574,20 +1578,27 @@ def run_global(
 
             try:
                 for lat, lon in location_list:
-                    status, results = _run_single_location(
-                        lat=lat,
-                        lon=lon,
-                        dataset=dataset,
-                        interest_lookup=interest_lookup,
-                        tech_inputs=tech_inputs,
-                        tech_meta=tech_meta,
-                        land_lookup=land_lookup,
-                        base_network=base_network,
-                        aggregation_count=aggregation_count,
-                        time_step=time_step,
-                        max_snapshots=max_snapshots,
-                        quiet=quiet,
-                    )
+                    try:
+                        status, results = _run_single_location(
+                            lat=lat,
+                            lon=lon,
+                            dataset=dataset,
+                            interest_lookup=interest_lookup,
+                            tech_inputs=tech_inputs,
+                            tech_meta=tech_meta,
+                            land_lookup=land_lookup,
+                            base_network=base_network,
+                            aggregation_count=aggregation_count,
+                            time_step=time_step,
+                            max_snapshots=max_snapshots,
+                            quiet=quiet,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        LOGGER.error(
+                            "Unhandled error at (%s, %s) — skipping: %s",
+                            lat, lon, exc, exc_info=True,
+                        )
+                        status, results = "error", None
                     if results is not None:
                         country = country_lookup.get((lat, lon), _country_for(world, lat, lon))
                         store.add_location(lat, lon, country, results)

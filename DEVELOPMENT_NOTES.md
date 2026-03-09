@@ -245,6 +245,7 @@ rsync -avz --delete \
   --exclude 'data/*.geojson' \
   --exclude 'results/' \
   --exclude 'logs/' \
+  --exclude 'slurm-*.out' \
   --exclude 'notebooks/' \
   ./ engs2523@arc-login.arc.ox.ac.uk:/data/engs-df-green-ammonia/engs2523/green-lory/
 ```
