@@ -6,4 +6,4 @@ ammonia_synthesis,power,ammonia,electricity_ac,6.25,True,10000000.0,0.3,1297855.
 battery_pcs_charge,power,power_storage,electricity_ac,0.954,True,10000000.0,0.0,20960.79582291829,0.0,,,,1.0,Battery PCS charging AC to storage (includes capital cost).
 battery_pcs_discharge,power_storage,power,electricity_ac,0.954,True,10000000.0,0.0,0.11205648203300865,0.0,,,,1.0,Battery PCS discharging storage to AC (minimal cost to avoid double-counting).
 hydrogen_fuel_cell,hydrogen,power,Hydrogen,0.5,True,1000000.0,0.0,170106.28565602537,0.0,,,,1.0,Optional fuel cell to supply power from hydrogen during deficits.
-penalty_link,ramp_penalty,ramp_penalty_dest,electricity_ac,1.0,True,1000000.0,0.0,109999999.99999993,1000000.0,,,,1.0,Transfers ramp penalty flow to an accumulating store for post-processing.
+penalty_link,ramp_penalty,ramp_penalty_dest,electricity_ac,1.0,True,1000000.0,0.0,109999999.99999993,100000.0,,,,1.0,Transfers ramp penalty flow to an accumulating store for post-processing.
