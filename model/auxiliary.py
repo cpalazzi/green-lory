@@ -552,6 +552,14 @@ def get_results_dict_for_multi_site(
         dct['penalty_link'] = float(n.links_t.p0['penalty_link'].sum()) * time_step
     elif 'penalty_link' in n.links.index:
         dct['penalty_link'] = 0.0
+    # grid: report total annual energy drawn from the feasibility backstop (MWh).
+    # Non-zero values indicate the local renewables alone cannot meet demand;
+    # filter on grid_energy_mwh == 0 to retain only resource-sufficient cells.
+    if 'grid' in n.generators.index:
+        if not n.generators_t.p.empty and 'grid' in n.generators_t.p.columns:
+            dct['grid_energy_mwh'] = float(n.generators_t.p['grid'].sum()) * time_step
+        else:
+            dct['grid_energy_mwh'] = 0.0
     # Consolidate battery PCS charge/discharge into a single reported capacity
     if 'battery_pcs_charge' in dct or 'battery_pcs_discharge' in dct:
         charge = float(dct.get('battery_pcs_charge', 0.0) or 0.0)

@@ -1,8 +1,11 @@
 from pathlib import Path
 import copy
 import glob
+import logging
 import os
 import sys
+
+LOGGER = logging.getLogger(__name__)
 
 import geopandas as gpd
 import pandas as pd
@@ -185,6 +188,14 @@ def apply_weather_profiles(network, weather_data):
 
     missing_profiles = []
     for generator_name in network.generators.index.to_list():
+        # The grid generator represents a feasibility backstop; its p_max_pu is
+        # always 1.0 so the solver can dispatch it whenever p_nom > 0.  The zero-
+        # filled "grid" column added by get_weather_data is intentionally ignored
+        # here — using it would silently block the backstop (p_max_pu=0).
+        if generator_name == "grid":
+            network.generators_t.p_max_pu[generator_name] = 1.0
+            continue
+
         selected_column = None
         if generator_name in weather_frame.columns:
             selected_column = generator_name
@@ -194,9 +205,6 @@ def apply_weather_profiles(network, weather_data):
                     selected_column = candidate
                     break
 
-        if selected_column is None and generator_name == "grid":
-            network.generators_t.p_max_pu[generator_name] = 0.0
-            continue
         if selected_column is None and generator_name == "ramp_dummy":
             network.generators_t.p_max_pu[generator_name] = 1.0
             continue
@@ -279,6 +287,15 @@ def main(
         solver_threads = int(solver_threads_raw)
         if solver_threads < 1:
             raise ValueError("GREEN_LORY_SOLVER_THREADS must be >= 1")
+
+    # Detect whether the grid feasibility backstop is active: run_global sets
+    # p_nom > 0 on the grid generator when ensure_feasibility=True.
+    # Used below to log that the backstop is enabled; solver options are the
+    # same in both cases since the LP is now well-conditioned with p_max_pu=1.
+    _grid_backstop_active = (
+        "grid" in n.generators.index
+        and float(n.generators.at["grid", "p_nom"]) > 0.0
+    )
 
     solver_options = None
     if solver == "gurobi":

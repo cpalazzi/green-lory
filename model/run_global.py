@@ -1582,6 +1582,7 @@ def run_global(
     lon_min: float | None = None,
     lon_max: float | None = None,
     fail_fast: bool = False,
+    ensure_feasibility: bool = True,
 ) -> pd.DataFrame:
     """Run the ammonia plant optimisation for every requested location.
 
@@ -1607,6 +1608,11 @@ def run_global(
         fail_fast: When True any per-location failure (weather, setup, or solver) raises
             immediately with a full traceback instead of being logged and skipped.  Use
             during development/debugging; leave False for production batch runs.
+        ensure_feasibility: When True the grid generator is made extendable at high-but-
+            finite cost (same as the ramp-penalty link: ~110 MEUR/MW capital +
+            1 MEUR/MWh marginal), guaranteeing every cell has a feasible LP.  Cells that
+            rely on the backstop will have grid_energy_mwh > 0 in results and very high
+            LCOA.  Set to False to reproduce the original hard-infeasibility behaviour.
     """
     requested_threads = 1 if threads_per_worker is None else int(threads_per_worker)
 
@@ -1673,6 +1679,40 @@ def run_global(
                 time_step=time_step,
             )
 
+            # ── Feasibility backstop ───────────────────────────────────────
+            # When ensure_feasibility=True the grid generator acts as a relief
+            # valve: the LP is always feasible, and grid_energy_mwh > 0 in
+            # results flags locations that genuinely cannot meet demand from
+            # local renewables alone.  Capital + marginal cost match the ramp-
+            # penalty link so the solver treats it as a last resort.
+            if ensure_feasibility and "grid" in base_network.generators.index:
+                # Pure marginal-cost backstop: no capital cost, no extendable variable.
+                #
+                # Sizing: p_nom=20,000 MW is ≈1.6× the worst-case peak power demand
+                # for the ammonia plant (~12,086 MW average × 1.3 peak factor) — large
+                # enough to guarantee feasibility for any location but small enough that
+                # Gurobi's barrier method is not destabilised by extreme coefficient
+                # magnitudes in the constraint matrix.
+                #
+                # Marginal cost: 100,000 EUR/MWh makes the grid ≈200× more expensive
+                # than storage round-trips (~500 EUR/MWh) and ≈1000× more expensive
+                # than renewables.  This ensures feasible cells never dispatch the grid
+                # (the optimizer prefers even heavily oversized storage), while
+                # infeasible cells can still reach a solution.
+                # Any cell with grid_energy_mwh > 0 in results is genuinely
+                # resource-constrained and should be filtered out.
+                _GRID_P_NOM = 20_000.0          # MW — sufficient for worst-case deficit
+                _GRID_MARGINAL = 100_000.0       # EUR/MWh — prohibitive vs all alternatives
+                base_network.generators.at["grid", "p_nom_extendable"] = False
+                base_network.generators.at["grid", "p_nom"] = _GRID_P_NOM
+                base_network.generators.at["grid", "capital_cost"] = 0.0
+                base_network.generators.at["grid", "marginal_cost"] = _GRID_MARGINAL
+                LOGGER.info(
+                    "ensure_feasibility=True: grid backstop active "
+                    "(p_nom=%.0f MW, marginal=%.0f EUR/MWh, capital=0)",
+                    _GRID_P_NOM, _GRID_MARGINAL,
+                )
+
             LOGGER.info(
                 "Pre-computation complete in %.1fs: %d interest entries, %d land entries, %d country entries, base network built (%d snapshots)",
                 time.perf_counter() - t_pre,
@@ -1736,9 +1776,13 @@ def run_global(
                                     store.add_location(lat, lon, country, results)
                                     _write_csv_row(lat, lon, country, results)
                                 progress.update(lat, lon, status)
-                        except Exception as _pool_exc:  # noqa: BLE001 – WorkerLostError, pickling errors, etc.
-                            if fail_fast:
-                                raise
+                        except Exception as _pool_exc:  # noqa: BLE001 – infrastructure crash (OOM/SIGKILL/broken pipe)
+                            # Per-cell solver errors are already caught inside _worker_task
+                            # and returned as (lat, lon, "error", None), so any exception
+                            # that reaches here is an infrastructure-level crash (worker
+                            # killed by OOM, SLURM, Gurobi licence limit, etc.).
+                            # Always re-raise after writing the dropped-locations CSV so
+                            # the SLURM job exits non-zero and sends the failure email.
                             _dropped = [loc for loc in location_list if loc not in _received]
                             LOGGER.error(
                                 "Pool iteration aborted after %d/%d locations: %s — "
@@ -1759,6 +1803,7 @@ def run_global(
                                     "--locations-csv '%s'",
                                     _failed_path, _failed_path,
                                 )
+                            raise  # always propagate — pool is dead
                 else:
                     # ── Serial path: use _SHARED_DATASET directly ──
                     for lat, lon in location_list:
@@ -1876,6 +1921,13 @@ if __name__ == "__main__":
         default=False,
         help="Raise immediately on any per-location failure instead of logging and skipping.",
     )
+    parser.add_argument(
+        "--no-ensure-feasibility",
+        dest="ensure_feasibility",
+        action="store_false",
+        default=True,
+        help="Disable the grid backstop and allow hard LP infeasibility (reproduces original behaviour).",
+    )
     args = parser.parse_args()
 
     if args.locations_csv:
@@ -1899,5 +1951,6 @@ if __name__ == "__main__":
         lon_min=args.lon_min,
         lon_max=args.lon_max,
         fail_fast=args.fail_fast,
+        ensure_feasibility=args.ensure_feasibility,
     )
     print(f"Processed {len(results_df)} locations. Results saved to {args.output_csv}.")

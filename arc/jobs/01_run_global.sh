@@ -101,7 +101,8 @@ export ARC_QUIET="${ARC_QUIET:-1}"
 export ARC_LON_MIN="${ARC_LON_MIN:-}"
 export ARC_LON_MAX="${ARC_LON_MAX:-}"
 export ARC_TIME_STEP="${ARC_TIME_STEP:-1.0}"
-export ARC_FAIL_FAST="${ARC_FAIL_FAST:-0}"  # set to 1 to raise immediately on any location failure
+export ARC_FAIL_FAST="${ARC_FAIL_FAST:-1}"  # set to 0 to swallow per-location failures silently
+export ARC_ENSURE_FEASIBILITY="${ARC_ENSURE_FEASIBILITY:-1}"  # set to 0 to disable grid backstop (hard infeasibility)
 
 LOGFILE="logs/arc-${RUN_LABEL}-${STAMP}.log"
 echo "Run label: $RUN_LABEL"
@@ -155,8 +156,10 @@ time_step_raw = os.environ.get("ARC_TIME_STEP", "1.0").strip()
 time_step = float(time_step_raw) if time_step_raw else 1.0
 num_workers_raw = os.environ.get("ARC_NUM_WORKERS", "1").strip()
 num_workers = int(num_workers_raw) if num_workers_raw else 1
-fail_fast_raw = os.environ.get("ARC_FAIL_FAST", "0").strip().lower()
+fail_fast_raw = os.environ.get("ARC_FAIL_FAST", "1").strip().lower()
 fail_fast = fail_fast_raw in {"1", "true", "yes"}
+ensure_feasibility_raw = os.environ.get("ARC_ENSURE_FEASIBILITY", "1").strip().lower()
+ensure_feasibility = ensure_feasibility_raw not in {"0", "false", "no"}
 
 result_df = run_global(
     locations=locations,
@@ -172,6 +175,7 @@ result_df = run_global(
     lon_min=lon_min,
     lon_max=lon_max,
     fail_fast=fail_fast,
+    ensure_feasibility=ensure_feasibility,
 )
 
 print(f"Processed {len(result_df)} locations")
