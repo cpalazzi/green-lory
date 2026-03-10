@@ -95,6 +95,12 @@ def _load_tech_inputs(path: str | Path | None) -> Dict[str, dict]:
         if normalized is None:
             continue
         out[normalized] = raw
+    # Pass through the grid_backstop section (if present) directly — it is not a
+    # PyPSA component and does not need normalization.  Absence means the backstop
+    # is disabled (the YAML comment controls this).
+    grid_backstop = data.get("grid_backstop")
+    if isinstance(grid_backstop, dict):
+        out["grid_backstop"] = grid_backstop
     return out
 
 
@@ -1680,29 +1686,16 @@ def run_global(
             )
 
             # ── Feasibility backstop ───────────────────────────────────────
-            # When ensure_feasibility=True the grid generator acts as a relief
-            # valve: the LP is always feasible, and grid_energy_mwh > 0 in
-            # results flags locations that genuinely cannot meet demand from
-            # local renewables alone.  Capital + marginal cost match the ramp-
-            # penalty link so the solver treats it as a last resort.
-            if ensure_feasibility and "grid" in base_network.generators.index:
-                # Pure marginal-cost backstop: no capital cost, no extendable variable.
-                #
-                # Sizing: p_nom=20,000 MW is ≈1.6× the worst-case peak power demand
-                # for the ammonia plant (~12,086 MW average × 1.3 peak factor) — large
-                # enough to guarantee feasibility for any location but small enough that
-                # Gurobi's barrier method is not destabilised by extreme coefficient
-                # magnitudes in the constraint matrix.
-                #
-                # Marginal cost: 100,000 EUR/MWh makes the grid ≈200× more expensive
-                # than storage round-trips (~500 EUR/MWh) and ≈1000× more expensive
-                # than renewables.  This ensures feasible cells never dispatch the grid
-                # (the optimizer prefers even heavily oversized storage), while
-                # infeasible cells can still reach a solution.
-                # Any cell with grid_energy_mwh > 0 in results is genuinely
-                # resource-constrained and should be filtered out.
-                _GRID_P_NOM = 20_000.0          # MW — sufficient for worst-case deficit
-                _GRID_MARGINAL = 100_000.0       # EUR/MWh — prohibitive vs all alternatives
+            # When ensure_feasibility=True AND the tech YAML contains a
+            # grid_backstop section, the grid generator acts as a relief valve:
+            # the LP is always feasible, and grid_energy_mwh > 0 in results
+            # flags locations that genuinely cannot meet demand from local
+            # renewables alone.  Parameters are defined in the tech YAML —
+            # comment out the grid_backstop section there to disable.
+            _grid_backstop_cfg = tech_inputs.get("grid_backstop") if ensure_feasibility else None
+            if _grid_backstop_cfg and "grid" in base_network.generators.index:
+                _GRID_P_NOM = float(_grid_backstop_cfg.get("p_nom_mw", 20_000.0))
+                _GRID_MARGINAL = float(_grid_backstop_cfg.get("marginal_cost_eur_per_mwh", 100_000.0))
                 base_network.generators.at["grid", "p_nom_extendable"] = False
                 base_network.generators.at["grid", "p_nom"] = _GRID_P_NOM
                 base_network.generators.at["grid", "capital_cost"] = 0.0
@@ -1711,6 +1704,12 @@ def run_global(
                     "ensure_feasibility=True: grid backstop active "
                     "(p_nom=%.0f MW, marginal=%.0f EUR/MWh, capital=0)",
                     _GRID_P_NOM, _GRID_MARGINAL,
+                )
+            elif ensure_feasibility:
+                LOGGER.warning(
+                    "ensure_feasibility=True but no grid_backstop section found in "
+                    "tech YAML; backstop disabled. Comment back in the grid_backstop "
+                    "block or remove --no-ensure-feasibility to re-enable."
                 )
 
             LOGGER.info(

@@ -9,6 +9,22 @@
 currency: USD
 water_usage_m3_per_t_nh3: 1.5
 water_cost_baseline_usd_per_m3: 2
+
+# ── Feasibility backstop ───────────────────────────────────────────────────────
+# When a grid cell cannot meet ammonia demand from local renewables alone the LP
+# would otherwise be infeasible.  This section enables a high-cost grid backstop
+# that makes every cell solvable: results with grid_energy_mwh > 0 are flagged
+# as resource-constrained and should be filtered out of cost comparisons.
+#
+# Comment out the entire grid_backstop block to disable the backstop — infeasible
+# cells will then raise a RuntimeError and be skipped (or abort the run if
+# fail_fast=True is set).  The --no-ensure-feasibility CLI flag has the same effect
+# at runtime without editing this file.
+grid_backstop:
+  p_nom_mw: 20000                   # MW — ~1.6x worst-case peak demand; sufficient for any location
+  marginal_cost_eur_per_mwh: 100000 # Prohibitive vs renewables/storage (~200x round-trip cost);
+                                    #   cells dispatching the grid will show elevated LCOA and grid_energy_mwh > 0
+
 techs:
   solar:
     component_type: generator
