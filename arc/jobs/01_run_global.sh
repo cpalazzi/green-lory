@@ -36,12 +36,7 @@ fi
 set -eu
 
 ARC_ANACONDA_MODULE="${ARC_ANACONDA_MODULE:-Anaconda3/2024.06-1}"
-# Load the ARC-wide Gurobi module BEFORE Anaconda so GRB_LICENSE_FILE is set
-# to the institutional token-server license (USELIMIT=4096) rather than the
-# personal WLS academic license (baseline=2 sessions) in ~/licenses/gurobi.lic.
-ARC_GUROBI_MODULE="${ARC_GUROBI_MODULE:-Gurobi/10.0.3-GCCcore-12.2.0}"
 module purge
-module load "$ARC_GUROBI_MODULE"
 module load "$ARC_ANACONDA_MODULE"
 
 if [ -n "${EBROOTANACONDA3:-}" ] && [ -f "$EBROOTANACONDA3/etc/profile.d/conda.sh" ]; then
@@ -61,15 +56,19 @@ ARC_REPO_DIR="${ARC_REPO_DIR:-$DEFAULT_REPO_DIR}"
 ARC_ENV_PREFIX="${ARC_ENV_PREFIX:-${ARC_WORK_BASE}/envs/green-lory-env}"
 ARC_LICENSE_DIR="${ARC_LICENSE_DIR:-${ARC_WORK_BASE}/licenses}"
 
-# The Gurobi module sets GRB_LICENSE_FILE to the token-server license.
-# Only fall back to the personal WLS license if the module failed to set it.
-if [[ -n "${GRB_LICENSE_FILE:-}" ]]; then
-  export GRB_LICENSE_FILE
-  echo "Gurobi license: $GRB_LICENSE_FILE"
-elif [[ -f "$ARC_LICENSE_DIR/gurobi.lic" ]]; then
-  export GRB_LICENSE_FILE="$ARC_LICENSE_DIR/gurobi.lic"
-  echo "Gurobi license (personal fallback): $GRB_LICENSE_FILE"
+# Use the ARC institutional token-server license (USELIMIT=4096) by pointing
+# GRB_LICENSE_FILE directly at the known path — no `module load Gurobi` needed
+# (that module ships Python 3.10 gurobipy which segfaults under Python 3.11).
+# Fall back to the personal WLS license only if the system file is absent.
+ARC_SYSTEM_GRB_LIC="/apps/system/easybuild/software/Gurobi/10.0.3-GCCcore-12.2.0/gurobi.lic"
+if [[ -z "${GRB_LICENSE_FILE:-}" ]]; then
+  if [[ -f "$ARC_SYSTEM_GRB_LIC" ]]; then
+    export GRB_LICENSE_FILE="$ARC_SYSTEM_GRB_LIC"
+  elif [[ -f "$ARC_LICENSE_DIR/gurobi.lic" ]]; then
+    export GRB_LICENSE_FILE="$ARC_LICENSE_DIR/gurobi.lic"
+  fi
 fi
+echo "Gurobi license: ${GRB_LICENSE_FILE:-(none set)}"
 
 if [[ ! -d "$ARC_ENV_PREFIX" ]]; then
   echo "ERROR: conda env not found: $ARC_ENV_PREFIX" >&2
