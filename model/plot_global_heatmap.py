@@ -5,8 +5,14 @@ import argparse
 from pathlib import Path
 from typing import Dict
 
+import json
+
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+
+# Repo root is the directory containing the 'model/' package.
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _cell_id(lat: float, lon: float, decimals: int = 2) -> str:
@@ -43,25 +49,89 @@ def _build_cell_geojson(
     return {"type": "FeatureCollection", "features": features}
 
 
+def _country_border_trace(
+    geojson_path: Path,
+    line_color: str = "rgba(60,60,60,0.45)",
+    line_width: float = 0.7,
+) -> "go.Scattergeo":
+    """Build a Scattergeo line trace of country borders from a GeoJSON file."""
+    with open(geojson_path) as fh:
+        countries = json.load(fh)
+
+    lats: list = []
+    lons: list = []
+    for feature in countries.get("features", []):
+        geom = feature.get("geometry", {})
+        gtype = geom.get("type", "")
+        coords = geom.get("coordinates", [])
+        if gtype == "Polygon":
+            rings = [coords[0]]  # outer ring only
+        elif gtype == "MultiPolygon":
+            rings = [poly[0] for poly in coords]  # outer ring of each sub-polygon
+        else:
+            continue
+        for ring in rings:
+            lons.extend([pt[0] for pt in ring] + [None])
+            lats.extend([pt[1] for pt in ring] + [None])
+
+    return go.Scattergeo(
+        lon=lons,
+        lat=lats,
+        mode="lines",
+        line=dict(color=line_color, width=line_width),
+        hoverinfo="skip",
+        showlegend=False,
+    )
+
+
 def plot_lcoa_heatmap(
-    csv_path: str | Path,
+    csv_path: "str | Path | pd.DataFrame",
     color_column: str = "auto",
     cell_size_deg: float = 1.0,
     color_scale: str = "Viridis_r",
-    range_color: tuple[float, float] | None = None,
-    percentile_clip: tuple[float, float] = (0.02, 0.98),
+    range_color: "tuple[float, float] | None" = None,
+    percentile_clip: "tuple[float, float]" = (0.02, 0.98),
+    show_country_borders: bool = True,
+    country_border_color: str = "rgba(60,60,60,0.5)",
+    country_border_width: float = 0.5,
+    cell_opacity: float = 0.85,
+    projection: str = "natural earth",
+    lat_range: "tuple[float, float] | None" = None,
+    colorbar_len: float = 0.85,
 ):
     """Render a global LCOA choropleth heatmap.
 
     Args:
-        range_color: Explicit (min, max) for the colour scale.  If *None*
-            (default), the range is auto-clipped to *percentile_clip* quantiles
-            so that extreme outliers (e.g. Antarctic cells) do not dominate.
+        csv_path: Path to a results CSV **or** a pre-filtered ``pd.DataFrame``.
+        range_color: Explicit (min, max) for the colour scale.  If *None*,
+            auto-clipped to *percentile_clip* quantiles.
         percentile_clip: (lo, hi) quantiles used when *range_color* is None.
-            Set to (0.0, 1.0) to use the full data range.
+        show_country_borders: Overlay faint country border lines (default True).
+        projection: Plotly geo projection name.  ``"natural earth"`` (default)
+            gives a standard publication-quality equal-area-ish world map with
+            no polar distortion.  Other good choices: ``"robinson"``,
+            ``"eckert4"``, ``"winkel tripel"``.
+        lat_range: (south, north) latitude limits for the geo background
+            (land/ocean fill).  ``None`` (default) auto-derives these from the
+            actual data extent — the background clips to the top/bottom of the
+            outermost data cells with a half-cell margin, so no empty polar
+            background is visible.  Pass an explicit tuple to override.
+
+            Note: ``lataxis_range`` clips Plotly's built-in land/ocean
+            background but *not* the choropleth cell polygons.  This is why
+            the auto-derived value only needs to match the data extent rather
+            than a hard geographic bound.
+        colorbar_len: Fraction of the figure height for the colour bar.
+            Natural Earth fills the figure differently depending on the
+            figure's aspect ratio.  ``0.85`` (default) fits a wide export
+            figure (~1400 px wide); narrow notebook panels may need ~0.6–0.7.
     """
-    csv_path = Path(csv_path)
-    df = pd.read_csv(csv_path)
+    if isinstance(csv_path, pd.DataFrame):
+        df = csv_path.copy()
+        df.columns = [col.lower() for col in df.columns]
+    else:
+        csv_path = Path(csv_path)
+        df = pd.read_csv(csv_path)
     df.columns = [col.lower() for col in df.columns]
     color_column = color_column.lower()
     if color_column in {"auto", "lcoa_currency_per_t"}:
@@ -93,11 +163,20 @@ def plot_lcoa_heatmap(
         required.add(lon_col)
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"CSV {csv_path} is missing required columns: {sorted(missing)}")
+        raise ValueError(f"Input is missing required columns: {sorted(missing)}")
 
     plot_df = df.dropna(subset=[color_column]).copy()
     if plot_df.empty:
         raise ValueError("No rows with colour metric available.")
+
+    # Derive lat_range from actual data extent so the land/ocean background
+    # clips to exactly the outermost cell edges with a tiny margin.
+    if lat_range is None:
+        _half = cell_size_deg / 2.0 + 0.1
+        lat_range = (
+            float(plot_df[lat_col].min()) - _half,
+            float(plot_df[lat_col].max()) + _half,
+        )
 
     # Compute colour range: explicit override or percentile clip.
     if range_color is None:
@@ -150,22 +229,50 @@ def plot_lcoa_heatmap(
     ]
     hover_data = {col: True for col in hover_candidates if col in plot_df.columns}
 
-    fig = px.choropleth_map(
+    fig = px.choropleth(
         plot_df,
         geojson=geojson,
         locations="cell_id",
         featureidkey="id",
         color=color_column,
-        map_style="carto-positron",
         color_continuous_scale=color_scale,
         range_color=range_color,
-        opacity=0.9,
         hover_data=hover_data or None,
-        center=dict(lat=0.0, lon=0.0),
-        zoom=0.5,
+        projection=projection,
     )
-    fig.update_traces(marker_line_width=0.2, marker_line_color="rgba(255, 255, 255, 0.3)")
-    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    fig.update_traces(marker_line_width=0.0, marker_opacity=cell_opacity)
+    fig.update_geos(
+        projection_type=projection,
+        lataxis_range=list(lat_range),
+        # Land / ocean background — subtle, so the LCOA colour dominates
+        showland=True,
+        landcolor="#f0f0ee",
+        showocean=True,
+        oceancolor="#dde8f0",
+        showlakes=False,
+        # Built-in coastlines are used when show_country_borders is False;
+        # when True, the GeoJSON overlay provides higher-fidelity borders.
+        showcoastlines=not show_country_borders,
+        coastlinecolor="rgba(80,80,80,0.5)",
+        coastlinewidth=0.5,
+        showframe=False,
+        bgcolor="white",
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=30, b=0),
+        coloraxis_colorbar=dict(lenmode="fraction", len=colorbar_len, yanchor="middle", y=0.5, thickness=15),
+    )
+
+    if show_country_borders:
+        geojson_path = REPO_ROOT / "data" / "countries.geojson"
+        if geojson_path.exists():
+            border_trace = _country_border_trace(
+                geojson_path,
+                line_color=country_border_color,
+                line_width=country_border_width,
+            )
+            fig.add_trace(border_trace)
+
     return fig
 
 

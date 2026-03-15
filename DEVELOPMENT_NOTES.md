@@ -178,7 +178,7 @@ Results are merged using the combiner cell in notebook 03 or `pd.concat` on the 
 
 ### ARC script layout
 - `arc/arc_initial_setup.sh`: one-time ARC bootstrap (clone/update + optional env build submission).
-- `arc/build-green-lory-env.sh`: SLURM env build job.
+- `arc/build-green-lory-env`: SLURM env build job.
 - `arc/load_green_lory_env.sh`: module + conda activation helper for interactive shell use.
 - `arc/arc_check_run_inputs.sh`: preflight check for required inputs before run submission.
 - `arc/jobs/01_run_global.sh`: full global run SLURM job.
@@ -186,7 +186,7 @@ Results are merged using the combiner cell in notebook 03 or `pd.concat` on the 
 
 ### Recommended ARC run sequence
 1. `bash arc/arc_initial_setup.sh`
-2. `sbatch arc/build-green-lory-env.sh` (if env not already built)
+2. `sbatch arc/build-green-lory-env` (if env not already built)
 3. `source arc/load_green_lory_env.sh`
 4. `bash arc/arc_check_run_inputs.sh`
 5. `bash arc/submit_global_run.sh <run-label> --quadrants` (4 parallel longitude quadrant jobs)
@@ -221,7 +221,6 @@ This keeps each command explicit and works well when password must be entered pe
 - `ARC_QUIET`
 - `ARC_THREADS_PER_WORKER`
 - `ARC_LON_MIN`, `ARC_LON_MAX` (longitude segmentation bounds)
-- `ARC_TIME_STEP` (timestep resolution in hours, default 1.0)
 - `ARC_ANACONDA_MODULE`
 - `ARC_ENV_PREFIX`
 - `ARC_GROUP`, `ARC_WORK_BASE`, `ARC_REPO_DIR`
@@ -245,7 +244,6 @@ rsync -avz --delete \
   --exclude 'data/*.geojson' \
   --exclude 'results/' \
   --exclude 'logs/' \
-  --exclude 'slurm-*.out' \
   --exclude 'notebooks/' \
   ./ engs2523@arc-login.arc.ox.ac.uk:/data/engs-df-green-ammonia/engs2523/green-lory/
 ```
@@ -264,49 +262,6 @@ rsync -avz \
   engs2523@arc-login.arc.ox.ac.uk:/data/engs-df-green-ammonia/engs2523/green-lory/results/ \
   ./results/
 ```
-
-## Performance Optimisations (2026-03-08)
-
-### Pre-computation caching in `run_global.py`
-- Interest/land DataFrames pre-indexed into `{(lat,lon): ...}` dicts for O(1) per-cell lookup.
-- Country assignment uses batch `sjoin` for all locations upfront.
-- Base PyPSA network built once and `copy.deepcopy()`-ed per cell (avoids re-importing CSVs).
-- Weather extraction bypasses `renewable_data` class, reads directly from cached xarray DataArrays.
-- Net effect: per-cell overhead reduced from ~1.5 s to < 20 ms.
-
-### Gurobi solver tuning
-- Added `BarConvTol=1e-4` to solver_options in `main.py` (relaxed from default 1e-8).
-- Saves ~19% solve time with < 0.1 EUR/t LCOA impact.
-- Barrier (Method=2, Crossover=0) remains the optimal solver method for this 8760-snapshot LP.
-
-### Profiling summary
-Per-cell time breakdown (8760 snapshots, Gurobi barrier):
-- Weather/lookup/deepcopy/cost setup: ~20 ms (0.3%)
-- `n.optimize()` linopy model build: ~475 ms (8%)
-- `m.solve()` Gurobi barrier: ~4.7 s (91%)
-- Post-processing: ~50 ms (1%)
-
-The Gurobi barrier solve is the irreducible bottleneck for full-year (8760) resolution.
-
-### Timestep resolution (`time_step` parameter)
-`run_global()` and the CLI accept a `time_step` parameter (default 1.0 h). When
-set to e.g. 3.0, hourly weather profiles are block-averaged into 3-hourly
-snapshots (8760 → 2920), reducing LP size proportionally.
-
-**100-cell Queensland comparison (3h vs 1h):**
-
-| Metric | 1h | 3h | Difference |
-|---|---|---|---|
-| LCOA mean | 848.2 EUR/t | 841.8 EUR/t | −6.4 (−0.75%) |
-| LCOA max deviation | — | — | −14.8 EUR/t (−1.49%) |
-| Battery mean | 6901 MWh | 6685 MWh | −216 (−4.1%) |
-| Battery individual | — | — | −39% to +108% |
-| Solve speed | ~5 s/cell | ~2.4 s/cell | 2.1× faster |
-
-LCOA accuracy is excellent (< 1.5% deviation). Battery sizing shows higher
-variance due to smoothing of intra-day peaks — expected for storage-sensitive
-assets. The 3h resolution is suitable for screening runs; 1h remains the
-production default.
 
 ## Documentation Governance
 - Keep only two canonical docs at repo root:
