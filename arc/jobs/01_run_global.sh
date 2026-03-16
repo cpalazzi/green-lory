@@ -87,6 +87,7 @@ fi
 export ARC_TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
 export ARC_INTEREST_CSV="${ARC_INTEREST_CSV:-}"
 export ARC_LAND_CSV="${ARC_LAND_CSV:-data/20251222_max_capacities.csv}"
+export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
 if [[ ! -f "$ARC_LAND_CSV" && -f "data/20251222_land_max_capacity.csv" ]]; then
   export ARC_LAND_CSV="data/20251222_land_max_capacity.csv"
 fi
@@ -182,6 +183,7 @@ result_df = run_global(
     num_workers=num_workers,
     lon_min=lon_min,
     lon_max=lon_max,
+    weather_dir=os.environ.get("ARC_WEATHER_DIR") or None,
     fail_fast=fail_fast,
     ensure_feasibility=ensure_feasibility,
 )

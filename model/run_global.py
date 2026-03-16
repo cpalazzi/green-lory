@@ -37,8 +37,8 @@ except ImportError:  # pragma: no cover - fallback for direct execution
 LOGGER = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_WEATHER_DIR = REPO_ROOT / "data"
-DEFAULT_LAND_CSV = DEFAULT_WEATHER_DIR / "20251222_max_capacities.csv"
+DEFAULT_WEATHER_DIR = REPO_ROOT / "data" / "weather_data"
+DEFAULT_LAND_CSV = REPO_ROOT / "data" / "20251222_max_capacities.csv"
 DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "spatial_cost_inputs.csv"
 DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_dea.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]

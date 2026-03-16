@@ -95,7 +95,7 @@ def plot_lcoa_heatmap(
     country_border_color: str = "rgba(60,60,60,0.5)",
     country_border_width: float = 0.5,
     cell_opacity: float = 0.85,
-    projection: str = "natural earth",
+    projection: str = "equirectangular",
     lat_range: "tuple[float, float] | None" = None,
     colorbar_len: float = 0.85,
 ):
@@ -107,10 +107,12 @@ def plot_lcoa_heatmap(
             auto-clipped to *percentile_clip* quantiles.
         percentile_clip: (lo, hi) quantiles used when *range_color* is None.
         show_country_borders: Overlay faint country border lines (default True).
-        projection: Plotly geo projection name.  ``"natural earth"`` (default)
-            gives a standard publication-quality equal-area-ish world map with
-            no polar distortion.  Other good choices: ``"robinson"``,
-            ``"eckert4"``, ``"winkel tripel"``.
+        projection: Plotly geo projection name.  ``"equirectangular"`` (default,
+            plate carrée) maps lon→x and lat→y directly so every gridline is a
+            perfectly straight horizontal or vertical rule — easiest to read
+            lat/lon coordinates from.  Other choices: ``"eckert4"`` (equal-area,
+            rectangular feel), ``"natural earth"`` (rounder, publication style),
+            ``"robinson"``.
         lat_range: (south, north) latitude limits for the geo background
             (land/ocean fill).  ``None`` (default) auto-derives these from the
             actual data extent — the background clips to the top/bottom of the
@@ -274,6 +276,265 @@ def plot_lcoa_heatmap(
             fig.add_trace(border_trace)
 
     return fig
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Matplotlib (publication) heatmap
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plot_lcoa_heatmap_mpl(
+    csv_path: "str | Path | pd.DataFrame",
+    color_column: str = "auto",
+    cell_size_deg: float = 1.0,
+    color_scale: str = "viridis_r",
+    range_color: "tuple[float, float] | None" = None,
+    percentile_clip: "tuple[float, float]" = (0.02, 0.98),
+    show_country_borders: bool = True,
+    country_border_color: str = "#444444",
+    country_border_width: float = 0.35,
+    lat_range: "tuple[float, float] | None" = None,
+    lon_range: "tuple[float, float]" = (-180.0, 180.0),
+    land_color: str = "#f0f0ee",
+    ocean_color: str = "#dde8f0",
+    lat_dtick: int = 30,
+    lon_dtick: int = 30,
+    colorbar_label: str = "LCOA (EUR/t NH\u2083)",
+    figsize: "tuple[float, float]" = (14.0, 6.0),
+) -> tuple:
+    """Render a publication-quality LCOA heatmap using matplotlib.
+
+    Uses an equirectangular (plate carrée) projection — latitude and longitude
+    map directly to y/x axes — with a proper cartographic cornice: inward tick
+    marks on all four sides, labelled parallels and meridians, and a thin
+    surrounding frame.
+
+    Returns:
+        (fig, ax) — matplotlib Figure and Axes objects.
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+    from matplotlib.collections import PatchCollection, LineCollection
+    from matplotlib.patches import Polygon as MplPolygon
+    from matplotlib.cm import ScalarMappable
+
+    # ── Load & normalise data ────────────────────────────────────────────────
+    if isinstance(csv_path, pd.DataFrame):
+        df = csv_path.copy()
+        df.columns = [col.lower() for col in df.columns]
+    else:
+        df = pd.read_csv(Path(csv_path))
+        df.columns = [col.lower() for col in df.columns]
+
+    color_column = color_column.lower()
+    if color_column in {"auto", "lcoa_currency_per_t"}:
+        inferred = None
+        if "currency" in df.columns:
+            currencies = (
+                df["currency"].dropna().astype(str).str.strip().str.lower().unique()
+            )
+            if len(currencies) == 1:
+                candidate = f"lcoa_{currencies[0]}_per_t"
+                if candidate in df.columns:
+                    inferred = candidate
+        if inferred is None and "lcoa_usd_per_t" in df.columns:
+            inferred = "lcoa_usd_per_t"
+        if inferred is None:
+            lcoa_cols = [
+                c for c in df.columns
+                if c.startswith("lcoa_") and c.endswith("_per_t")
+            ]
+            if lcoa_cols:
+                inferred = lcoa_cols[0]
+        if inferred is not None:
+            color_column = inferred
+
+    lat_col = "latitude"
+    lon_col = "longitude"
+    plot_df = df.dropna(subset=[color_column]).copy()
+
+    if lat_range is None:
+        _half = cell_size_deg / 2.0 + 0.1
+        lat_range = (
+            float(plot_df[lat_col].min()) - _half,
+            float(plot_df[lat_col].max()) + _half,
+        )
+
+    if range_color is None:
+        lo_q, hi_q = percentile_clip
+        range_color = (
+            float(plot_df[color_column].quantile(lo_q)),
+            float(plot_df[color_column].quantile(hi_q)),
+        )
+
+    # ── Build 2D raster grid ─────────────────────────────────────────────────
+    half = cell_size_deg / 2.0
+    lat_min = float(plot_df[lat_col].min())
+    lat_max = float(plot_df[lat_col].max())
+    lon_min_d = float(plot_df[lon_col].min())
+    lon_max_d = float(plot_df[lon_col].max())
+
+    n_lat = round((lat_max - lat_min) / cell_size_deg) + 1
+    n_lon = round((lon_max_d - lon_min_d) / cell_size_deg) + 1
+    grid = np.full((n_lat, n_lon), np.nan)
+
+    lat_idx = np.round(
+        (plot_df[lat_col].values - lat_min) / cell_size_deg
+    ).astype(int)
+    lon_idx = np.round(
+        (plot_df[lon_col].values - lon_min_d) / cell_size_deg
+    ).astype(int)
+    valid = (lat_idx >= 0) & (lat_idx < n_lat) & (lon_idx >= 0) & (lon_idx < n_lon)
+    grid[lat_idx[valid], lon_idx[valid]] = plot_df[color_column].values[valid]
+
+    img_extent = [lon_min_d - half, lon_max_d + half, lat_min - half, lat_max + half]
+
+    # ── Colormap ──────────────────────────────────────────────────────────────
+    cmap_name = color_scale.lower().replace(" ", "_")
+    try:
+        cmap = plt.get_cmap(cmap_name).copy()
+    except (ValueError, AttributeError):
+        cmap = plt.get_cmap("viridis_r").copy()
+    cmap.set_bad(alpha=0.0)  # NaN cells → fully transparent
+    norm = mcolors.Normalize(vmin=range_color[0], vmax=range_color[1])
+
+    # ── Figure & axes ─────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_facecolor(ocean_color)  # ocean background
+
+    # ── Land fill & border source ─────────────────────────────────────────────
+    geojson_path = REPO_ROOT / "data" / "countries.geojson"
+    land_patches = []
+    border_segments: list = []
+
+    if geojson_path.exists():
+        with open(geojson_path) as fh:
+            countries = json.load(fh)
+
+        for feature in countries.get("features", []):
+            geom = feature.get("geometry", {})
+            gtype = geom.get("type", "")
+            coords = geom.get("coordinates", [])
+
+            if gtype == "Polygon":
+                rings = [coords[0]]
+            elif gtype == "MultiPolygon":
+                rings = [p[0] for p in coords]
+            else:
+                continue
+
+            for ring in rings:
+                xy = np.array(ring, dtype=float)
+                land_patches.append(MplPolygon(xy, closed=True))
+                if show_country_borders:
+                    border_segments.append(xy)
+
+        land_col = PatchCollection(
+            land_patches, facecolor=land_color, edgecolor="none",
+            linewidth=0, zorder=1,
+        )
+        ax.add_collection(land_col)
+
+    # ── Data raster ───────────────────────────────────────────────────────────
+    ax.imshow(
+        grid, extent=img_extent, origin="lower", aspect="auto",
+        cmap=cmap, norm=norm, interpolation="none", zorder=2,
+    )
+
+    # ── Country borders ───────────────────────────────────────────────────────
+    if show_country_borders and border_segments:
+        lc = LineCollection(
+            [seg for seg in border_segments],
+            colors=country_border_color,
+            linewidths=country_border_width,
+            zorder=3,
+        )
+        ax.add_collection(lc)
+
+    # ── Axis limits ───────────────────────────────────────────────────────────
+    ax.set_xlim(lon_range)
+    ax.set_ylim(lat_range)
+
+    # ── Tick marks & labels ───────────────────────────────────────────────────
+    lon_major = list(range(
+        int(np.ceil(lon_range[0] / lon_dtick)) * lon_dtick,
+        int(lon_range[1]) + 1,
+        lon_dtick,
+    ))
+    lat_major = [
+        l for l in range(-90, 91, lat_dtick)
+        if lat_range[0] - 1 <= l <= lat_range[1] + 1
+    ]
+
+    def _fmt_lon(v: int) -> str:
+        if v == 0:
+            return "0°"
+        return f"{v}°E" if v > 0 else f"{-v}°W"
+
+    def _fmt_lat(v: int) -> str:
+        if v == 0:
+            return "0°"
+        return f"{v}°N" if v > 0 else f"{-v}°S"
+
+    ax.set_xticks(lon_major)
+    ax.set_xticklabels([_fmt_lon(v) for v in lon_major], fontsize=8)
+    ax.set_yticks(lat_major)
+    ax.set_yticklabels([_fmt_lat(v) for v in lat_major], fontsize=8)
+
+    # Minor ticks at 10° lat / 10° lon
+    lon_minor_step = max(lon_dtick // 3, 10)
+    lat_minor_step = max(lat_dtick // 3, 5)
+    lon_minor = [
+        v for v in range(int(lon_range[0]), int(lon_range[1]) + 1, lon_minor_step)
+        if v not in lon_major
+    ]
+    lat_minor = [
+        l for l in range(-90, 91, lat_minor_step)
+        if l not in lat_major and lat_range[0] - 1 <= l <= lat_range[1] + 1
+    ]
+    ax.set_xticks(lon_minor, minor=True)
+    ax.set_yticks(lat_minor, minor=True)
+
+    # Graticule lines for all ticks (major slightly more visible than minor)
+    for _lon in lon_major:
+        ax.axvline(_lon, color="#888888", alpha=0.35, linewidth=0.55, zorder=3)
+    for _lat in lat_major:
+        ax.axhline(_lat, color="#888888", alpha=0.35, linewidth=0.55, zorder=3)
+    for _lon in lon_minor:
+        ax.axvline(_lon, color="#888888", alpha=0.18, linewidth=0.35, zorder=3)
+    for _lat in lat_minor:
+        ax.axhline(_lat, color="#888888", alpha=0.18, linewidth=0.35, zorder=3)
+
+    # Inward ticks on all four sides — long enough to be clearly visible
+    ax.tick_params(
+        axis="both", which="major",
+        direction="in", length=10, width=0.9,
+        top=True, right=True, zorder=6,
+    )
+    ax.tick_params(
+        axis="both", which="minor",
+        direction="in", length=5, width=0.6,
+        top=True, right=True,
+        labeltop=False, labelright=False,
+        labelbottom=False, labelleft=False,
+        zorder=6,
+    )
+    # Re-enable bottom/left labels (minor tick_params blanket-disabled them)
+    ax.tick_params(axis="x", which="major", labelbottom=True)
+    ax.tick_params(axis="y", which="major", labelleft=True)
+
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.8)
+
+    # ── Colorbar ──────────────────────────────────────────────────────────────
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax, fraction=0.025, pad=0.01, aspect=30)
+    cb.set_label(colorbar_label, fontsize=9)
+    cb.ax.tick_params(labelsize=8)
+
+    fig.tight_layout()
+    return fig, ax
 
 
 def _parse_args() -> argparse.Namespace:
