@@ -1,0 +1,232 @@
+# Canonical technology cost inputs for the basic ammonia plant — 2050 DEA scenario.
+# Base structure matches tech_config_ammonia_plant_2030_dea.yaml; cost values taken
+# directly from the DEA reference datasheets for the 2050 projection year.
+#
+# Source files (data/dea_reference/):
+#   Solar, Solar tracking, Wind:
+#     technology_data_for_el_and_dh - 0017_1 (1).xlsx
+#       → "22 Utility-scale PV", "22 Utility-scale PV tracker", "20 Onshore turbines"
+#   Electrolysis:
+#     data_sheets_for_renewable_fuels (2).xlsx → "1.1 AEC 1 GW"
+#   Ammonia synthesis:
+#     data_sheets_for_renewable_fuels (2).xlsx → "5.4 Hydrogen to Ammonia"
+#   Battery:
+#     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "180 Lithium Ion Battery"
+#   H2 tanks:
+#     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "151a Hydrogen Storage - Tanks"
+#
+# Methodology:
+#   Generators: total investment and component breakdown read directly from DEA 2050
+#     column. tech_cost = equipment-centric rows; build_cost = civil/install/soft/grid.
+#   Links: DEA gives EUR/kW_input for electrolysis (converted to output basis via HHV
+#     efficiency) and M€/MW_NH3_output for ammonia synthesis (scaled by same ASU markup
+#     factor used in 2030 YAML). For hydrogen compression and battery PCS, costs derived
+#     from DEA 2050/2030 ratios applied to 2030 YAML values.
+#   Stores: DEA component costs read directly (battery: energy + 50% other project
+#     costs at 1h reference; H2 tanks: tanks + installation rows).
+#
+# Components without DEA 2050 data (hydrogen fuel cell, ammonia storage) retain 2030
+# values. Efficiency and carrier coefficients updated where DEA provides 2050 values.
+#
+# All costs are EUR per MW (power devices) or per MWh (energy storage) overnight CAPEX.
+# For link components, enter costs on an output (bus1) basis.
+
+currency: EUR
+
+# Global water and land cost parameters
+water_usage_m3_per_t_nh3: 1.5 # Process + cooling water per tonne of ammonia
+water_cost_baseline_usd_per_m3: 2.0 # Baseline desalination cost (coastal reference)
+
+# ── Feasibility backstop ───────────────────────────────────────────────────────
+grid_backstop:
+  p_nom_mw: 20000
+  marginal_cost_eur_per_mwh: 100000
+
+techs:
+
+ # -----------------
+ # Generators
+ # -----------------
+  solar:
+    component_type: generator
+    source_note: DEA 2050 Utility-scale PV (sheet "22 Utility-scale PV", 2050 column)
+    overnight_cost_per_mw: 290000 # EUR/MW — DEA row 16 col 2050 = 0.29 MEUR/MW
+    tech_cost_per_mw: 100000 # pv modules (90k) + inverter (10k) from DEA component lines
+    build_cost_per_mw: 190000 # installation (90k) + grid (40k) + soft (30k) + BOP (30k)
+    land_use_km2_per_mw: 0.01 # Equator baseline for solar density calibration (100 MW/km² at lat=0); run_global applies latitude-adjusted footprint
+    lifetime_years: 40
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent (DEA: 4,900/290,000 = 1.7%)
+  solar_tracking:
+    component_type: generator
+    source_note: DEA 2050 Utility-scale PV tracker (sheet "22 Utility-scale PV tracker", 2050 column)
+    overnight_cost_per_mw: 350000 # DEA row 16 col 2050 = 0.35 MEUR/MW
+    tech_cost_per_mw: 160000 # pv modules (90k) + inverter (10k) + tracker (60k)
+    build_cost_per_mw: 190000 # installation (90k) + grid (40k) + soft (30k) + BOP (30k)
+    land_use_km2_per_mw: 0.02 # Equator baseline for tracking density calibration (50 MW/km² at lat=0); run_global applies latitude-adjusted footprint
+    lifetime_years: 40
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent (DEA: 4,900/350,000 = 1.4%)
+  wind:
+    component_type: generator
+    source_note: DEA 2050 Onshore turbines (sheet "20 Onshore turbines", 2050 column; offshore cost premiums applied via finance overrides)
+    overnight_cost_per_mw: 872000 # DEA equipment (775,395) + installation (80,327) + grid (16,534) ≈ 872,256; excludes land, neighbour settlements, decommissioning
+    tech_cost_per_mw: 775395 # equipment line from DEA row 17
+    build_cost_per_mw: 96861 # installation/development (80,327) + grid connection (16,534)
+    land_use_km2_per_mw: 0.2 # 5 MW/km² density (Salmon et al., 200 km²/GW)
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02 # Rounded up DEA excluding land rent
+
+ # -----------------
+ # Links
+ # -----------------
+  ammonia_synthesis:
+    component_type: link
+    source_note: DEA 2050 Hydrogen to Ammonia (sheet "5.4 Hydrogen to Ammonia", 2050 column; 0.865 M€/MW_NH3 × ASU markup 1.106 consistent with 2030 YAML derivation)
+    overnight_cost_per_mw: 957000 # EUR/MW — DEA 865,125 × 1.106 (same ASU/markup as 2030 YAML). Note cost decline is from economy of scale (2290 TPD vs 458 TPD in 2030), not tech change.
+    tech_cost_per_mw: 478500 # 50% equipment (DEA row 24)
+    build_cost_per_mw: 478500 # 50% installation (DEA row 25)
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.03 # DEA: 3% of CAPEX
+    carriers_in: {power: 0.16, hydrogen: 1.13472}
+    carriers_out: {ammonia: 1.0}
+    overall_efficiency: 0.772 # DEA: ammonia output unchanged at 82.3% of total input
+  electrolysis:
+    component_type: link
+    source_note: DEA 2050 AEC 1 GW (sheet "1.1 AEC 1 GW", 2050 column; 275 EUR/kW_input ÷ 0.84 HHV eff = 327k EUR/MW_output)
+    overnight_cost_per_mw: 327000 # EUR/MW_H2_out — DEA 275,000 EUR/MW_input ÷ 0.84 HHV efficiency
+    tech_cost_per_mw: 294300 # 90% equipment share (DEA row 34)
+    build_cost_per_mw: 32700 # 10% installation share (DEA row 35)
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 25
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02 # Consistent with 2030 YAML (DEA reports 4% but includes replacement provisions)
+    carriers_in: {power: 1.1904761904761905} # 1/0.84 — DEA 2050 HHV efficiency (LHV 69.9% + HHV delta 14.1% ≈ 84%)
+    carriers_out: {hydrogen: 1.0}
+    overall_efficiency: 0.84 # HHV basis; DEA 2050 stack+BOP = 47.6 kWh/kgH2, H2 HHV = 39.4 kWh/kg
+  hydrogen_compression:
+    component_type: link
+    source_note: DEA 2050 H2 storage tanks (compressor component, DEA 2050/2030 ratio 8,481/25,434 = 0.333 applied to 2030 YAML)
+    overnight_cost_per_mw: 165300 # EUR/MW
+    tech_cost_per_mw: 137800 # compressor + tank component shares (ratio-scaled)
+    build_cost_per_mw: 27500 # installation/equipment/manhours share (ratio-scaled)
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 20
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+    carriers_in: {hydrogen: 1.0, power: 0.05}
+    carriers_out: {hydrogen_storage: 1.0}
+    overall_efficiency: 0.9523809524
+  hydrogen_fuel_cell:
+    component_type: link
+    source_note: fuelCell (no DEA 2050 line available; retains 2030 values) # TODO(data): replace with DEA fuel-cell CAPEX breakdown when available
+    overnight_cost_per_mw: 2475000
+    tech_cost_per_mw: 1980000 # Estimated 80%
+    build_cost_per_mw: 495000 # Estimated 20%
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 20
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+    carriers_in: {hydrogen: 2.0}
+    carriers_out: {power: 1.0}
+    overall_efficiency: 0.5
+  hydrogen_from_storage:
+    component_type: link
+    source_note: hydrogenBufferWithdrawal (pass-through; retains 2030 values)
+    overnight_cost_per_mw: 1.00
+    tech_cost_per_mw: 0.90
+    build_cost_per_mw: 0.10
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 20
+    interest_rate: 0.05
+    fixed_om_fraction: 0.0
+    carriers_in: {hydrogen_storage: 1.0}
+    carriers_out: {hydrogen: 1.0}
+    overall_efficiency: 1.0
+  battery_pcs_charge:
+    component_type: link
+    source_note: DEA 2050 Lithium Ion Battery (power component 72k + 50% of other project costs 60k, 1-hour allocation)
+    overnight_cost_per_mw: 132000 # DEA row 27 col 2050 = 0.072 MEUR/MW power + 0.5 × 0.12 MEUR/MWh other
+    tech_cost_per_mw: 72000 # PCS/inverter from DEA row 27
+    build_cost_per_mw: 60000 # 50% allocation of DEA "other project costs" to MW asset
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 30 # DEA 2050 row 18 = 30 years (up from 25 in 2030)
+    interest_rate: 0.1
+    fixed_om_fraction: 0.03 # Rounded up DEA (2.9% of system cost)
+    carriers_in: {power: 1.0}
+    carriers_out: {power_storage: 0.96} # DEA 2050 AC round-trip 92% → sqrt(0.92) ≈ 0.96 per direction
+    overall_efficiency: 0.96
+  battery_pcs_discharge:
+    component_type: link
+    source_note: Battery power conversion system (discharging direction, no capital cost)
+    overnight_cost_per_mw: 1.00 # Placeholder as PCS is already costed in charge direction and they are bidirectional
+    tech_cost_per_mw: 0.50
+    build_cost_per_mw: 0.50
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.0
+    carriers_in: {power_storage: 1.0}
+    carriers_out: {power: 0.96} # Matches charge direction
+    overall_efficiency: 0.96
+  penalty_link:
+    component_type: link
+    source_note: rampPenaltySlack (unchanged)
+    overnight_cost_per_mw: 100000000
+    tech_cost_per_mw: 80000000
+    build_cost_per_mw: 20000000
+    land_use_km2_per_mw: 0.0000001 # Minimal
+    lifetime_years: 1
+    interest_rate: 0.1
+    fixed_om_fraction: 0.0
+    carriers_in: {ramp_penalty: 1.0}
+    carriers_out: {ramp_penalty_dest: 1.0}
+    overall_efficiency: 1.0
+
+ # -----------------
+ # Stores
+ # -----------------
+  accumulated_penalty:
+    component_type: store
+    source_note: rampPenaltySlack (unchanged)
+    overnight_cost_per_mwh: 100000000 # EUR/MWh
+    tech_cost_per_mwh: 80000000
+    build_cost_per_mwh: 20000000
+    land_use_km2_per_mwh: 0.0
+    lifetime_years: 1
+    interest_rate: 0.1
+    fixed_om_fraction: 0.0
+  ammonia:
+    component_type: store
+    source_note: (no DEA 2050 value available; retains 2030 values) # TODO(data): replace with DEA ammonia storage CAPEX when available
+    overnight_cost_per_mwh: 521.73912 # EUR/MWh
+    tech_cost_per_mwh: 417.3913
+    build_cost_per_mwh: 104.34782
+    land_use_km2_per_mwh: 0.00001
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.03
+  battery_storage:
+    component_type: store
+    source_note: DEA 2050 Lithium Ion Battery (energy component 54k + 50% of other project costs 60k, 1-hour allocation)
+    overnight_cost_per_mwh: 114000 # EUR/MWh — DEA row 26 col 2050 = 0.054 MEUR/MWh energy + 0.5 × 0.12 MEUR/MWh other
+    tech_cost_per_mwh: 54000 # Battery energy component from DEA row 26
+    build_cost_per_mwh: 60000 # 50% allocation of DEA "other project costs" to MWh asset
+    land_use_km2_per_mwh: 0.00005 # Nominal
+    lifetime_years: 30 # DEA 2050 row 18 = 30 years (up from 25 in 2030)
+    interest_rate: 0.1
+    fixed_om_fraction: 0.029 # DEA: 2.9% of system cost
+    standing_loss_fraction_per_day: 0.001 # DEA: 0.1%/day (unchanged from 2030)
+  compressed_hydrogen_store:
+    component_type: store
+    source_note: DEA 2050 Hydrogen Storage Tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; tanks + installation rows)
+    overnight_cost_per_mwh: 15300 # EUR/MWh — DEA tanks (10,177) + installation (5,089) ≈ 15,266, rounded
+    tech_cost_per_mwh: 10200 # Type I tanks from DEA row 28
+    build_cost_per_mwh: 5100 # Installation, equipment, manhours from DEA row 29
+    land_use_km2_per_mwh: 0.0001 # Nominal
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
