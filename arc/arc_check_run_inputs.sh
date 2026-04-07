@@ -40,7 +40,8 @@ if [[ -n "$INTEREST_CSV" ]]; then
   [[ -f "$INTEREST_CSV" ]] || missing+=("$INTEREST_CSV")
 fi
 
-for pattern in "data/Solar*.nc" "data/SolarTracking*.nc" "data/WindPowers*.nc"; do
+WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
+for pattern in "${WEATHER_DIR}/Solar*.nc" "${WEATHER_DIR}/SolarTracking*.nc" "${WEATHER_DIR}/WindPowers*.nc"; do
   if ! compgen -G "$pattern" >/dev/null; then
     missing+=("$pattern")
   fi
