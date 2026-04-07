@@ -120,19 +120,43 @@ overrides CSV rather than through separate generator technologies.
 ## Offshore Build Cost Overrides
 
 The `build_cost_multiplier` column in the spatial cost inputs CSV is wired into
-`run_global.py`. Notebook `02_spatial_cost_inputs.ipynb` generates a base overrides
-CSV that applies `build_cost_multiplier = 2.0` for all techs at pure-ocean locations
-(`onshore_land_pct == 0`).
+`run_global.py`. Notebook `02_spatial_cost_inputs.ipynb` generates per-location,
+per-tech overrides for offshore cells (`onshore_land_pct == 0`).
 
-<!-- TODO: vary offshore costs by distance-to-coast and fixed/floating wind depth bands -->
+### Depth-based multiplier (implemented 2026-04)
 
-Planned refinements:
-1. Read bathymetry depth from `model_bathymetry.nc` and distance-to-coast.
-2. Apply graduated multipliers per location, e.g.:
-   - Shallow fixed-bottom (< 50m depth): `build_cost_multiplier` ~1.5
-   - Floating (50–1000m): `build_cost_multiplier` ~2.0
-   - Additional remoteness factor based on distance-to-shore
-3. Differentiate wind cost from other techs (wind turbines have larger offshore premium).
+Offshore `build_cost_multiplier` is a piecewise-linear function of bathymetry depth
+with separate curves for **wind** and **plant equipment** techs. The `bathymetry_depth_m`
+column from `20251222_max_capacities.csv` (derived from `model_bathymetry.nc`) is used
+as input.
+
+Breakpoints and multipliers:
+
+| Depth (m) | Wind mult | Plant mult | Technology regime |
+|-----------|-----------|------------|-------------------|
+| 0         | 1.3       | 1.1        | Shallow / fixed-bottom |
+| 60        | 1.8       | 1.3        | Fixed-bottom limit (DNV, IEA Wind Task 26) |
+| 300       | 2.5       | 1.8        | Semi-sub / spar floating proven range |
+| 1500      | 3.5       | 2.5        | Deep floating → unmoored / vessel-based |
+
+Between breakpoints, values are linearly interpolated (`np.interp`). Beyond 1500 m
+(~80% of ocean cells), multipliers are clamped at the last breakpoint value.
+
+Wind techs: `{wind}`. All other techs use the plant curve.
+
+### Composable multiplier design
+
+The depth multiplier is designed as one factor in a composite:
+```
+build_cost_multiplier = depth_mult × remoteness_mult × labour_cost_mult
+```
+
+<!-- TODO: add remoteness_mult (distance-to-coast) -->
+<!-- TODO: add labour_cost_mult (country-level labour cost index) -->
+
+Onshore / coastal cells (`onshore_land_pct > 0`) currently get `build_cost_multiplier = 1.0`
+from the depth function; the remoteness and labour factors will apply to both onshore and
+offshore cells when implemented.
 
 This keeps the model architecture clean: cost differentiation lives in data, not in generator topology.
 
@@ -167,7 +191,9 @@ Results are merged using the combiner cell in notebook 03 or `pd.concat` on the 
 2. `hydrogen_fuel_cell`: no direct imported DEA line identified; still proxy-converted.
 3. `ammonia` storage: still proxy-based pending direct DEA source.
 4. QLD-specific EPC/build breakdown evidence is still needed for fully local split localization.
-5. Offshore build cost multipliers not yet generated (see "Offshore Build Cost Overrides" section).
+5. ~~Offshore build cost multipliers not yet generated~~ → Implemented depth-based multipliers (2026-04).
+6. Remoteness multiplier (distance-to-coast) not yet implemented.
+7. Labour cost multiplier (country-level) not yet implemented.
 
 ## ARC Cluster Operations
 
