@@ -3,16 +3,131 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 import geopandas as gpd
-from shapely.geometry import Point
+from shapely.geometry import Point, box
+from shapely.errors import GEOSException
+
+try:
+    from . import data_paths
+except ImportError:  # pragma: no cover - fallback for direct execution
+    PACKAGE_ROOT = Path(__file__).resolve().parent
+    if str(PACKAGE_ROOT) not in sys.path:
+        sys.path.insert(0, str(PACKAGE_ROOT))
+    import data_paths  # type: ignore
 
 
 LOGGER = logging.getLogger(__name__)
+
+COUNTRY_ASSIGNMENT_CELL_SIZE_DEG = 1.0
+COUNTRY_ASSIGNMENT_AREA_CRS = 'EPSG:6933'
+
+
+def _build_cell_geometries(
+    locations: list[tuple[float, float]],
+    cell_size_deg: float = COUNTRY_ASSIGNMENT_CELL_SIZE_DEG,
+    crs: str = 'EPSG:4326',
+) -> gpd.GeoDataFrame:
+    """Return coarse grid-cell polygons centred on the provided coordinates."""
+    if not locations:
+        return gpd.GeoDataFrame(columns=['latitude', 'longitude', 'geometry'], geometry='geometry', crs=crs)
+
+    half_size = float(cell_size_deg) / 2.0
+    normalized = [(float(lat), float(lon)) for lat, lon in locations]
+    geometries = [
+        box(lon - half_size, lat - half_size, lon + half_size, lat + half_size)
+        for lat, lon in normalized
+    ]
+    return gpd.GeoDataFrame(
+        {'latitude': [lat for lat, _ in normalized], 'longitude': [lon for _, lon in normalized]},
+        geometry=geometries,
+        crs=crs,
+    )
+
+
+def build_country_lookup_by_cell_overlap(
+    world: gpd.GeoDataFrame,
+    locations: list[tuple[float, float]],
+    cell_size_deg: float = COUNTRY_ASSIGNMENT_CELL_SIZE_DEG,
+) -> dict[tuple[float, float], str]:
+    """Assign each coarse cell to the country with the largest overlap area.
+
+    This uses the full cell footprint rather than the cell centroid, so mixed
+    coastal cells and border cells are assigned to the country covering the
+    largest share of the cell's land polygon overlap.
+    """
+    lookup = {(float(lat), float(lon)): '' for lat, lon in locations}
+    if not locations or world.empty:
+        return lookup
+
+    country_frame = world[['country', 'geometry']].dropna(subset=['geometry']).copy()
+    if country_frame.empty:
+        return lookup
+    if country_frame.crs is None:
+        country_frame = country_frame.set_crs('EPSG:4326')
+
+    # Some country geometries can be topologically invalid and crash GEOS
+    # overlay operations (TopologyException side location conflict). Repair
+    # them up front with a zero-width buffer.
+    if not country_frame.geometry.is_valid.all():
+        country_frame['geometry'] = country_frame.geometry.buffer(0)
+        country_frame = country_frame.dropna(subset=['geometry']).copy()
+        country_frame = country_frame[country_frame.geometry.is_valid].copy()
+        if country_frame.empty:
+            return lookup
+
+    cells = _build_cell_geometries(locations, cell_size_deg=cell_size_deg, crs=country_frame.crs)
+    candidates = gpd.sjoin(cells, country_frame, how='left', predicate='intersects')
+    candidates = candidates.dropna(subset=['index_right']).reset_index().rename(columns={'index': 'cell_idx'})
+    if candidates.empty:
+        return lookup
+
+    countries_equal_area = country_frame.to_crs(COUNTRY_ASSIGNMENT_AREA_CRS).reset_index(drop=True)
+    candidates_equal_area = gpd.GeoDataFrame(
+        candidates[['cell_idx', 'latitude', 'longitude', 'country', 'index_right']].copy(),
+        geometry=candidates.geometry,
+        crs=cells.crs,
+    ).to_crs(COUNTRY_ASSIGNMENT_AREA_CRS)
+
+    cell_geometries = gpd.GeoSeries(candidates_equal_area.geometry.reset_index(drop=True), crs=COUNTRY_ASSIGNMENT_AREA_CRS)
+    country_geometries = gpd.GeoSeries(
+        countries_equal_area.geometry.iloc[candidates_equal_area['index_right'].astype(int).to_numpy()].reset_index(drop=True),
+        crs=COUNTRY_ASSIGNMENT_AREA_CRS,
+    )
+    try:
+        overlap_area = cell_geometries.intersection(country_geometries).area
+    except GEOSException:
+        # Retry once after repairing any residual invalid geometries.
+        cell_geometries = cell_geometries.buffer(0)
+        country_geometries = country_geometries.buffer(0)
+        overlap_area = cell_geometries.intersection(country_geometries).area
+    candidates_equal_area = candidates_equal_area.reset_index(drop=True)
+    candidates_equal_area['overlap_area'] = overlap_area.to_numpy()
+    candidates_equal_area = candidates_equal_area[candidates_equal_area['overlap_area'] > 0].copy()
+    if candidates_equal_area.empty:
+        return lookup
+
+    best = candidates_equal_area.sort_values(['cell_idx', 'overlap_area'], ascending=[True, False])
+    best = best.drop_duplicates(subset=['cell_idx'], keep='first')
+    for row in best.itertuples(index=False):
+        lookup[(float(row.latitude), float(row.longitude))] = str(row.country) if pd.notna(row.country) else ''
+    return lookup
+
+
+def country_for_cell_overlap(
+    world: gpd.GeoDataFrame,
+    lat: float,
+    lon: float,
+    cell_size_deg: float = COUNTRY_ASSIGNMENT_CELL_SIZE_DEG,
+) -> str:
+    """Return the country covering the largest overlap of the cell footprint."""
+    key = (float(lat), float(lon))
+    return build_country_lookup_by_cell_overlap(world, [key], cell_size_deg=cell_size_deg).get(key, '')
 
 
 def _resolve_data_dir(path: str | None) -> Path:
@@ -64,7 +179,7 @@ class all_locations:
         self.solar = self._register_resource('solar', 'solar', 'Solar')
         self.wind = self._register_resource('wind', 'windpowers', 'Wind')
         self.solar_tracking = self._register_resource('solar_tracking', 'solartracking', 'Solar')
-        self.bathymetry = xr.open_dataset(self.path / 'model_bathymetry.nc')
+        self.bathymetry = xr.open_dataset(data_paths.BATHYMETRY_FILE)
         if self.cache_resources:
             self.bathymetry.load()
         self._open_handles.append(self.bathymetry)

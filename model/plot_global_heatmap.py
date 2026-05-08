@@ -205,12 +205,12 @@ def plot_lcoa_heatmap(
     wind_cost_cols = [
         col
         for col in (
-            "cost_share_wind_pct",
+            "tech_share_wind_pct",
         )
         if col in plot_df.columns
     ]
     if wind_cost_cols:
-        plot_df["cost_share_wind_total_pct"] = plot_df[wind_cost_cols].fillna(0.0).sum(axis=1)
+        plot_df["tech_share_wind_total_pct"] = plot_df[wind_cost_cols].fillna(0.0).sum(axis=1)
     land_onshore_col = (
         "land_onshore_pct"
         if "land_onshore_pct" in plot_df.columns
@@ -224,10 +224,12 @@ def plot_lcoa_heatmap(
         "annual_ammonia_demand_mwh",
         "wind_total_mw",
         solar_col,
-        "cost_share_wind_total_pct",
-        "cost_share_solar_pct",
-        "cost_share_electrolyser_pct",
+        "tech_share_wind_total_pct",
+        "tech_share_solar_pct",
+        "tech_share_electrolyser_pct",
         land_onshore_col,
+        "build_cost_multiplier",
+        "elevation_m",
     ]
     hover_data = {col: True for col in hover_candidates if col in plot_df.columns}
 
@@ -533,7 +535,7 @@ def plot_lcoa_heatmap_mpl(
     cb.set_label(colorbar_label, fontsize=9)
     cb.ax.tick_params(labelsize=8)
 
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
     return fig, ax
 
 

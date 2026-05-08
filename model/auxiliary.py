@@ -490,16 +490,16 @@ def get_results_dict_for_multi_site(
             cost_denominator = total_cost
         other_cost = max(other_cost, 0.0)
         for label, values in component_costs.items():
-            dct[f'cost_share_{label}_pct'] = (
+            dct[f'tech_share_{label}_pct'] = (
                 values['total'] / cost_denominator * 100 if cost_denominator else np.nan
             )
-            dct[f'lcoa_component_{label}_{currency_slug}_per_t'] = (
+            dct[f'lcoa_tech_{label}_{currency_slug}_per_t'] = (
                 values['total'] / production if production > 0 else np.nan
             )
 
         residual_share = other_cost / cost_denominator * 100 if cost_denominator else np.nan
         dct['other_cost_pct'] = residual_share
-        dct[f'lcoa_component_other_{currency_slug}_per_t'] = (
+        dct[f'lcoa_tech_other_{currency_slug}_per_t'] = (
             other_cost / production if production > 0 else np.nan
         )
         dct['capital_cost_share_pct'] = (
@@ -560,6 +560,31 @@ def get_results_dict_for_multi_site(
             dct['grid_energy_mwh'] = float(n.generators_t.p['grid'].sum()) * time_step
         else:
             dct['grid_energy_mwh'] = 0.0
+
+    # ── Gridless energy fraction & gridless LCOA ─────────────────────────────
+    # Fraction of power-bus generation from renewables (excl. grid backstop
+    # and ramp_dummy).  Allows post-hoc estimation of ammonia producible
+    # without the grid backstop and the corresponding "gridless" LCOA.
+    if not operating and not n.generators_t.p.empty:
+        _power_gens = [g for g in n.generators.index
+                       if n.generators.loc[g, 'bus'] == 'power']
+        _total_gen_mwh = float(n.generators_t.p[_power_gens].sum().sum()) * time_step
+        _grid_mwh = dct.get('grid_energy_mwh', 0.0)
+        if _total_gen_mwh > 0:
+            _gridless_frac = float(np.clip(1.0 - _grid_mwh / _total_gen_mwh, 0.0, 1.0))
+        else:
+            _gridless_frac = 0.0
+        dct['gridless_energy_fraction'] = _gridless_frac
+        dct['gridless_ammonia_production_t'] = production * _gridless_frac
+        # Grid backstop marginal cost dominates where used; strip it out to
+        # get the cost the plant would incur using only renewables.
+        _grid_cost = _grid_mwh * float(n.generators.loc['grid', 'marginal_cost']) if 'grid' in n.generators.index else 0.0
+        _gridless_total_cost = total_cost - _grid_cost
+        _gridless_prod = production * _gridless_frac
+        dct[f'lcoa_gridless_{currency_slug}_per_t'] = (
+            _gridless_total_cost / _gridless_prod if _gridless_prod > 0 else np.nan
+        )
+
     # Consolidate battery PCS charge/discharge into a single reported capacity
     if 'battery_pcs_charge' in dct or 'battery_pcs_discharge' in dct:
         charge = float(dct.get('battery_pcs_charge', 0.0) or 0.0)

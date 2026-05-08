@@ -1,0 +1,227 @@
+# Canonical technology cost inputs for the basic ammonia plant — 2050 Way et al scenario (USD).
+#
+# Cost basis: Way et al (2022) "Empirically grounded technology forecasts and the
+# energy transition" as implemented in Salmon & Verschuur (lcoa-opt).  Overnight costs
+# reverse-engineered from the lcoa-opt GeneralSteelData.xlsx Costs sheet (2050
+# column, RCP 4.5 scenario) using their annuity factor (8% discount / 20yr life /
+# 2% O&M → AF = 0.121852).  These are per-MW-OUTPUT overnight costs.
+#
+# Currency: USD 2020.
+#   Conversion: USD 2018 → USD 2020 via CPI (258.811/251.107 = 1.0307)
+#
+# lcoa-opt 2050 efficiencies (Way et al / Salmon model):
+#   Electrolysis HHV: 0.886509  (vs DEA 2050: 0.84)
+#   Fuel cell:        0.540015  (vs DEA 2050: 0.50)
+#   Battery charge:   0.98      (vs DEA 2050: 0.96)
+#   Battery discharge: 0.99     (vs DEA 2050: 0.96)
+#   HB / H2 compression: unchanged from DEA
+#
+# Gap-fills (not in Way et al):
+#   solar_tracking: Way solar × DEA tracker/fixed ratio (350k/290k = 1.207×)
+#   hydrogen_compression: DEA 2050 value (165,300 EUR → 188,800 USD via ECB 2020 rate)
+#   hydrogen_from_storage, penalty_link, accumulated_penalty: unchanged pass-throughs.
+#   ammonia storage: lcoa-opt value (47 USD 2018/MWh → 49 USD 2020/MWh).
+#
+# Build cost splits: DEA 2050 tech_cost/build_cost fractions applied to Way totals.
+# Financial parameters: DEA 2050 interest rates and lifetimes (green-lory defaults).
+# Land use: DEA 2050 values.
+
+currency: USD
+
+# Global water and land cost parameters
+water_usage_m3_per_t_nh3: 1.5
+water_cost_baseline_usd_per_m3: 2.0
+
+# ── Feasibility backstop ───────────────────────────────────────────────────────
+grid_backstop:
+  p_nom_mw: 20000
+  marginal_cost_eur_per_mwh: 100000
+
+techs:
+
+ # -----------------
+ # Generators
+ # -----------------
+  solar:
+    component_type: generator
+    source_note: Way et al 2050 RCP4.5 via lcoa-opt (25,725 $/MW/yr annualised → 211,114 $/MW overnight USD2018 → 217,600 USD2020)
+    overnight_cost_per_mw: 217600
+    tech_cost_per_mw: 75000        # DEA fraction 34.5%
+    build_cost_per_mw: 142600      # DEA fraction 65.5%
+    land_use_km2_per_mw: 0.01
+    lifetime_years: 40
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+  solar_tracking:
+    component_type: generator
+    source_note: Way solar × DEA tracker/fixed ratio 1.207 (217,600 × 1.207 = 262,600 USD)
+    overnight_cost_per_mw: 262600
+    tech_cost_per_mw: 120000       # DEA fraction 45.7%
+    build_cost_per_mw: 142600      # DEA fraction 54.3%
+    land_use_km2_per_mw: 0.02
+    lifetime_years: 40
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+  wind:
+    component_type: generator
+    source_note: Way et al 2050 RCP4.5 via lcoa-opt (93,433 $/MW/yr annualised → 766,773 $/MW overnight USD2018 → 790,300 USD2020)
+    overnight_cost_per_mw: 790300
+    tech_cost_per_mw: 702700       # DEA fraction 88.9%
+    build_cost_per_mw: 87600       # DEA fraction 11.1%
+    land_use_km2_per_mw: 0.2
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+
+ # -----------------
+ # Links
+ # -----------------
+  ammonia_synthesis:
+    component_type: link
+    source_note: Salmon/Verschuur lcoa-opt (565,000 $/MW_in/yr → 4,636,765 $/MW_in overnight ÷ 6.25 eff = 741,882 $/MW_out → 764,600 USD2020/MW_out). HB not from Way et al.
+    overnight_cost_per_mw: 764600
+    tech_cost_per_mw: 382300       # DEA fraction 50%
+    build_cost_per_mw: 382300      # DEA fraction 50%
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.03
+    carriers_in: {power: 0.16, hydrogen: 1.13472}
+    carriers_out: {ammonia: 1.0}
+    overall_efficiency: 0.772
+  electrolysis:
+    component_type: link
+    source_note: Way et al 2050 electrolyser (33,721 $/MW_in/yr → 276,735 $/MW_in ÷ 0.886509 eff = 312,174 $/MW_out → 321,700 USD2020/MW_H2_out)
+    overnight_cost_per_mw: 321700
+    tech_cost_per_mw: 289500       # DEA fraction 90%
+    build_cost_per_mw: 32200       # DEA fraction 10%
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 25
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+    carriers_in: {power: 1.1280201329}  # 1/0.886509 — Way 2050 HHV efficiency
+    carriers_out: {hydrogen: 1.0}
+    overall_efficiency: 0.886509
+  hydrogen_compression:
+    component_type: link
+    source_note: DEA 2050 (not in Way et al; 165,300 EUR → 188,800 USD via ECB 2020)
+    overnight_cost_per_mw: 188800
+    tech_cost_per_mw: 157400       # DEA fraction 83.4%
+    build_cost_per_mw: 31400       # DEA fraction 16.6%
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 20
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+    carriers_in: {hydrogen: 1.0, power: 0.05}
+    carriers_out: {hydrogen_storage: 1.0}
+    overall_efficiency: 0.9523809524
+  hydrogen_fuel_cell:
+    component_type: link
+    source_note: Way et al 2050 fuel cell (24,919 $/MW_H2_in/yr → 204,502 $/MW_in ÷ 0.540015 eff = 378,710 $/MW_out → 390,300 USD2020/MW_power_out)
+    overnight_cost_per_mw: 390300
+    tech_cost_per_mw: 312200       # DEA fraction 80%
+    build_cost_per_mw: 78100       # DEA fraction 20%
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 20
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02
+    carriers_in: {hydrogen: 1.8518004130}  # 1/0.540015 — Way 2050 fuel cell efficiency
+    carriers_out: {power: 1.0}
+    overall_efficiency: 0.540015
+  hydrogen_from_storage:
+    component_type: link
+    source_note: hydrogenBufferWithdrawal (pass-through; unchanged)
+    overnight_cost_per_mw: 1.00
+    tech_cost_per_mw: 0.90
+    build_cost_per_mw: 0.10
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 20
+    interest_rate: 0.05
+    fixed_om_fraction: 0.0
+    carriers_in: {hydrogen_storage: 1.0}
+    carriers_out: {hydrogen: 1.0}
+    overall_efficiency: 1.0
+  battery_pcs_charge:
+    component_type: link
+    source_note: Way et al 2050 battery PCS (8,916 $/MW/yr → 73,171 $/MW_in ÷ 0.98 eff = 74,664 $/MW_out → 77,000 USD2020/MW_out)
+    overnight_cost_per_mw: 77000
+    tech_cost_per_mw: 42000        # DEA fraction 54.5%
+    build_cost_per_mw: 35000       # DEA fraction 45.5%
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.03
+    carriers_in: {power: 1.0}
+    carriers_out: {power_storage: 0.98}   # Way 2050 charge efficiency
+    overall_efficiency: 0.98
+  battery_pcs_discharge:
+    component_type: link
+    source_note: Battery PCS discharge (no capital cost; bidirectional PCS costed on charge side)
+    overnight_cost_per_mw: 1.00
+    tech_cost_per_mw: 0.50
+    build_cost_per_mw: 0.50
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.0
+    carriers_in: {power_storage: 1.0}
+    carriers_out: {power: 0.99}           # Way 2050 discharge efficiency
+    overall_efficiency: 0.99
+  penalty_link:
+    component_type: link
+    source_note: rampPenaltySlack (unchanged)
+    overnight_cost_per_mw: 100000000
+    tech_cost_per_mw: 80000000
+    build_cost_per_mw: 20000000
+    land_use_km2_per_mw: 0.0000001
+    lifetime_years: 1
+    interest_rate: 0.1
+    fixed_om_fraction: 0.0
+    carriers_in: {ramp_penalty: 1.0}
+    carriers_out: {ramp_penalty_dest: 1.0}
+    overall_efficiency: 1.0
+
+ # -----------------
+ # Stores
+ # -----------------
+  accumulated_penalty:
+    component_type: store
+    source_note: rampPenaltySlack (unchanged)
+    overnight_cost_per_mwh: 100000000
+    tech_cost_per_mwh: 80000000
+    build_cost_per_mwh: 20000000
+    land_use_km2_per_mwh: 0.0
+    lifetime_years: 1
+    interest_rate: 0.1
+    fixed_om_fraction: 0.0
+  ammonia:
+    component_type: store
+    source_note: lcoa-opt NH3 storage (5.76 $/MWh/yr → 47 $/MWh USD2018 → 49 USD2020/MWh)
+    overnight_cost_per_mwh: 49
+    tech_cost_per_mwh: 39
+    build_cost_per_mwh: 10
+    land_use_km2_per_mwh: 0.00001
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.03
+  battery_storage:
+    component_type: store
+    source_note: Way et al 2050 battery energy (8,916 $/MWh/yr → 73,171 $/MWh USD2018 → 75,400 USD2020/MWh)
+    overnight_cost_per_mwh: 75400
+    tech_cost_per_mwh: 35700       # DEA fraction 47.4%
+    build_cost_per_mwh: 39700      # DEA fraction 52.6%
+    land_use_km2_per_mwh: 0.00005
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.029
+    standing_loss_fraction_per_day: 0.001
+  compressed_hydrogen_store:
+    component_type: store
+    source_note: lcoa-opt H2 store (2,524 $/MWh/yr → 20,714 $/MWh USD2018 → 21,300 USD2020/MWh; includes some compression in lcoa-opt)
+    overnight_cost_per_mwh: 21300
+    tech_cost_per_mwh: 14200       # DEA fraction 66.7%
+    build_cost_per_mwh: 7100       # DEA fraction 33.3%
+    land_use_km2_per_mwh: 0.0001
+    lifetime_years: 30
+    interest_rate: 0.1
+    fixed_om_fraction: 0.02

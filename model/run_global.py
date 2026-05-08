@@ -17,13 +17,13 @@ from typing import Any, Dict, Iterable, Iterator, List, Sequence, Tuple
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from shapely.geometry import Point
 import yaml
 
 try:
     from . import main as plant_main
     from . import location_tools as lt
     from . import data_store as results_store
+    from . import data_paths
     from . import land_processing
 except ImportError:  # pragma: no cover - fallback for direct execution
     PACKAGE_ROOT = Path(__file__).resolve().parent
@@ -32,13 +32,14 @@ except ImportError:  # pragma: no cover - fallback for direct execution
     import main as plant_main  # type: ignore
     import location_tools as lt  # type: ignore
     import data_store as results_store  # type: ignore
+    import data_paths  # type: ignore
     import land_processing  # type: ignore
 
 LOGGER = logging.getLogger(__name__)
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_WEATHER_DIR = REPO_ROOT / "data" / "weather_data"
-DEFAULT_LAND_CSV = REPO_ROOT / "data" / "20251222_max_capacities.csv"
+REPO_ROOT = data_paths.REPO_ROOT
+DEFAULT_WEATHER_DIR = data_paths.WEATHER_DATA_DIR
+DEFAULT_LAND_CSV = data_paths.MAX_CAPACITIES_FILE
 DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "spatial_cost_inputs.csv"
 DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_dea.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
@@ -317,7 +318,7 @@ def _compute_headline_splits(
     - tech_cost_pct: tech portion of principal recovery
     - om_cost_pct: fixed O&M
     - interest_pct: interest portion of capital recovery
-    Also returns weighted build_cost_multiplier_applied.
+    Also returns weighted build_cost_multiplier.
     """
     total_cost = float(network.objective) if network.objective else 0.0
     if total_cost <= 0:
@@ -383,7 +384,7 @@ def _compute_headline_splits(
         build_mult_applied = weighted_build_cost / base_build_cost
 
     return {
-        "build_cost_multiplier_applied": build_mult_applied if build_mult_applied is not None else 1.0,
+        "build_cost_multiplier": build_mult_applied if build_mult_applied is not None else 1.0,
         "build_cost_pct": total_build_principal / total_cost * 100.0,
         "tech_cost_pct": total_tech_principal / total_cost * 100.0,
         "om_cost_pct": total_fixed_om / total_cost * 100.0,
@@ -409,7 +410,7 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "annual_ammonia_demand_mwh",
         "annual_ammonia_production_t",
         total_cost_col,
-        "build_cost_multiplier_applied",
+        "build_cost_multiplier",
         "build_cost_pct",
         "tech_cost_pct",
         "om_cost_pct",
@@ -432,10 +433,21 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "land_cell_area_km2",
         "onshore_area_km2",
         "offshore_area_km2",
-        "bathymetry_depth_m",
+        "elevation_m",
         "area_cap_mw",
+        "max_gridless_ammonia_capacity_t",
+        "max_gridless_ammonia_capacity_mtpa",
+        "gridless_capacity_scale_factor",
+        "protected_area_pct",
+        "slope_suitable_land_pct",
+        "steep_slope_pct",
+        "land_exclusion_factor",
+        "land_competition_fraction",
+        "constrained_onshore_area_km2",
         "solar_area_used_km2",
         "wind_area_used_km2",
+        "wind_onshore_area_km2",
+        "wind_offshore_area_km2",
         "max_power_wind_mw",
         "max_power_solar_mw",
     ]
@@ -463,8 +475,8 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
     component_costs = [
         col
         for col in df.columns
-        if (col.startswith("cost_share_") or col.startswith("lcoa_component_"))
-        and col != "cost_share_other_pct"
+        if (col.startswith("tech_share_") or col.startswith("lcoa_tech_"))
+        and col != "tech_share_other_pct"
     ]
     interest_rates = [col for col in df.columns if col.startswith("interest_rate_")]
     tail = ["interest_overrides_applied"]
@@ -618,18 +630,20 @@ def _load_land_table(path: str | Path | None) -> pd.DataFrame | None:
     if resolved is None:
         return None
     if not resolved.exists():
-        legacy = resolved.parent / "20251222_land_max_capacity.csv"
-        if path in {None, DEFAULT_LAND_CSV} and legacy.exists():
-            resolved = legacy
-        else:
-            LOGGER.warning("Max-capacities CSV %s not found; skipping capacity caps.", resolved)
-            return None
+        LOGGER.warning("Max-capacities CSV %s not found; skipping capacity caps.", resolved)
+        return None
     df = pd.read_csv(resolved)
     df.columns = [col.lower() for col in df.columns]
     expected = {"latitude", "longitude"}
     if not expected.issubset(df.columns):
         LOGGER.warning("Land CSV %s is missing %s", resolved, expected - set(df.columns))
         return None
+    # Backfill elevation_m from bathymetry NetCDF when the CSV column is absent or all-NaN.
+    if "elevation_m" not in df.columns or df["elevation_m"].isna().all():
+        bathymetry_path = data_paths.BATHYMETRY_FILE
+        if bathymetry_path.exists():
+            df = land_processing._attach_bathymetry_depth(df, bathymetry_path)
+            LOGGER.info("Backfilled elevation_m from %s", bathymetry_path)
     return df
 
 
@@ -667,9 +681,9 @@ def _apply_spatial_solar_density_from_tech_config(
         base_land_use_km2_per_mw=base_land_use,
     )
 
-    if "onshore_area_km2" in updated.columns:
+    if "solar_area_km2" in updated.columns:
         updated["max_power_solar_mw"] = (
-            updated["onshore_area_km2"] * updated["solar_density_mw_per_km2"]
+            updated["solar_area_km2"] * updated["solar_density_mw_per_km2"]
         ).clip(lower=0.0)
         if "max_power_wind_mw" in updated.columns:
             updated["max_capacity_mw"] = (
@@ -1056,9 +1070,9 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
     if offshore_area is not None:
         metadata["offshore_area_km2"] = offshore_area
 
-    bathymetry_depth = _maybe("bathymetry_depth_m")
+    bathymetry_depth = _maybe("elevation_m")
     if bathymetry_depth is not None:
-        metadata["bathymetry_depth_m"] = bathymetry_depth
+        metadata["elevation_m"] = bathymetry_depth
 
     max_capacity = _maybe("max_capacity_mw")
     if max_capacity is None:
@@ -1078,6 +1092,20 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
     if wind_area is not None:
         metadata["wind_area_used_km2"] = wind_area
 
+    for column in [
+        "protected_area_pct",
+        "slope_suitable_land_pct",
+        "steep_slope_pct",
+        "land_exclusion_factor",
+        "land_competition_fraction",
+        "constrained_onshore_area_km2",
+        "wind_onshore_area_km2",
+        "wind_offshore_area_km2",
+    ]:
+        value = _maybe(column)
+        if value is not None:
+            metadata[column] = value
+
     for column in row.index:
         key = str(column).strip().lower()
         if key.startswith("max_power_") and key.endswith("_mw"):
@@ -1090,6 +1118,66 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
                 metadata[key] = value
 
     return metadata
+
+
+def _numeric_from_mapping(mapping: Dict[str, Any] | pd.Series, *names: str) -> float | None:
+    for name in names:
+        try:
+            value = mapping.get(name)  # type: ignore[attr-defined]
+        except AttributeError:
+            value = None
+        if value is None or pd.isna(value):
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _estimate_max_gridless_ammonia_capacity(
+    results: Dict[str, Any],
+    land_row: pd.Series | None,
+) -> Dict[str, float]:
+    gridless_t = _numeric_from_mapping(results, "gridless_ammonia_production_t")
+    if gridless_t is None:
+        annual_t = _numeric_from_mapping(results, "annual_ammonia_production_t")
+        gridless_fraction = _numeric_from_mapping(results, "gridless_energy_fraction")
+        if annual_t is None or gridless_fraction is None:
+            return {}
+        gridless_t = annual_t * gridless_fraction
+
+    gridless_t = max(0.0, float(gridless_t))
+    if land_row is None:
+        return {
+            "gridless_capacity_scale_factor": 1.0,
+            "max_gridless_ammonia_capacity_t": gridless_t,
+            "max_gridless_ammonia_capacity_mtpa": gridless_t / 1_000_000.0,
+        }
+
+    scale_limits: list[float] = []
+
+    wind_used_mw = _numeric_from_mapping(results, "wind_mw", "wind") or 0.0
+    wind_cap_mw = _numeric_from_mapping(land_row, "max_power_wind_mw", "wind_max_capacity")
+    if wind_used_mw > 1e-9 and wind_cap_mw is not None:
+        scale_limits.append(max(0.0, wind_cap_mw) / wind_used_mw)
+
+    solar_used_mw = (
+        (_numeric_from_mapping(results, "solar_mw", "solar") or 0.0)
+        + (_numeric_from_mapping(results, "solar_tracking_mw", "solar_tracking") or 0.0)
+    )
+    solar_cap_mw = _numeric_from_mapping(land_row, "max_power_solar_mw", "solar_max_capacity")
+    if solar_used_mw > 1e-9 and solar_cap_mw is not None:
+        scale_limits.append(max(0.0, solar_cap_mw) / solar_used_mw)
+
+    scale_factor = min(scale_limits) if scale_limits else 1.0
+    scale_factor = max(0.0, float(scale_factor))
+    max_capacity_t = gridless_t * scale_factor
+    return {
+        "gridless_capacity_scale_factor": scale_factor,
+        "max_gridless_ammonia_capacity_t": max_capacity_t,
+        "max_gridless_ammonia_capacity_mtpa": max_capacity_t / 1_000_000.0,
+    }
 
 
 def _compose_interest_rates(
@@ -1123,45 +1211,15 @@ def _load_country_shapes() -> gpd.GeoDataFrame:
 
 
 def _country_for(world: gpd.GeoDataFrame, lat: float, lon: float) -> str:
-    point = Point(lon, lat)
-    matches = world[world.intersects(point)]
-    if matches.empty:
-        return ""
-    country = matches.iloc[0].country
-    return str(country) if pd.notna(country) else ""
+    return lt.country_for_cell_overlap(world, lat, lon)
 
 
 def _build_country_lookup(
     world: gpd.GeoDataFrame,
     locations: List[Tuple[float, float]],
 ) -> Dict[Tuple[float, float], str]:
-    """Batch-assign countries to all locations using a spatial join.
-
-    Returns ``{(lat, lon): country_name}`` dict.  Much faster than calling
-    ``_country_for`` per cell when there are thousands of locations.
-
-    Uses ``predicate="intersects"`` (rather than ``"within"``) so that cells
-    whose centroid falls exactly on a polygon boundary (common at high latitudes
-    and small-island coastlines) are correctly assigned a country rather than
-    left unmatched.  When a point intersects multiple polygons (border cells),
-    the first matched country is kept.
-    """
-    if not locations:
-        return {}
-    lats, lons = zip(*locations)
-    points = gpd.GeoDataFrame(
-        {"latitude": lats, "longitude": lons},
-        geometry=gpd.points_from_xy(lons, lats),
-        crs=world.crs,
-    )
-    joined = gpd.sjoin(points, world[["country", "geometry"]], how="left", predicate="intersects")
-    # A point on a shared border may match multiple polygons → keep first hit.
-    joined = joined[~joined.index.duplicated(keep="first")]
-    lookup: Dict[Tuple[float, float], str] = {}
-    for idx, row in joined.iterrows():
-        key = (float(row["latitude"]), float(row["longitude"]))
-        lookup[key] = str(row["country"]) if pd.notna(row.get("country")) else ""
-    return lookup
+    """Batch-assign countries using the largest country overlap per cell footprint."""
+    return lt.build_country_lookup_by_cell_overlap(world, locations)
 
 
 def _build_weather_frame(dataset: lt.all_locations, lat: float, lon: float, aggregation_count: int) -> pd.DataFrame:
@@ -1430,8 +1488,10 @@ def _run_single_location(
 
     if land_cap is not None:
         results["land_capacity_cap"] = land_cap
+        results["land_capacity_cap_mw"] = land_cap
     if land_row is not None:
         results.update(_land_metadata_from_row(land_row))
+    results.update(_estimate_max_gridless_ammonia_capacity(results, land_row))
     results["interest_overrides_applied"] = bool(overrides)
 
     # Headline cost splits (no double counting).
@@ -1625,7 +1685,7 @@ def run_global(
     with _quiet_logging(quiet), _override_env("GREEN_LORY_SOLVER_LOG", "0", quiet):
         weather_dir_path = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
         land_csv_path = _resolve_path(land_csv or DEFAULT_LAND_CSV)
-        interest_csv_path = _resolve_path(interest_csv or DEFAULT_INTEREST_CSV)
+        interest_csv_path = _resolve_path(interest_csv) if interest_csv is not None else None
         tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
 
         tech_inputs = _load_tech_inputs(tech_yaml_path)
@@ -1678,9 +1738,10 @@ def run_global(
             if time_step > 1:
                 probe_weather = _resample_weather_frame(probe_weather, int(time_step))
             n_snapshots = max_snapshots if max_snapshots is not None else len(probe_weather)
+            _plant_dir = os.environ.get("ARC_PLANT_DIR", "basic_ammonia_plant")
             base_network = plant_main.generate_network(
                 n_snapshots,
-                "basic_ammonia_plant",
+                _plant_dir,
                 aggregation_count=aggregation_count,
                 time_step=time_step,
             )

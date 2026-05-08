@@ -21,6 +21,7 @@
 
 # Never commit virtualenvs or Python caches
 .venv/
+references/
 **/__pycache__/
 **/*.py[cod]
 .ipynb_checkpoints/
@@ -34,5 +35,10 @@
 /results/**
 !/results/**/.gitkeep
 
-/scripts/**
+# Only the documented helper scripts are part of the supported interface.
+# Local diagnostics and Copilot scratch helpers under scripts/ stay ignored.
+/scripts/*
+!/scripts/README.md
 !/scripts/**/.gitkeep
+!/scripts/fetch_travel_time.py
+!/scripts/merge_global_results.py

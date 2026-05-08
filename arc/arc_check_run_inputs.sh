@@ -8,11 +8,7 @@ cd "$REPO_ROOT"
 LOCATIONS_CSV="${1:-${ARC_LOCATIONS_CSV:-}}"
 TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
 INTEREST_CSV="${ARC_INTEREST_CSV:-}"
-LAND_CSV="${ARC_LAND_CSV:-data/20251222_max_capacities.csv}"
-
-if [[ ! -f "$LAND_CSV" && -f "data/20251222_land_max_capacity.csv" ]]; then
-  LAND_CSV="data/20251222_land_max_capacity.csv"
-fi
+LAND_CSV="${ARC_LAND_CSV:-data/max_capacities.csv}"
 
 echo "Preflight checks"
 echo "  repo:        $REPO_ROOT"
@@ -46,6 +42,12 @@ for pattern in "${WEATHER_DIR}/Solar*.nc" "${WEATHER_DIR}/SolarTracking*.nc" "${
     missing+=("$pattern")
   fi
 done
+
+BATHYMETRY_CANONICAL="data/model_bathymetry.nc"
+BATHYMETRY_LEGACY="${WEATHER_DIR}/model_bathymetry.nc"
+if [[ ! -f "$BATHYMETRY_CANONICAL" && ! -f "$BATHYMETRY_LEGACY" ]]; then
+  missing+=("$BATHYMETRY_CANONICAL (or legacy fallback $BATHYMETRY_LEGACY)")
+fi
 
 if [[ -n "$LOCATIONS_CSV" ]]; then
   if [[ ! -f "$LOCATIONS_CSV" ]]; then

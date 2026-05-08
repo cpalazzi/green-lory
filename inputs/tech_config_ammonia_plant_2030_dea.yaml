@@ -57,7 +57,7 @@ techs:
     source_note: DEA 2030 Utility-scale PV
     overnight_cost_per_mw: 380000 # EUR/MW
     tech_cost_per_mw: 160000 # pv modules + inverter from DEA component lines
-    build_cost_per_mw: 220000 # installation + grid + soft costs + residual BOP
+    build_cost_per_mw: 220000 # installation + grid + soft costs + residual BOP # Apply labour factor to: build_cost = installation + soft (apply labour factor to soft)
     land_use_km2_per_mw: 0.01 # Equator baseline for solar density calibration (100 MW/km² at lat=0); run_global applies latitude-adjusted footprint
     lifetime_years: 40
     interest_rate: 0.1
@@ -91,7 +91,7 @@ techs:
     source_note: DEA 2030 Hydrogen to Ammonia
     overnight_cost_per_mw: 1526000
     tech_cost_per_mw: 763000 # reactor, catalysts, air separation unit, etc.
-    build_cost_per_mw: 763000 # installation
+    build_cost_per_mw: 763000 # installation 
     land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 30
     interest_rate: 0.1

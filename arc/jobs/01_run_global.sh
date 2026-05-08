@@ -75,7 +75,14 @@ if [[ ! -d "$ARC_ENV_PREFIX" ]]; then
   exit 2
 fi
 
-conda activate "$ARC_ENV_PREFIX"
+conda activate "$ARC_ENV_PREFIX" 2>/dev/null || true
+# Use the env's Python explicitly so the job works even if conda activate
+# silently fails to update PATH (common in non-interactive SLURM batch shells).
+ARC_PYTHON="${ARC_ENV_PREFIX}/bin/python"
+if [[ ! -x "$ARC_PYTHON" ]]; then
+  echo "ERROR: python not found at $ARC_PYTHON" >&2
+  exit 2
+fi
 
 cd "$ARC_REPO_DIR"
 mkdir -p logs "results/${RUN_LABEL}"
@@ -86,11 +93,8 @@ fi
 
 export ARC_TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
 export ARC_INTEREST_CSV="${ARC_INTEREST_CSV:-}"
-export ARC_LAND_CSV="${ARC_LAND_CSV:-data/20251222_max_capacities.csv}"
+export ARC_LAND_CSV="${ARC_LAND_CSV:-data/max_capacities.csv}"
 export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
-if [[ ! -f "$ARC_LAND_CSV" && -f "data/20251222_land_max_capacity.csv" ]]; then
-  export ARC_LAND_CSV="data/20251222_land_max_capacity.csv"
-fi
 
 bash arc/arc_check_run_inputs.sh "${ARC_LOCATIONS_CSV:-}" >/dev/null
 
@@ -121,7 +125,7 @@ echo "Output:    $ARC_OUTPUT_CSV"
 echo "Workers: ARC_NUM_WORKERS=${ARC_NUM_WORKERS}, ARC_THREADS_PER_WORKER=${ARC_THREADS_PER_WORKER}" | tee -a "$LOGFILE"
 env | grep -E '^(ARC_|GREEN_LORY_|GRB_LICENSE_FILE|OMP_NUM_THREADS|MKL_NUM_THREADS|OPENBLAS_NUM_THREADS)' | sort | tee -a "$LOGFILE"
 
-python - <<'PY' 2>&1 | tee -a "$LOGFILE"
+"$ARC_PYTHON" - <<'PY' 2>&1 | tee -a "$LOGFILE"
 import os
 import pandas as pd
 from model.run_global import run_global
