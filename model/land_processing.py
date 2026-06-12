@@ -130,10 +130,6 @@ FINAL_COLUMNS = [
     "max_power_solar_mw",
     "max_power_wind_mw",
     "max_capacity_mw",
-    # Backward-compatible aliases used by existing plotting/reporting code.
-    "solar_max_capacity",
-    "wind_max_capacity",
-    "max_capacity",
 ]
 
 
@@ -1169,25 +1165,6 @@ def _uniform_land_competition_fraction(
     return float(raw_values[0])
 
 
-def _legacy_wind_area_split(output: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-    if "wind_onshore_area_km2" in output.columns and "wind_offshore_area_km2" in output.columns:
-        return (
-            output["wind_onshore_area_km2"].clip(lower=0.0),
-            output["wind_offshore_area_km2"].clip(lower=0.0),
-        )
-
-    if "wind_area_km2" not in output.columns:
-        raise KeyError("wind_area_km2 is required to rescale a land-competition scenario.")
-
-    total_wind_area = output["wind_area_km2"].clip(lower=0.0)
-    if "offshore_area_km2" in output.columns:
-        offshore_wind_area = np.minimum(total_wind_area, output["offshore_area_km2"].clip(lower=0.0))
-    else:
-        offshore_wind_area = pd.Series(0.0, index=output.index)
-    onshore_wind_area = (total_wind_area - offshore_wind_area).clip(lower=0.0)
-    return onshore_wind_area, offshore_wind_area
-
-
 def apply_land_competition_scenario(
     df: pd.DataFrame,
     land_competition_fraction: float,
@@ -1212,7 +1189,16 @@ def apply_land_competition_scenario(
     if "solar_area_km2" not in output.columns and "solar_availability" in output.columns and "area" in output.columns:
         output["solar_area_km2"] = output["area"] * output["solar_availability"]
 
-    wind_onshore_area_km2, wind_offshore_area_km2 = _legacy_wind_area_split(output)
+    required_wind_area_columns = {"wind_onshore_area_km2", "wind_offshore_area_km2"}
+    missing_wind_area_columns = sorted(required_wind_area_columns - set(output.columns))
+    if missing_wind_area_columns:
+        raise KeyError(
+            "Rescaling land-competition scenarios now requires explicit wind area columns: "
+            + ", ".join(missing_wind_area_columns)
+        )
+
+    wind_onshore_area_km2 = output["wind_onshore_area_km2"].clip(lower=0.0)
+    wind_offshore_area_km2 = output["wind_offshore_area_km2"].clip(lower=0.0)
     output["wind_onshore_area_km2"] = wind_onshore_area_km2
     output["wind_offshore_area_km2"] = wind_offshore_area_km2
 
@@ -1269,10 +1255,6 @@ def apply_land_competition_scenario(
     ).clip(lower=0.0)
     output["max_capacity_mw"] = output["max_power_solar_mw"] + output["max_power_wind_mw"]
     output["availability"] = (output["max_capacity_mw"] > 0).astype(float)
-
-    output["solar_max_capacity"] = output["max_power_solar_mw"]
-    output["wind_max_capacity"] = output["max_power_wind_mw"]
-    output["max_capacity"] = output["max_capacity_mw"]
     return output
 
 
@@ -1364,11 +1346,6 @@ def build_land_availability_table(config: LandAvailabilityConfig | None = None) 
         + availability["max_power_wind_mw"]
     )
     availability["availability"] = (availability["max_capacity_mw"] > 0).astype(float)
-
-    # Backward-compatible aliases.
-    availability["solar_max_capacity"] = availability["max_power_solar_mw"]
-    availability["wind_max_capacity"] = availability["max_power_wind_mw"]
-    availability["max_capacity"] = availability["max_capacity_mw"]
 
     for column in FINAL_COLUMNS:
         if column not in availability.columns:

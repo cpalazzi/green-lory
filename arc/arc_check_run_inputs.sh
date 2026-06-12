@@ -7,16 +7,16 @@ cd "$REPO_ROOT"
 
 LOCATIONS_CSV="${1:-${ARC_LOCATIONS_CSV:-}}"
 TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
-INTEREST_CSV="${ARC_INTEREST_CSV:-}"
-LAND_CSV="${ARC_LAND_CSV:-data/max_capacities.csv}"
+OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
+LAND_CSV="${ARC_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
 
 echo "Preflight checks"
 echo "  repo:        $REPO_ROOT"
 echo "  tech_yaml:   $TECH_YAML"
-if [[ -n "$INTEREST_CSV" ]]; then
-  echo "  interest:    $INTEREST_CSV"
+if [[ -n "$OVERRIDE_CSV" ]]; then
+  echo "  override:    $OVERRIDE_CSV"
 else
-  echo "  interest:    <none>"
+  echo "  override:    <none>"
 fi
 echo "  land_csv:    $LAND_CSV"
 [[ -n "$LOCATIONS_CSV" ]] && echo "  locations:   $LOCATIONS_CSV"
@@ -32,8 +32,8 @@ do
   [[ -f "$f" ]] || missing+=("$f")
 done
 
-if [[ -n "$INTEREST_CSV" ]]; then
-  [[ -f "$INTEREST_CSV" ]] || missing+=("$INTEREST_CSV")
+if [[ -n "$OVERRIDE_CSV" ]]; then
+  [[ -f "$OVERRIDE_CSV" ]] || missing+=("$OVERRIDE_CSV")
 fi
 
 WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
@@ -44,9 +44,8 @@ for pattern in "${WEATHER_DIR}/Solar*.nc" "${WEATHER_DIR}/SolarTracking*.nc" "${
 done
 
 BATHYMETRY_CANONICAL="data/model_bathymetry.nc"
-BATHYMETRY_LEGACY="${WEATHER_DIR}/model_bathymetry.nc"
-if [[ ! -f "$BATHYMETRY_CANONICAL" && ! -f "$BATHYMETRY_LEGACY" ]]; then
-  missing+=("$BATHYMETRY_CANONICAL (or legacy fallback $BATHYMETRY_LEGACY)")
+if [[ ! -f "$BATHYMETRY_CANONICAL" ]]; then
+  missing+=("$BATHYMETRY_CANONICAL")
 fi
 
 if [[ -n "$LOCATIONS_CSV" ]]; then

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=build-green-lory-env
-#SBATCH --partition=medium
+#SBATCH --partition=short
 #SBATCH --clusters=all
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

@@ -1,0 +1,175 @@
+country,tiam_region_code,tiam_region_name,ameli_interest_rate,ameli_wacc_pct,mapping_note
+Algeria,AFR,Africa,0.051,5.1,AFR
+Angola,AFR,Africa,0.051,5.1,AFR
+Benin,AFR,Africa,0.051,5.1,AFR
+Botswana,AFR,Africa,0.051,5.1,AFR
+Burkina Faso,AFR,Africa,0.051,5.1,AFR
+Burundi,AFR,Africa,0.051,5.1,AFR
+Cameroon,AFR,Africa,0.051,5.1,AFR
+Central African Republic,AFR,Africa,0.051,5.1,AFR
+Chad,AFR,Africa,0.051,5.1,AFR
+Democratic Republic of the Congo,AFR,Africa,0.051,5.1,AFR
+Djibouti,AFR,Africa,0.051,5.1,AFR
+Egypt,AFR,Africa,0.051,5.1,AFR
+Equatorial Guinea,AFR,Africa,0.051,5.1,AFR
+Eritrea,AFR,Africa,0.051,5.1,AFR
+Ethiopia,AFR,Africa,0.051,5.1,AFR
+Gabon,AFR,Africa,0.051,5.1,AFR
+Ghana,AFR,Africa,0.051,5.1,AFR
+Guinea,AFR,Africa,0.051,5.1,AFR
+Guinea-Bissau,AFR,Africa,0.051,5.1,AFR
+Ivory Coast,AFR,Africa,0.051,5.1,AFR
+Kenya,AFR,Africa,0.051,5.1,AFR
+Lesotho,AFR,Africa,0.051,5.1,AFR
+Liberia,AFR,Africa,0.051,5.1,AFR
+Libya,AFR,Africa,0.051,5.1,AFR
+Madagascar,AFR,Africa,0.051,5.1,AFR
+Malawi,AFR,Africa,0.051,5.1,AFR
+Mali,AFR,Africa,0.051,5.1,AFR
+Mauritania,AFR,Africa,0.051,5.1,AFR
+Morocco,AFR,Africa,0.051,5.1,AFR
+Mozambique,AFR,Africa,0.051,5.1,AFR
+Namibia,AFR,Africa,0.051,5.1,AFR
+Niger,AFR,Africa,0.051,5.1,AFR
+Nigeria,AFR,Africa,0.051,5.1,AFR
+Republic of the Congo,AFR,Africa,0.051,5.1,AFR
+Rwanda,AFR,Africa,0.051,5.1,AFR
+Senegal,AFR,Africa,0.051,5.1,AFR
+Sierra Leone,AFR,Africa,0.051,5.1,AFR
+Somalia,AFR,Africa,0.051,5.1,AFR
+Somaliland,AFR,Africa,0.051,5.1,AFR
+South Africa,AFR,Africa,0.051,5.1,AFR
+South Sudan,AFR,Africa,0.051,5.1,AFR
+Sudan,AFR,Africa,0.051,5.1,AFR
+Togo,AFR,Africa,0.051,5.1,AFR
+Tunisia,AFR,Africa,0.051,5.1,AFR
+Uganda,AFR,Africa,0.051,5.1,AFR
+United Republic of Tanzania,AFR,Africa,0.051,5.1,AFR
+Western Sahara,AFR,Africa,0.051,5.1,AFR
+Zambia,AFR,Africa,0.051,5.1,AFR
+Zimbabwe,AFR,Africa,0.051,5.1,AFR
+eSwatini,AFR,Africa,0.051,5.1,AFR
+Australia,AUS,Australia,0.051,5.1,AUS
+Fiji,AUS,Australia,0.051,5.1,AUS
+New Zealand,AUS,Australia,0.051,5.1,AUS
+Canada,CAN,Canada,0.046,4.6,CAN
+Greenland,CAN,Canada,0.046,4.6,CAN
+China,CHI,China,0.051,5.1,CHI
+Mongolia,CHI,China,0.051,5.1,CHI
+Argentina,CSA,Central and South America,0.051,5.1,CSA
+Belize,CSA,Central and South America,0.051,5.1,CSA
+Bolivia,CSA,Central and South America,0.051,5.1,CSA
+Brazil,CSA,Central and South America,0.051,5.1,CSA
+Chile,CSA,Central and South America,0.051,5.1,CSA
+Colombia,CSA,Central and South America,0.051,5.1,CSA
+Costa Rica,CSA,Central and South America,0.051,5.1,CSA
+Cuba,CSA,Central and South America,0.051,5.1,CSA
+Dominican Republic,CSA,Central and South America,0.051,5.1,CSA
+Ecuador,CSA,Central and South America,0.051,5.1,CSA
+El Salvador,CSA,Central and South America,0.051,5.1,CSA
+Falkland Islands,CSA,Central and South America,0.051,5.1,CSA
+Guatemala,CSA,Central and South America,0.051,5.1,CSA
+Guyana,CSA,Central and South America,0.051,5.1,CSA
+Haiti,CSA,Central and South America,0.051,5.1,CSA
+Honduras,CSA,Central and South America,0.051,5.1,CSA
+Jamaica,CSA,Central and South America,0.051,5.1,CSA
+Nicaragua,CSA,Central and South America,0.051,5.1,CSA
+Panama,CSA,Central and South America,0.051,5.1,CSA
+Paraguay,CSA,Central and South America,0.051,5.1,CSA
+Peru,CSA,Central and South America,0.051,5.1,CSA
+Puerto Rico,CSA,Central and South America,0.051,5.1,CSA
+Suriname,CSA,Central and South America,0.051,5.1,CSA
+The Bahamas,CSA,Central and South America,0.051,5.1,CSA
+Uruguay,CSA,Central and South America,0.051,5.1,CSA
+Venezuela,CSA,Central and South America,0.051,5.1,CSA
+Albania,EEU,Eastern Europe,0.051,5.1,EEU
+Bosnia and Herzegovina,EEU,Eastern Europe,0.051,5.1,EEU
+Bulgaria,EEU,Eastern Europe,0.051,5.1,EEU
+Croatia,EEU,Eastern Europe,0.051,5.1,EEU
+Cyprus,EEU,Eastern Europe,0.051,5.1,EEU
+Czechia,EEU,Eastern Europe,0.051,5.1,EEU
+Hungary,EEU,Eastern Europe,0.051,5.1,EEU
+Kosovo,EEU,Eastern Europe,0.051,5.1,EEU
+Montenegro,EEU,Eastern Europe,0.051,5.1,EEU
+North Macedonia,EEU,Eastern Europe,0.051,5.1,EEU
+Poland,EEU,Eastern Europe,0.051,5.1,EEU
+Republic of Serbia,EEU,Eastern Europe,0.051,5.1,EEU
+Romania,EEU,Eastern Europe,0.051,5.1,EEU
+Slovakia,EEU,Eastern Europe,0.051,5.1,EEU
+Slovenia,EEU,Eastern Europe,0.051,5.1,EEU
+Armenia,FSU,Former Soviet Union,0.051,5.1,FSU
+Azerbaijan,FSU,Former Soviet Union,0.051,5.1,FSU
+Belarus,FSU,Former Soviet Union,0.051,5.1,FSU
+Estonia,FSU,Former Soviet Union,0.051,5.1,FSU
+Georgia,FSU,Former Soviet Union,0.051,5.1,FSU
+Kazakhstan,FSU,Former Soviet Union,0.051,5.1,FSU
+Kyrgyzstan,FSU,Former Soviet Union,0.051,5.1,FSU
+Latvia,FSU,Former Soviet Union,0.051,5.1,FSU
+Lithuania,FSU,Former Soviet Union,0.051,5.1,FSU
+Moldova,FSU,Former Soviet Union,0.051,5.1,FSU
+Russia,FSU,Former Soviet Union,0.051,5.1,FSU
+Tajikistan,FSU,Former Soviet Union,0.051,5.1,FSU
+Turkmenistan,FSU,Former Soviet Union,0.051,5.1,FSU
+Ukraine,FSU,Former Soviet Union,0.051,5.1,FSU
+Uzbekistan,FSU,Former Soviet Union,0.051,5.1,FSU
+India,IND,India,0.051,5.1,IND
+Japan,JAP,Japan,0.018000000000000002,1.8000000000000003,JAP
+Iran,MEA,Middle-east,0.051,5.1,MEA
+Iraq,MEA,Middle-east,0.051,5.1,MEA
+Israel,MEA,Middle-east,0.051,5.1,MEA
+Jordan,MEA,Middle-east,0.051,5.1,MEA
+Kuwait,MEA,Middle-east,0.051,5.1,MEA
+Lebanon,MEA,Middle-east,0.051,5.1,MEA
+Oman,MEA,Middle-east,0.051,5.1,MEA
+Qatar,MEA,Middle-east,0.051,5.1,MEA
+Saudi Arabia,MEA,Middle-east,0.051,5.1,MEA
+Syria,MEA,Middle-east,0.051,5.1,MEA
+Turkey,MEA,Middle-east,0.051,5.1,MEA
+United Arab Emirates,MEA,Middle-east,0.051,5.1,MEA
+Yemen,MEA,Middle-east,0.051,5.1,MEA
+Mexico,MEX,Mexico,0.051,5.1,MEX
+Afghanistan,ODA,Other Developing Asia,0.051,5.1,ODA
+Bangladesh,ODA,Other Developing Asia,0.051,5.1,ODA
+Bhutan,ODA,Other Developing Asia,0.051,5.1,ODA
+Brunei,ODA,Other Developing Asia,0.051,5.1,ODA
+Cambodia,ODA,Other Developing Asia,0.051,5.1,ODA
+East Timor,ODA,Other Developing Asia,0.051,5.1,ODA
+Indonesia,ODA,Other Developing Asia,0.051,5.1,ODA
+Laos,ODA,Other Developing Asia,0.051,5.1,ODA
+Malaysia,ODA,Other Developing Asia,0.051,5.1,ODA
+Myanmar,ODA,Other Developing Asia,0.051,5.1,ODA
+Nepal,ODA,Other Developing Asia,0.051,5.1,ODA
+North Korea,ODA,Other Developing Asia,0.051,5.1,ODA
+Pakistan,ODA,Other Developing Asia,0.051,5.1,ODA
+Papua New Guinea,ODA,Other Developing Asia,0.051,5.1,ODA
+Philippines,ODA,Other Developing Asia,0.051,5.1,ODA
+Solomon Islands,ODA,Other Developing Asia,0.051,5.1,ODA
+Sri Lanka,ODA,Other Developing Asia,0.051,5.1,ODA
+Taiwan,ODA,Other Developing Asia,0.051,5.1,ODA
+Thailand,ODA,Other Developing Asia,0.051,5.1,ODA
+Vanuatu,ODA,Other Developing Asia,0.051,5.1,ODA
+Vietnam,ODA,Other Developing Asia,0.051,5.1,ODA
+South Korea,SKO,South Korea,0.051,5.1,SKO
+United Kingdom,UK,United Kingdom,0.043,4.3,UK
+Antarctica,UNASSIGNED,,0.051,5.1,unassigned_ocean_or_unmapped_country_defaulted_to_reduced_5p1pct
+,UNASSIGNED,,0.051,5.1,unassigned_ocean_or_unmapped_country_defaulted_to_reduced_5p1pct
+United States of America,USA,USA,0.044000000000000004,4.4,USA
+Austria,WEU,Western Europe,0.04,4.0,WEU
+Belgium,WEU,Western Europe,0.04,4.0,WEU
+Denmark,WEU,Western Europe,0.04,4.0,WEU
+Finland,WEU,Western Europe,0.04,4.0,WEU
+France,WEU,Western Europe,0.04,4.0,WEU
+French Southern and Antarctic Lands,WEU,Western Europe,0.04,4.0,WEU
+Germany,WEU,Western Europe,0.04,4.0,WEU
+Greece,WEU,Western Europe,0.04,4.0,WEU
+Iceland,WEU,Western Europe,0.04,4.0,WEU
+Ireland,WEU,Western Europe,0.04,4.0,WEU
+Italy,WEU,Western Europe,0.04,4.0,WEU
+Luxembourg,WEU,Western Europe,0.04,4.0,WEU
+Netherlands,WEU,Western Europe,0.04,4.0,WEU
+New Caledonia,WEU,Western Europe,0.04,4.0,WEU
+Norway,WEU,Western Europe,0.04,4.0,WEU
+Portugal,WEU,Western Europe,0.04,4.0,WEU
+Spain,WEU,Western Europe,0.04,4.0,WEU
+Sweden,WEU,Western Europe,0.04,4.0,WEU
+Switzerland,WEU,Western Europe,0.04,4.0,WEU

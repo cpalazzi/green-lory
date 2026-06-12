@@ -1,0 +1,17 @@
+tiam_region_code,tiam_region_name,low_carbon_wacc_pct,high_carbon_wacc_pct,reduced_wacc_pct,source,interest_rate
+AFR,Africa,11.8,8.9,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+MEX,Mexico,11.8,8.9,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+CSA,Central and South America,9.2,7.3,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+IND,India,8.2,6.3,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+MEA,Middle-east,6.8,5.1,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+ODA,Other Developing Asia,6.8,5.1,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+SKO,South Korea,6.8,5.1,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+CHI,China,6.6,6.6,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+AUS,Australia,6.1,5.1,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+EEU,Eastern Europe,5.8,5.5,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+FSU,Former Soviet Union,5.8,5.5,5.1,"Ameli et al. 2021 Fig. 2, bubble labels",0.051
+CAN,Canada,5.4,4.6,4.6,"Ameli et al. 2021 Fig. 2, bubble labels",0.046
+USA,USA,5.1,4.4,4.4,"Ameli et al. 2021 Fig. 2, bubble labels",0.044000000000000004
+UK,United Kingdom,4.4,4.3,4.3,"Ameli et al. 2021 Fig. 2, bubble labels",0.043
+WEU,Western Europe,4.2,4.0,4.0,"Ameli et al. 2021 Fig. 2, bubble labels",0.04
+JAP,Japan,2.4,1.8,1.8,"Ameli et al. 2021 Fig. 2, bubble labels",0.018000000000000002

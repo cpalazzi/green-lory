@@ -47,9 +47,16 @@ This file is the technical reference for architecture, modeling conventions, cos
 ## Process Coupling and Constraints
 - `main.main()` solves with `extra_functionality=auxiliary.linopy_constraints`.
 - Active guardrails include:
-  - Battery charge/discharge capacity coupling.
-  - Hydrogen storage discharge power linkage to store content/cycling assumptions.
+  - Battery PCS charge/discharge capacity coupling (`battery_pcs_balance`):
+    `p_nom[battery_pcs_charge] == p_nom[battery_pcs_discharge] / efficiency[battery_pcs_discharge]`.
+    Needed because the full PCS cost sits on the charge link while the discharge
+    link carries only a token cost; the lock stops the solver sizing discharge
+    power for free.
   - Link ramp-rate constraints for ammonia synthesis when limits are provided.
+- Storage energy capacity (`compressed_hydrogen_store`, `ammonia`, `battery_storage`)
+  is sized purely by its annualized capital cost. There is no artificial H2
+  discharge-rate / cycling constraint: PyPSA cannot discharge faster than one
+  snapshot, and slower discharge is left free for the optimizer to choose.
 - `ammonia_synthesis` is a multi-port link with fixed stoichiometric/energy coupling through `efficiency` and `efficiency2`.
 
 ## Spatial Cost Implementation Summary
@@ -127,7 +134,7 @@ per-tech overrides for offshore cells (`onshore_land_pct == 0`).
 
 Offshore `build_cost_multiplier` is a piecewise-linear function of bathymetry depth
 with separate curves for **wind** and **plant equipment** techs. The `elevation_m`
-column from `max_capacities.csv` (derived from `model_bathymetry.nc`) is used
+column from `max_capacities_paper_2pct_slope15.csv` (derived from `model_bathymetry.nc`) is used
 as input. Convention: positive = above sea level, negative = below sea level (ocean depth).
 
 Breakpoints and multipliers:
@@ -366,7 +373,7 @@ This keeps each command explicit and works well when password must be entered pe
 ### ARC run controls (env vars)
 `arc/jobs/01_run_global.sh` supports:
 - `ARC_TECH_YAML`
-- `ARC_INTEREST_CSV`
+- `ARC_OVERRIDE_CSV`
 - `ARC_LAND_CSV`
 - `ARC_LOCATIONS_CSV`
 - `ARC_MAX_SNAPSHOTS`
@@ -407,7 +414,7 @@ rsync -avz --delete \
 For large data files (max_capacities CSV, weather NetCDFs), use explicit `scp`:
 
 ```bash
-scp data/max_capacities.csv \
+scp data/max_capacities_paper_2pct_slope15.csv \
   engs2523@arc-login.arc.ox.ac.uk:/data/engs-df-green-ammonia/engs2523/green-lory/data/
 ```
 
@@ -455,7 +462,7 @@ factor, which would reduce ammonia storage requirements and slightly lower
 LCOA in locations with strongly seasonal VRE. This would also require
 modelling port/logistics scheduling.
 
-## Repo Cleanup and Rebaseline Plan (2026-05-05)
+## Repo Cleanup and Relabel Plan (2026-05-05)
 
 Goal: make the repository usable by a human operator after the land-availability
 rework, cleanly separate expensive ARC-only geospatial preprocessing from cheap
@@ -463,16 +470,16 @@ derived land-cap variants, clean up stale results/helpers, and then re-sync ARC
 from a rationalized local layout.
 
 Important current findings:
-- The heavy land-processing stage should now build reusable baseline tables with
+- The heavy land-processing stage should now build reusable 100pct tables with
   no land competition baked in; land competition becomes a cheap CSV rescaling
   step performed after the protected-area/slope overlay is finished.
-- The first required baseline matrix is:
-  - `max_capacities_baseline_slope15.csv`
-  - `max_capacities_baseline_allslopes.csv`
+- The first required full-availability matrix is:
+  - `max_capacities_100pct_slope15.csv`
+  - `max_capacities_100pct_allslopes.csv`
 - The first required derived competition variants are:
   - `max_capacities_paper_2pct_slope15.csv`
   - `max_capacities_high_50pct_slope15.csv`
-- The `allslopes` baseline is intended for future runs where steep terrain is
+- The `100pct_allslopes` case is intended for future runs where steep terrain is
   represented through spatially varying build cost rather than hard exclusion.
 - The canonical local data layout is now:
   - top-level `data/model_bathymetry.nc`
@@ -502,17 +509,17 @@ Important current findings:
    - Make `land_competition_fraction` explicit in the notebook/CLI entrypoint
      rather than hidden in `model/land_processing.py` defaults.
    - Treat land competition and slope handling as separate scenario axes:
-     - slope baselines: `baseline_slope15`, `baseline_allslopes`
-     - competition variants: `baseline`, `paper_2pct`, `high_50pct`
-   - Heavy ARC builds should only generate the baseline no-competition files.
-   - Derived competition files should be produced from a baseline CSV via cheap
+     - full-availability cases: `100pct_slope15`, `100pct_allslopes`
+     - competition variants: `paper_2pct_slope15`, `high_50pct_slope15`
+   - Heavy ARC builds should only generate the 100pct no-competition files.
+   - Derived competition files should be produced from a 100pct CSV via cheap
      rescaling, not by rerunning the full geospatial overlay.
    - Ensure the output naming makes both axes legible in downstream runs and ARC
      submissions.
-   - Status 2026-05-05: CLI defaults now target the no-competition baseline;
+   - Status 2026-05-05: CLI defaults now target the no-competition 100pct case;
      `model/land_processing.py --base-csv ...` can derive competition variants
-     from an existing baseline file, and the ARC submission layer should submit
-     `baseline_slope15`, `baseline_allslopes`, `paper_2pct_slope15`, and
+    from an existing 100pct file, and the ARC submission layer should submit
+     `100pct_slope15`, `100pct_allslopes`, `paper_2pct_slope15`, and
      `high_50pct_slope15` as the initial supported matrix.
    - Review gate: confirm the first matrix and naming before broader scenario
      expansion.
@@ -568,11 +575,11 @@ Important current findings:
    - Review gate: approve formula and source assumptions before coding.
 
 8. **Regenerate local inputs after the cleanup lands**
-   - Rebuild the baseline max-capacity tables on ARC with the cleaned path
+   - Rebuild the 100pct max-capacity tables on ARC with the cleaned path
      scheme:
-     - `baseline_slope15`
-     - `baseline_allslopes`
-   - Derive the first competition variants from `baseline_slope15` without
+     - `100pct_slope15`
+     - `100pct_allslopes`
+   - Derive the first competition variants from `100pct_slope15` without
      rerunning the full overlay:
      - `paper_2pct_slope15`
      - `high_50pct_slope15`
@@ -584,9 +591,61 @@ Important current findings:
      `results/`.
    - Remove or archive older quadrant shards and stale scenario folders once the
      replacement outputs are confirmed.
-   - Ensure naming makes scenario dimensions explicit: year, finance mode, land
-     cap case, and any major methodology variant.
+   - Ensure naming makes scenario dimensions explicit: year, cost case, finance
+     case, land cap case, and any major methodology variant.
    - Review gate: agree on retention policy before deletion.
+
+### Current canonical Way 2050 paper-grid labels
+
+Use these labels for the `data/max_capacities_paper_2pct_slope15.csv` land case.
+The cost scope is `flat` or `spatial_<mechanisms>`, where the mechanisms name
+the active override columns. Finance is omitted for standard finance and
+appended after the cost scope for named finance variants such as `amelired`.
+
+| Run label | Tech YAML | Override CSV | Meaning | Status |
+| --- | --- | --- | --- | --- |
+| `way_2050_flat_paper_2pct_slope15` | `inputs/tech_config_ammonia_plant_2050_way_eur.yaml` | none | Standard WAY 2050 finance, no spatial build/water overrides | existing |
+| `way_2050_flat_amelired_4h_paper_2pct_slope15` | `inputs/tech_config_ammonia_plant_2050_way_eur.yaml` | `inputs/amelired_interest_inputs_2050.csv` | Closest Salmon/Verschuur replication target: Ameli reduced-WACC at 4h with flat build/remoteness/water/land | next rerun target |
+| `way_2050_flat_amelired_4h_tracking_paper_2pct_slope15` | `inputs/tech_config_ammonia_plant_2050_way_eur.yaml` + `ARC_PLANT_DIR=basic_ammonia_plant_2050_way_tracking` | `inputs/amelired_interest_inputs_2050.csv` | Same as closest replication target, but enables single-axis tracking PV as described in Verschuur section 4.6 | sensitivity to run |
+| `way_2050_flat_amelired_4h_tracking_nominal_compression_paper_2pct_slope15` | `inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml` + `ARC_PLANT_DIR=basic_ammonia_plant_2050_way_tracking` | `inputs/amelired_interest_inputs_2050.csv` | Same as tracking sensitivity, but keeps 5% compression power draw and removes separate compressor CAPEX to mimic lcoa-opt's bundled/nominal compression treatment | sensitivity to run |
+| `way_2050_spatial_build_remote_water_paper_2pct_slope15` | `inputs/tech_config_ammonia_plant_2050_way_eur.yaml` | `inputs/spatial_cost_inputs.csv` | Standard WAY 2050 finance plus active spatial build multipliers, remoteness, and water costs | canonical label for new outputs |
+| `way_2050_spatial_build_remote_water_amelired_4h_paper_2pct_slope15` | `inputs/tech_config_ammonia_plant_2050_way_eur.yaml` | `inputs/spatial_cost_inputs_amelired_2050.csv` | Spatial sensitivity: Ameli reduced-WACC plus active spatial build/remoteness/water costs at 4h resolution | downloaded locally |
+
+Notes:
+- `scripts/build_ameli_wacc_inputs.py` now defaults to `amelired_*` output filenames for the reduced scenario.
+- Use 4h for Salmon/Verschuur replication comparisons. The paper describes hourly reanalysis weather inputs, but the archived lcoa-opt global runner hard-codes `time_step = 4` and constructs a 2190-snapshot network. Treat 1h Amelired runs as later higher-resolution Green Lory reruns, not the current replication baseline.
+- Single-axis tracking is enabled through the plant folder, not only the YAML: use `ARC_PLANT_DIR=basic_ammonia_plant_2050_way_tracking`.
+- Current hydrogen-compressor CAPEX in the Way YAML is a DEA 2050 gap-fill (`165,300 EUR/MW`), not a Way/lcoa-opt value. The nominal-compression YAML sets compressor overnight CAPEX to `1 EUR/MW`, leaving the `power: 0.05` compression electricity draw unchanged.
+- The matching WAY 2050 paper-grid spatial base is now `inputs/spatial_cost_inputs_way_2050_paper_2pct_slope15.csv` with 52,704 active cells.
+- `inputs/amelired_interest_inputs_2050.csv` and `inputs/spatial_cost_inputs_amelired_2050.csv` have both been regenerated locally from that matching active-cell grid.
+- `inputs/spatial_cost_inputs_amelired_2050.csv` currently has active `interest_rate`, `build_cost_multiplier`, `remoteness_mult`, and `water_cost_usd_per_m3`; `land_cost_usd_per_km2_year` is all zero, so do not include `land` in the run label for this file.
+- Existing local `way_2050_flat_amelired_4h_*` outputs are stale/misleading for paper replication: they predate the battery-storage name fix and their result summaries show varying build multipliers. Rerun `way-2050-flat-amelired-4h` with current code before using it as the replication baseline.
+- When `--locations-input` points at a max-capacity CSV, the builder now ignores zero-capacity rows before coverage checks, so warnings only reflect active-cell mismatches.
+- `notebooks/02_spatial_cost_inputs.ipynb` now rebuilds `tech_rates` from `TECH_YAML` inside the saved notebook source, so it executes cleanly from a fresh kernel again.
+
+### Resolved auxiliary constraint issue (2026-06-11)
+
+The auxiliary design constraint named `compressed_h2_cycling_limit` was inherited
+from the historic lcoa-opt Pyomo helper. Two problems were found:
+
+1. **Dead code.** When the battery links were renamed (`battery_interface_in/out`
+   → `battery_pcs_charge/discharge`), the constraint block in `linopy_constraints`
+   kept selecting `battery_interface_out`, so it `KeyError`'d and was silently
+   skipped. Every existing result already reflects "no such constraint".
+2. **Wrong component and wrong form.** Even if revived, it bound
+   `battery_interface_out` (battery discharge) — not `hydrogen_from_storage` — to
+   `compressed_hydrogen_store` via an equality at a rate whose inverse is ~8760 h
+   (≈ 1 year). That is a battery-cycling heuristic that never made sense for H2
+   and, as an equality, would have pinned discharge power to a glacially slow rate.
+
+**Resolution:** the `compressed_h2_cycling_limit` block was deleted from both the
+active `linopy_constraints` and the legacy `pyomo_constraints`. Realistic storage
+sizing comes from the store's own annualized capital cost, not an artificial
+cycling constraint — a minimum discharge duration of one snapshot is already
+structural, and a maximum duration is irrelevant. The battery PCS charge/discharge
+coupling (also dead from the same rename) was re-activated as `battery_pcs_balance`
+with the current link names. `hydrogen_from_storage` keeps its placeholder near-zero
+capex (discharge power is therefore left effectively unconstrained by design).
 
 10. **Re-run DEA scenarios under the cleaned setup**
    - Produce fresh DEA 2030 flat/spatial and DEA 2050 flat/spatial runs using the

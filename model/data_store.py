@@ -31,8 +31,6 @@ def _apply_unit_suffixes(location_results: Dict[str, Any]) -> Dict[str, Any]:
         "hydrogen_compression",
         "hydrogen_from_storage",
         "ammonia_synthesis",
-        "battery_interface_in",
-        "battery_interface_out",
         "hydrogen_fuel_cell",
     }
     mwh_components = {

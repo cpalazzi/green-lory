@@ -50,8 +50,8 @@ if [[ "$ARC_CLEAN_REMOTE" == "1" ]]; then
 fi
 
 rm -f \
-  data/max_capacities_baseline_slope15.csv \
-  data/max_capacities_baseline_allslopes.csv \
+  data/max_capacities_100pct_slope15.csv \
+  data/max_capacities_100pct_allslopes.csv \
   data/max_capacities_paper_2pct_slope15.csv \
   data/max_capacities_high_50pct_slope15.csv
 
@@ -61,36 +61,6 @@ normalize_partial data/WDPA_Feb2026_Public_shp_0/WDPA_Feb2026_Public_shp-polygon
 normalize_partial data/WDPA_Feb2026_Public_shp_1/WDPA_Feb2026_Public_shp-polygons.shp
 normalize_partial data/WDPA_Feb2026_Public_shp_2/WDPA_Feb2026_Public_shp-polygons.shp
 
-for shard in 0 1 2; do
-  canonical_dir="data/WDPA_Feb2026_Public_shp_\${shard}"
-  legacy_dir="data/external/wdpa/WDPA_Feb2026_Public_shp_\${shard}"
-  mkdir -p "\$canonical_dir"
-  if [[ -d "\$legacy_dir" && ! -f "\$canonical_dir/WDPA_Feb2026_Public_shp-polygons.shp" ]]; then
-    find "\$legacy_dir" -maxdepth 1 -type f -exec mv -f {} "\$canonical_dir"/ \;
-  fi
-done
-
-if [[ -f data/external/gebco/GEBCO_2025_sub_ice.nc ]]; then
-  legacy_gebco_size="$(stat -c %s data/external/gebco/GEBCO_2025_sub_ice.nc)"
-  canonical_gebco_size="0"
-  if [[ -f data/GEBCO_2025_sub_ice.nc ]]; then
-    canonical_gebco_size="$(stat -c %s data/GEBCO_2025_sub_ice.nc)"
-  fi
-  if [[ ! -f data/GEBCO_2025_sub_ice.nc || "\$legacy_gebco_size" -gt "\$canonical_gebco_size" ]]; then
-    mkdir -p data
-    rm -f data/GEBCO_2025_sub_ice.nc
-    mv data/external/gebco/GEBCO_2025_sub_ice.nc data/GEBCO_2025_sub_ice.nc
-  fi
-fi
-
-if [[ -f data/weather_data/model_bathymetry.nc && ! -f data/model_bathymetry.nc ]]; then
-  mv data/weather_data/model_bathymetry.nc data/model_bathymetry.nc
-fi
-
-rm -f data/max_capacities_full_land_constraints.csv
-rm -rf data/external/wdpa
-rmdir data/external/gebco 2>/dev/null || true
-rmdir data/external 2>/dev/null || true
 EOF
 )
 

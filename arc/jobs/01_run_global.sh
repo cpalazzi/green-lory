@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=green-lory-global
-#SBATCH --partition=medium
+#SBATCH --partition=short
 #SBATCH --clusters=all
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=370G
-#SBATCH --time=2-00:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=carlo.palazzi@eng.ox.ac.uk
 
@@ -92,8 +92,8 @@ if [[ -n "$LOCATIONS_ARG" ]]; then
 fi
 
 export ARC_TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
-export ARC_INTEREST_CSV="${ARC_INTEREST_CSV:-}"
-export ARC_LAND_CSV="${ARC_LAND_CSV:-data/max_capacities.csv}"
+export ARC_OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
+export ARC_LAND_CSV="${ARC_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
 export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
 
 bash arc/arc_check_run_inputs.sh "${ARC_LOCATIONS_CSV:-}" >/dev/null
@@ -177,7 +177,7 @@ ensure_feasibility = ensure_feasibility_raw not in {"0", "false", "no"}
 result_df = run_global(
     locations=locations,
     land_csv=os.environ.get("ARC_LAND_CSV"),
-    interest_csv=(os.environ.get("ARC_INTEREST_CSV") or "").strip() or None,
+    override_csv=(os.environ.get("ARC_OVERRIDE_CSV") or "").strip() or None,
     tech_yaml=os.environ.get("ARC_TECH_YAML"),
     time_step=time_step,
     max_snapshots=max_snapshots,

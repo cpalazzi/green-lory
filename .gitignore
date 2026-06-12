@@ -41,4 +41,5 @@ references/
 !/scripts/README.md
 !/scripts/**/.gitkeep
 !/scripts/fetch_travel_time.py
+!/scripts/build_ameli_wacc_inputs.py
 !/scripts/merge_global_results.py

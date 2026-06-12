@@ -365,8 +365,8 @@ def get_results_dict_for_excel(n, scale, aggregation_count=1, operating=False, t
 
     # Get the energy flows
     primary = n.links_t.p0 * scale
-    secondary = (n.links_t.p2 * scale).drop(columns=['hydrogen_from_storage', 'electrolysis', 'battery_interface_in',
-                                                     'battery_interface_out', 'hydrogen_fuel_cell'])
+    secondary = (n.links_t.p2 * scale).drop(columns=['hydrogen_from_storage', 'electrolysis', 'battery_pcs_charge',
+                                                     'battery_pcs_discharge', 'hydrogen_fuel_cell'])
 
     # Rescale the energy flows (I know there's hard coding here but these numbers should never change!):
     primary['hydrogen_compression'] /= HYDROGEN_HHV_MWH_PER_T
@@ -380,8 +380,8 @@ def get_results_dict_for_excel(n, scale, aggregation_count=1, operating=False, t
         'electrolysis': 'Electrolysis (MW)',
         'hydrogen_compression': 'Hydrogen to storage (t/h)',
         'hydrogen_from_storage': 'Hydrogen from storage (t/h)',
-        'battery_interface_in': 'Battery Charge (MW)',
-        'battery_interface_out': 'Battery Discharge (MW)',
+        'battery_pcs_charge': 'Battery Charge (MW)',
+        'battery_pcs_discharge': 'Battery Discharge (MW)',
         'hydrogen_fuel_cell': 'Power from Fuel cell (MW)',
         'ammonia_synthesis': 'Ammonia synthesis power consumption (MW)'
     }, inplace=True)
@@ -684,15 +684,9 @@ def pyomo_constraints(network, snapshots):
 
     # The battery constraint is built here - it doesn't need a special function because it doesn't depend on time
     network.model.battery_interface = pm.Constraint(
-        rule=lambda model: network.model.link_p_nom['battery_interface_in'] ==
-                           network.model.link_p_nom['battery_interface_out'] /
-                           network.links.efficiency["battery_interface_out"])
-
-    # Constrain the maximum discharge of the H2 storage relative to its size
-    time_step_cycle = 4/8760*0.5*0.5  # Factor 0.5 for half-hourly time step, 0.5 for oversized storage
-    network.model.cycling_limit = pm.Constraint(
-        rule=lambda model: network.model.link_p_nom['battery_interface_out'] ==
-                           network.model.store_e_nom['compressed_hydrogen_store'] * time_step_cycle)
+        rule=lambda model: network.model.link_p_nom['battery_pcs_charge'] ==
+                           network.model.link_p_nom['battery_pcs_discharge'] /
+                           network.links.efficiency["battery_pcs_discharge"])
 
     # The ammonia synthesis ramp constraints are functions of time, so we need to create some pyomo sets/parameters to represent them.
     network.model.t = pm.Set(initialize=network.snapshots)
@@ -761,28 +755,22 @@ def linopy_constraints(network, snapshots):
                 name="shared_wind_land_cap",
             )
 
-    # Keep the battery interface charger/discharger capacities coupled
+    # Couple the battery PCS charger/discharger ratings.  The full PCS capital cost
+    # sits on battery_pcs_charge; battery_pcs_discharge carries only a token cost to
+    # avoid double-counting, so without this lock the solver would size discharge
+    # power for free.  (Links were renamed from the legacy battery_interface_in/out.)
     try:
-        batt_in = model["Link-p_nom"].sel(name="battery_interface_in")
-        batt_out = model["Link-p_nom"].sel(name="battery_interface_out")
+        batt_charge = model["Link-p_nom"].sel(name="battery_pcs_charge")
+        batt_discharge = model["Link-p_nom"].sel(name="battery_pcs_discharge")
     except KeyError:
-        batt_in = batt_out = None
+        batt_charge = batt_discharge = None
 
-    if batt_in is not None and batt_out is not None:
-        eff = network.links.at["battery_interface_out", "efficiency"]
-        model.add_constraints(batt_in == batt_out / eff, name="battery_interface_balance")
-
-        try:
-            store_cap = model["Store-e_nom"].sel(name="compressed_hydrogen_store")
-        except KeyError:
-            store_cap = None
-
-        if store_cap is not None:
-            time_step_cycle = 4 / 8760 * 0.5 * 0.5
-            model.add_constraints(
-                batt_out == store_cap * time_step_cycle,
-                name="compressed_h2_cycling_limit",
-            )
+    if batt_charge is not None and batt_discharge is not None:
+        eff = network.links.at["battery_pcs_discharge", "efficiency"]
+        model.add_constraints(
+            batt_charge == batt_discharge / eff,
+            name="battery_pcs_balance",
+        )
 
     # Enforce ammonia synthesis ramp limits
     try:

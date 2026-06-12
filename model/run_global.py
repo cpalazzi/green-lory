@@ -40,7 +40,6 @@ LOGGER = logging.getLogger(__name__)
 REPO_ROOT = data_paths.REPO_ROOT
 DEFAULT_WEATHER_DIR = data_paths.WEATHER_DATA_DIR
 DEFAULT_LAND_CSV = data_paths.MAX_CAPACITIES_FILE
-DEFAULT_INTEREST_CSV = REPO_ROOT / "inputs" / "spatial_cost_inputs.csv"
 DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_dea.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
 _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
@@ -228,19 +227,15 @@ def _apply_finance_overrides(
             # Compute effective overnight cost with build_cost_multiplier applied
             tech_cost = raw.get("tech_cost_per_mw")
             build_cost = raw.get("build_cost_per_mw")
-            overnight_base = raw.get("overnight_cost_per_mw")
-            
-            if overnight_base is None:
-                continue
-            
-            # Use new split if available, otherwise fall back to total overnight cost
-            if tech_cost is not None and build_cost is not None:
-                effective_build_cost = float(build_cost) * float(build_mult)
-                overnight = float(tech_cost) + effective_build_cost
-            else:
-                # Backward compat: if no split, apply multiplier to entire overnight cost
-                overnight = float(overnight_base) * float(build_mult)
-            
+            if tech_cost is None or build_cost is None:
+                raise ValueError(
+                    f"Tech '{normalized}' must define tech_cost_per_mw and build_cost_per_mw; "
+                    "unsplit overnight-cost inputs are no longer supported."
+                )
+
+            effective_build_cost = float(build_cost) * float(build_mult)
+            overnight = float(tech_cost) + effective_build_cost
+
             annual_out = _annualised_capital_cost(overnight, float(rate), lifetime_years, fixed_om_fraction)
 
             if component_type == "generator":
@@ -259,17 +254,15 @@ def _apply_finance_overrides(
             # Compute effective overnight cost with build_cost_multiplier applied
             tech_cost = raw.get("tech_cost_per_mwh")
             build_cost = raw.get("build_cost_per_mwh")
-            overnight_base = raw.get("overnight_cost_per_mwh")
-            
-            if overnight_base is None:
-                continue
-            
-            if tech_cost is not None and build_cost is not None:
-                effective_build_cost = float(build_cost) * float(build_mult)
-                overnight = float(tech_cost) + effective_build_cost
-            else:
-                overnight = float(overnight_base) * float(build_mult)
-            
+            if tech_cost is None or build_cost is None:
+                raise ValueError(
+                    f"Store '{normalized}' must define tech_cost_per_mwh and build_cost_per_mwh; "
+                    "unsplit overnight-cost inputs are no longer supported."
+                )
+
+            effective_build_cost = float(build_cost) * float(build_mult)
+            overnight = float(tech_cost) + effective_build_cost
+
             annual = _annualised_capital_cost(overnight, float(rate), lifetime_years, fixed_om_fraction)
             if normalized in network.stores.index:
                 network.stores.loc[normalized, "capital_cost"] = annual * float(time_step) * float(aggregation_count)
@@ -409,6 +402,7 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         lcoa_col,
         "annual_ammonia_demand_mwh",
         "annual_ammonia_production_t",
+        "gridless_ammonia_production_t",
         total_cost_col,
         "build_cost_multiplier",
         "build_cost_pct",
@@ -435,9 +429,18 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "offshore_area_km2",
         "elevation_m",
         "area_cap_mw",
-        "max_gridless_ammonia_capacity_t",
-        "max_gridless_ammonia_capacity_mtpa",
-        "gridless_capacity_scale_factor",
+        "max_ammonia_capacity_t",
+        "max_ammonia_capacity_mtpa",
+        "max_onshore_ammonia_capacity_t",
+        "max_onshore_ammonia_capacity_mtpa",
+        "max_gridless_onshore_ammonia_capacity_t",
+        "max_gridless_onshore_ammonia_capacity_mtpa",
+        "capacity_limit_technology",
+        "onshore_capacity_limit_technology",
+        "renewable_capacity_scale_factor",
+        "onshore_renewable_capacity_scale_factor",
+        "wind_mw_per_t_nh3",
+        "solar_mw_per_t_nh3",
         "protected_area_pct",
         "slope_suitable_land_pct",
         "steep_slope_pct",
@@ -448,6 +451,8 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "wind_area_used_km2",
         "wind_onshore_area_km2",
         "wind_offshore_area_km2",
+        "wind_density_mw_per_km2",
+        "solar_density_mw_per_km2",
         "max_power_wind_mw",
         "max_power_solar_mw",
     ]
@@ -690,8 +695,6 @@ def _apply_spatial_solar_density_from_tech_config(
                 updated["max_power_wind_mw"]
                 + updated["max_power_solar_mw"]
             )
-        # Backward-compatible aliases used by older plotting/report helpers.
-        updated["solar_max_capacity"] = updated["max_power_solar_mw"]
 
     return updated
 
@@ -841,13 +844,6 @@ def _match_land_row(land_df: pd.DataFrame, lat: float, lon: float) -> pd.Series 
         return None
     return subset.iloc[0]
 
-
-LEGACY_POWER_CAP_COLUMN_MAP = {
-    "solar_max_capacity": "solar",
-    "wind_max_capacity": "wind",
-}
-
-
 def _set_component_cap(network, tech_name: str, cap_value: float) -> float:
     if cap_value is None or not np.isfinite(float(cap_value)):
         return 0.0
@@ -892,13 +888,6 @@ def _extract_capacity_caps_from_row(row: pd.Series) -> Tuple[Dict[str, float], D
             tech = key[len("max_energy_") : -len("_mwh")]
             if tech:
                 energy_caps[tech] = max(0.0, float(value))
-
-    for legacy_col, tech in LEGACY_POWER_CAP_COLUMN_MAP.items():
-        if tech in power_caps:
-            continue
-        value = row.get(legacy_col)
-        if pd.notna(value):
-            power_caps[tech] = max(0.0, float(value))
 
     return power_caps, energy_caps
 
@@ -963,34 +952,17 @@ def _apply_land_caps(
         str(col).lower().startswith("max_power_") and str(col).lower().endswith("_mw")
         for col in row.index
     )
-    has_legacy_power_caps = any(
-        pd.notna(row.get(col))
-        for col in LEGACY_POWER_CAP_COLUMN_MAP
-    )
     if has_explicit_power_caps:
         for tech in WIND_GENERATORS + ["solar"]:
-            power_caps.setdefault(tech, 0.0)
-    elif has_legacy_power_caps:
-        for tech in WIND_GENERATORS:
             power_caps.setdefault(tech, 0.0)
 
     if power_caps or energy_caps:
         total_cap = _apply_component_caps(network, power_caps, energy_caps)
         return (total_cap if total_cap > 0 else None), row
 
-    fallback = row.get("max_capacity_mw")
-    if pd.isna(fallback):
-        fallback = row.get("max_capacity")
-    if pd.notna(fallback):
-        fallback_val = max(0.0, float(fallback))
-        fallback_caps = {
-            "wind": fallback_val,
-            "solar": fallback_val,
-        }
-        total_cap = _apply_component_caps(network, fallback_caps, {})
-        return (total_cap if total_cap > 0 else None), row
-
-    return None, row
+    raise ValueError(
+        f"Land CSV row at ({lat}, {lon}) must include explicit max_power_*_mw or max_energy_*_mwh columns."
+    )
 
 
 def _apply_land_caps_fast(
@@ -1009,34 +981,17 @@ def _apply_land_caps_fast(
         str(col).lower().startswith("max_power_") and str(col).lower().endswith("_mw")
         for col in row.index
     )
-    has_legacy_power_caps = any(
-        pd.notna(row.get(col))
-        for col in LEGACY_POWER_CAP_COLUMN_MAP
-    )
     if has_explicit_power_caps:
         for tech in WIND_GENERATORS + ["solar"]:
-            power_caps.setdefault(tech, 0.0)
-    elif has_legacy_power_caps:
-        for tech in WIND_GENERATORS:
             power_caps.setdefault(tech, 0.0)
 
     if power_caps or energy_caps:
         total_cap = _apply_component_caps(network, power_caps, energy_caps)
         return (total_cap if total_cap > 0 else None), row
 
-    fallback = row.get("max_capacity_mw")
-    if pd.isna(fallback):
-        fallback = row.get("max_capacity")
-    if pd.notna(fallback):
-        fallback_val = max(0.0, float(fallback))
-        fallback_caps = {
-            "wind": fallback_val,
-            "solar": fallback_val,
-        }
-        total_cap = _apply_component_caps(network, fallback_caps, {})
-        return (total_cap if total_cap > 0 else None), row
-
-    return None, row
+    raise ValueError(
+        f"Land CSV row at ({lat}, {lon}) must include explicit max_power_*_mw or max_energy_*_mwh columns."
+    )
 
 
 def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
@@ -1052,8 +1007,6 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
         return float(value) * scale
 
     onshore = _maybe("onshore_land_pct", 1.0)
-    if onshore is None:
-        onshore = _maybe("onshore_fraction", 100.0)
     if onshore is not None:
         metadata["land_onshore_pct"] = onshore
         metadata["offshore_sea_pct"] = max(0.0, 100.0 - onshore)
@@ -1074,21 +1027,16 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
     if bathymetry_depth is not None:
         metadata["elevation_m"] = bathymetry_depth
 
-    max_capacity = _maybe("max_capacity_mw")
-    if max_capacity is None:
-        max_capacity = _maybe("max_capacity")
-    if max_capacity is not None:
-        metadata["area_cap_mw"] = max_capacity
+    max_power_solar_mw = _maybe("max_power_solar_mw")
+    max_power_wind_mw = _maybe("max_power_wind_mw")
+    if max_power_solar_mw is not None or max_power_wind_mw is not None:
+        metadata["area_cap_mw"] = (max_power_solar_mw or 0.0) + (max_power_wind_mw or 0.0)
 
     solar_area = _maybe("solar_area_km2")
-    if solar_area is None:
-        solar_area = _maybe("onshore_area_km2")
     if solar_area is not None:
         metadata["solar_area_used_km2"] = solar_area
 
     wind_area = _maybe("wind_area_km2")
-    if wind_area is None:
-        wind_area = _maybe("onshore_wind_area_km2")
     if wind_area is not None:
         metadata["wind_area_used_km2"] = wind_area
 
@@ -1101,6 +1049,8 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
         "constrained_onshore_area_km2",
         "wind_onshore_area_km2",
         "wind_offshore_area_km2",
+        "wind_density_mw_per_km2",
+        "solar_density_mw_per_km2",
     ]:
         value = _maybe(column)
         if value is not None:
@@ -1135,49 +1085,171 @@ def _numeric_from_mapping(mapping: Dict[str, Any] | pd.Series, *names: str) -> f
     return None
 
 
-def _estimate_max_gridless_ammonia_capacity(
+def _bounded_fraction(value: float) -> float:
+    return float(np.clip(float(value), 0.0, 1.0))
+
+
+def _gridless_fraction_from_results(results: Dict[str, Any], annual_t: float) -> float:
+    gridless_t = _numeric_from_mapping(results, "gridless_ammonia_production_t")
+    if gridless_t is not None:
+        return _bounded_fraction(gridless_t / annual_t)
+
+    gridless_fraction = _numeric_from_mapping(results, "gridless_energy_fraction")
+    if gridless_fraction is not None:
+        return _bounded_fraction(gridless_fraction)
+
+    grid_energy_mwh = _numeric_from_mapping(results, "grid_energy_mwh")
+    if grid_energy_mwh is not None and grid_energy_mwh <= 1e-9:
+        return 1.0
+
+    grid_mw = _numeric_from_mapping(results, "grid_mw", "grid")
+    if grid_mw is not None and grid_mw <= 1e-9:
+        return 1.0
+
+    return math.nan
+
+
+def _renewable_capacity_scale(
+    wind_used_mw: float,
+    solar_used_mw: float,
+    wind_cap_mw: float | None,
+    solar_cap_mw: float | None,
+) -> tuple[float, str]:
+    scale_limits: list[tuple[str, float]] = []
+    missing_required_cap = False
+
+    if wind_used_mw > 1e-9:
+        if wind_cap_mw is None:
+            missing_required_cap = True
+        else:
+            scale_limits.append(("wind", max(0.0, float(wind_cap_mw)) / wind_used_mw))
+
+    if solar_used_mw > 1e-9:
+        if solar_cap_mw is None:
+            missing_required_cap = True
+        else:
+            scale_limits.append(("solar", max(0.0, float(solar_cap_mw)) / solar_used_mw))
+
+    if missing_required_cap:
+        return math.nan, "unknown"
+    if not scale_limits:
+        return 1.0, "none"
+
+    technology, scale_factor = min(scale_limits, key=lambda item: item[1])
+    return max(0.0, float(scale_factor)), technology
+
+
+def _onshore_wind_cap_from_land_row(land_row: pd.Series | None) -> float | None:
+    if land_row is None:
+        return None
+
+    wind_onshore_area_km2 = _numeric_from_mapping(land_row, "wind_onshore_area_km2")
+    wind_density_mw_per_km2 = _numeric_from_mapping(land_row, "wind_density_mw_per_km2")
+    if wind_onshore_area_km2 is None or wind_density_mw_per_km2 is None:
+        return None
+
+    return max(0.0, float(wind_onshore_area_km2)) * max(0.0, float(wind_density_mw_per_km2))
+
+
+def _capacity_from_scale(annual_t: float, scale_factor: float) -> float:
+    if not math.isfinite(scale_factor):
+        return math.nan
+    return annual_t * scale_factor
+
+
+def _estimate_paper_ammonia_capacity(
     results: Dict[str, Any],
     land_row: pd.Series | None,
-) -> Dict[str, float]:
-    gridless_t = _numeric_from_mapping(results, "gridless_ammonia_production_t")
-    if gridless_t is None:
-        annual_t = _numeric_from_mapping(results, "annual_ammonia_production_t")
-        gridless_fraction = _numeric_from_mapping(results, "gridless_energy_fraction")
-        if annual_t is None or gridless_fraction is None:
-            return {}
-        gridless_t = annual_t * gridless_fraction
+) -> Dict[str, Any]:
+    """Estimate paper-style land-constrained ammonia capacity from solved sizing.
 
-    gridless_t = max(0.0, float(gridless_t))
-    if land_row is None:
-        return {
-            "gridless_capacity_scale_factor": 1.0,
-            "max_gridless_ammonia_capacity_t": gridless_t,
-            "max_gridless_ammonia_capacity_mtpa": gridless_t / 1_000_000.0,
-        }
-
-    scale_limits: list[float] = []
-
-    wind_used_mw = _numeric_from_mapping(results, "wind_mw", "wind") or 0.0
-    wind_cap_mw = _numeric_from_mapping(land_row, "max_power_wind_mw", "wind_max_capacity")
-    if wind_used_mw > 1e-9 and wind_cap_mw is not None:
-        scale_limits.append(max(0.0, wind_cap_mw) / wind_used_mw)
-
-    solar_used_mw = (
-        (_numeric_from_mapping(results, "solar_mw", "solar") or 0.0)
-        + (_numeric_from_mapping(results, "solar_tracking_mw", "solar_tracking") or 0.0)
-    )
-    solar_cap_mw = _numeric_from_mapping(land_row, "max_power_solar_mw", "solar_max_capacity")
-    if solar_used_mw > 1e-9 and solar_cap_mw is not None:
-        scale_limits.append(max(0.0, solar_cap_mw) / solar_used_mw)
-
-    scale_factor = min(scale_limits) if scale_limits else 1.0
-    scale_factor = max(0.0, float(scale_factor))
-    max_capacity_t = gridless_t * scale_factor
-    return {
-        "gridless_capacity_scale_factor": scale_factor,
-        "max_gridless_ammonia_capacity_t": max_capacity_t,
-        "max_gridless_ammonia_capacity_mtpa": max_capacity_t / 1_000_000.0,
+    The solved renewable capacities encode the full plant efficiency chain, so this
+    scales ammonia output by available renewable build-out rather than recreating
+    electrolyser, storage, Haber-Bosch, or ASU conversion logic.
+    """
+    output: Dict[str, Any] = {
+        "max_ammonia_capacity_t": math.nan,
+        "max_ammonia_capacity_mtpa": math.nan,
+        "max_onshore_ammonia_capacity_t": math.nan,
+        "max_onshore_ammonia_capacity_mtpa": math.nan,
+        "max_gridless_onshore_ammonia_capacity_t": math.nan,
+        "max_gridless_onshore_ammonia_capacity_mtpa": math.nan,
+        "capacity_limit_technology": "unknown",
+        "onshore_capacity_limit_technology": "unknown",
+        "renewable_capacity_scale_factor": math.nan,
+        "onshore_renewable_capacity_scale_factor": math.nan,
+        "wind_mw_per_t_nh3": math.nan,
+        "solar_mw_per_t_nh3": math.nan,
     }
+
+    annual_t = _numeric_from_mapping(results, "annual_ammonia_production_t")
+    if annual_t is None or annual_t <= 0:
+        for column in [
+            "max_ammonia_capacity_t",
+            "max_ammonia_capacity_mtpa",
+            "max_onshore_ammonia_capacity_t",
+            "max_onshore_ammonia_capacity_mtpa",
+            "max_gridless_onshore_ammonia_capacity_t",
+            "max_gridless_onshore_ammonia_capacity_mtpa",
+        ]:
+            output[column] = 0.0
+        return output
+
+    annual_t = float(annual_t)
+    wind_used_mw = max(0.0, _numeric_from_mapping(results, "wind_mw", "wind") or 0.0)
+    solar_used_mw = max(
+        0.0,
+        (_numeric_from_mapping(results, "solar_mw", "solar") or 0.0)
+        + (_numeric_from_mapping(results, "solar_tracking_mw", "solar_tracking") or 0.0),
+    )
+
+    output["wind_mw_per_t_nh3"] = wind_used_mw / annual_t
+    output["solar_mw_per_t_nh3"] = solar_used_mw / annual_t
+
+    wind_cap_mw = None
+    solar_cap_mw = None
+    if land_row is not None:
+        wind_cap_mw = _numeric_from_mapping(land_row, "max_power_wind_mw")
+        solar_cap_mw = _numeric_from_mapping(land_row, "max_power_solar_mw")
+
+    scale_factor, limit_technology = _renewable_capacity_scale(
+        wind_used_mw,
+        solar_used_mw,
+        wind_cap_mw,
+        solar_cap_mw,
+    )
+    max_capacity_t = _capacity_from_scale(annual_t, scale_factor)
+
+    output["renewable_capacity_scale_factor"] = scale_factor
+    output["capacity_limit_technology"] = limit_technology
+    output["max_ammonia_capacity_t"] = max_capacity_t
+    output["max_ammonia_capacity_mtpa"] = max_capacity_t / 1_000_000.0
+
+    wind_onshore_cap_mw = _onshore_wind_cap_from_land_row(land_row)
+    onshore_scale_factor, onshore_limit_technology = _renewable_capacity_scale(
+        wind_used_mw,
+        solar_used_mw,
+        wind_onshore_cap_mw,
+        solar_cap_mw,
+    )
+    max_onshore_capacity_t = _capacity_from_scale(annual_t, onshore_scale_factor)
+
+    output["onshore_renewable_capacity_scale_factor"] = onshore_scale_factor
+    output["onshore_capacity_limit_technology"] = onshore_limit_technology
+    output["max_onshore_ammonia_capacity_t"] = max_onshore_capacity_t
+    output["max_onshore_ammonia_capacity_mtpa"] = max_onshore_capacity_t / 1_000_000.0
+
+    gridless_fraction = _gridless_fraction_from_results(results, annual_t)
+    if math.isfinite(max_onshore_capacity_t) and math.isfinite(gridless_fraction):
+        gridless_onshore_capacity_t = max_onshore_capacity_t * gridless_fraction
+    else:
+        gridless_onshore_capacity_t = math.nan
+
+    output["max_gridless_onshore_ammonia_capacity_t"] = gridless_onshore_capacity_t
+    output["max_gridless_onshore_ammonia_capacity_mtpa"] = (
+        gridless_onshore_capacity_t / 1_000_000.0
+    )
+    return output
 
 
 def _compose_interest_rates(
@@ -1283,7 +1355,7 @@ def _resample_weather_frame(weather_frame: pd.DataFrame, timestep_hours: int) ->
 def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]]:
     """Return (lat, lon) pairs for all cells with positive capacity.
 
-    Filters on ``max_capacity_mw > 0`` (or legacy equivalents).
+    Filters on ``max_capacity_mw > 0``.
     Ocean cells are included — offshore cost premiums are handled via
     ``build_cost_multiplier`` in the spatial cost inputs CSV.
     """
@@ -1291,8 +1363,6 @@ def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]
         raise ValueError("A max-capacities CSV is required when no explicit locations are supplied.")
     if "max_capacity_mw" in land_df.columns:
         filtered = land_df[land_df["max_capacity_mw"] > 0]
-    elif "max_capacity" in land_df.columns:
-        filtered = land_df[land_df["max_capacity"] > 0]
     elif "availability" in land_df.columns:
         filtered = land_df[land_df["availability"] > 0]
     else:
@@ -1461,37 +1531,12 @@ def _run_single_location(
             results["land_cost_usd_per_km2_year"] = float(land_cost_usd_per_km2_year)
             results[f"land_cost_{currency_code}_per_t"] = land_cost_per_t
 
-    # Backfill explicit currency columns if legacy outputs are returned.
-    currency_code = os.environ.get("GREEN_LORY_CURRENCY", "USD").strip().upper()
-    currency_slug = currency_code.lower()
-    if f"lcoa_{currency_slug}_per_t" not in results:
-        if "lcoa_currency_per_t" in results:
-            results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_currency_per_t"]
-        elif "lcoa_usd_per_t" in results:
-            results[f"lcoa_{currency_slug}_per_t"] = results["lcoa_usd_per_t"]
-    if "currency" not in results:
-        results["currency"] = currency_code
-    if (
-        f"total_cost_{currency_slug}_per_year" not in results
-        and "total_cost_currency_per_year" in results
-    ):
-        results[f"total_cost_{currency_slug}_per_year"] = results[
-            "total_cost_currency_per_year"
-        ]
-    if (
-        f"total_cost_{currency_slug}_per_year" not in results
-        and "total_cost_usd_per_year" in results
-    ):
-        results[f"total_cost_{currency_slug}_per_year"] = results[
-            "total_cost_usd_per_year"
-        ]
-
     if land_cap is not None:
         results["land_capacity_cap"] = land_cap
         results["land_capacity_cap_mw"] = land_cap
     if land_row is not None:
         results.update(_land_metadata_from_row(land_row))
-    results.update(_estimate_max_gridless_ammonia_capacity(results, land_row))
+    results.update(_estimate_paper_ammonia_capacity(results, land_row))
     results["interest_overrides_applied"] = bool(overrides)
 
     # Headline cost splits (no double counting).
@@ -1636,7 +1681,7 @@ def run_global(
     locations: Sequence[Tuple[float, float]] | None = None,
     weather_dir: str | Path | None = None,
     land_csv: str | Path | None = None,
-    interest_csv: str | Path | None = None,
+    override_csv: str | Path | None = None,
     tech_yaml: str | Path | None = None,
     aggregation_count: int = 1,
     time_step: float = 1.0,
@@ -1658,10 +1703,10 @@ def run_global(
         weather_dir: Directory containing the NetCDF stacks consumed by `location_tools`.
         land_csv: CSV with at least `Latitude` and `Longitude` columns plus any available
             max-capacity metadata.
-        interest_csv: CSV with `lat`, `lon`, `tech`, `interest_rate` columns to override
-            financing assumptions per technology. Additional spatial columns such as
-            `build_cost_multiplier`, `land_cost_usd_per_km2_year`, and
-            `water_cost_usd_per_m3` are supported when present.
+        override_csv: Optional per-location override CSV. Supported columns include
+            `interest_rate`, `build_cost_multiplier`, `land_cost_usd_per_km2_year`,
+            `water_cost_usd_per_m3`, depth/remoteness multipliers, and related spatial
+            cost inputs when present.
         tech_yaml: Optional tech-config YAML used to source financing defaults and currency metadata.
         aggregation_count: Snapshot aggregation factor forwarded to the weather loader.
         time_step: Duration of each snapshot in hours.
@@ -1685,7 +1730,7 @@ def run_global(
     with _quiet_logging(quiet), _override_env("GREEN_LORY_SOLVER_LOG", "0", quiet):
         weather_dir_path = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
         land_csv_path = _resolve_path(land_csv or DEFAULT_LAND_CSV)
-        interest_csv_path = _resolve_path(interest_csv) if interest_csv is not None else None
+        override_csv_path = _resolve_path(override_csv) if override_csv is not None else None
         tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
 
         tech_inputs = _load_tech_inputs(tech_yaml_path)
@@ -1715,7 +1760,7 @@ def run_global(
             str(requested_threads),
             threads_per_worker is not None,
         ):
-            interest_df = _load_interest_table(interest_csv_path)
+            interest_df = _load_interest_table(override_csv_path)
 
             # ── Pre-computation phase ──────────────────────────────────────
             t_pre = time.perf_counter()
@@ -1932,11 +1977,11 @@ if __name__ == "__main__":
         help="Path to the tech-config YAML (overrides the built-in default).",
     )
     parser.add_argument(
-        "--interest-csv",
+        "--override-csv",
         type=str,
         default=None,
         help=(
-            "Spatial cost inputs CSV (lat,lon,tech,interest_rate); may also include "
+            "Spatial override CSV (lat,lon,tech plus optional interest/build/water/land columns); may include "
             "build_cost_multiplier, land_cost_usd_per_km2_year, and water_cost_usd_per_m3. "
             "Generate with notebook 02_spatial_cost_inputs."
         ),
@@ -2000,7 +2045,7 @@ if __name__ == "__main__":
     results_df = run_global(
         locations=requested_locations,
         tech_yaml=args.tech_yaml,
-        interest_csv=args.interest_csv,
+        override_csv=args.override_csv,
         land_csv=args.land_csv,
         time_step=args.time_step,
         max_snapshots=args.max_snapshots,

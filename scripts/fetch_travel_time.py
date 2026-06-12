@@ -28,7 +28,7 @@ BATCH_SIZE = 500  # features per GEE request
 CELL_SIZE_DEG = 1.0  # grid resolution
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MAX_CAPACITIES_CSV = REPO_ROOT / "data" / "max_capacities.csv"
+MAX_CAPACITIES_CSV = REPO_ROOT / "data" / "max_capacities_paper_2pct_slope15.csv"
 OUTPUT_CSV = REPO_ROOT / "data" / "travel_time_by_cell.csv"
 
 

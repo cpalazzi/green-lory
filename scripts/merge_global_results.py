@@ -16,9 +16,18 @@ if str(REPO_ROOT) not in sys.path:
 
 
 REQUIRED_COLUMNS = [
-    "max_gridless_ammonia_capacity_t",
-    "max_gridless_ammonia_capacity_mtpa",
-    "gridless_capacity_scale_factor",
+    "max_ammonia_capacity_t",
+    "max_ammonia_capacity_mtpa",
+    "max_onshore_ammonia_capacity_t",
+    "max_onshore_ammonia_capacity_mtpa",
+    "max_gridless_onshore_ammonia_capacity_t",
+    "max_gridless_onshore_ammonia_capacity_mtpa",
+    "capacity_limit_technology",
+    "onshore_capacity_limit_technology",
+    "renewable_capacity_scale_factor",
+    "onshore_renewable_capacity_scale_factor",
+    "wind_mw_per_t_nh3",
+    "solar_mw_per_t_nh3",
     "protected_area_pct",
     "slope_suitable_land_pct",
     "land_exclusion_factor",

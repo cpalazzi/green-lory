@@ -49,14 +49,14 @@ COMPONENT_NAME_MAP = {
     "HydrogenCompression": "hydrogen_compression",
     "HydrogenFromStorage": "hydrogen_from_storage",
     "HB": "ammonia_synthesis",
-    "BatteryInterfaceIn": "battery_interface_in",
-    "BatteryInterfaceOut": "battery_interface_out",
+    "BatteryInterfaceIn": "battery_pcs_charge",
+    "BatteryInterfaceOut": "battery_pcs_discharge",
     "HydrogenFuelCell": "hydrogen_fuel_cell",
     "PenaltyLink": "penalty_link",
     "CompressedH2Store": "compressed_hydrogen_store",
-    "Battery": "battery",
-    "BatteryStorage": "battery",
-    "battery_storage": "battery",
+    "Battery": "battery_storage",
+    "BatteryStorage": "battery_storage",
+    "battery_storage": "battery_storage",
     "AccumulatedPenalty": "accumulated_penalty",
 }
 
@@ -115,7 +115,6 @@ def generate_network(
     costs=None,
     efficiencies=None,
     time_step=0.5,
-    tech_config_overrides=None,
 ):
     """Generates a network that can be used to run several cases"""
     # ==================================================================================================================
@@ -136,8 +135,6 @@ def generate_network(
 
     # Techno-economic inputs are expected to be pre-processed into the CSV bundle
     # (annuitised capital_cost, correct link cost basis, efficiencies, etc.).
-    # tech_config_overrides is retained in the signature for compatibility but is
-    # intentionally not applied here.
 
     if costs is not None:
         for equipment, row in costs.items():
@@ -233,7 +230,6 @@ def main(
     extension="",
     aggregation_count=1,
     time_step=1.0,
-    tech_config_overrides=None,
     interest_rates=None,
     water_cost_usd_per_m3=None,
     water_usage_m3_per_t=None,
@@ -252,7 +248,6 @@ def main(
             "basic_ammonia_plant",
             aggregation_count=aggregation_count,
             time_step=time_step,
-            tech_config_overrides=tech_config_overrides,
         )
 
     # Note: All flows are in MW or MWh, conversions for hydrogen use HYDROGEN_HHV_MWH_PER_T (39.4 MWh/t)

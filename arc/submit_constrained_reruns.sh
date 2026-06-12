@@ -14,7 +14,18 @@ Options:
   --land-tag <tag>    Optional suffix for run/output naming. If omitted, infer
                       from --land-csv when the file is named max_capacities_<tag>.csv.
   --scenario <name>   Submit only the named scenario. May be passed multiple times.
+                      Closest Salmon/Verschuur replication uses way-2050-flat-amelired-4h.
   --include-2030      Also submit DEA 2030 flat and spatial scenarios.
+
+Available scenarios:
+  way-2050-flat
+  way-2050-flat-amelired-4h
+  way-2050-spatial-build-remote-water
+  way-2050-spatial-build-remote-water-amelired-4h
+  dea-2050-flat
+  dea-2050-spatial-build-remote-water
+  dea-2030-flat
+  dea-2030-spatial-build-remote-water
 EOF
 }
 
@@ -80,17 +91,21 @@ fi
 
 mkdir -p logs results
 
-normalize_job_id() {
+job_id_from_parsable() {
   local raw_job_id="$1"
   printf '%s\n' "${raw_job_id%%;*}"
+}
+
+job_cluster_from_parsable() {
+  local raw_job_id="$1"
+  if [[ "$raw_job_id" == *";"* ]]; then
+    printf '%s\n' "${raw_job_id#*;}"
+  fi
 }
 
 infer_land_tag() {
   local stem
   stem="$(basename "${LAND_CSV%.*}")"
-  if [[ "$stem" == "max_capacities" ]]; then
-    return 0
-  fi
   if [[ "$stem" == max_capacities_* ]]; then
     printf '%s\n' "${stem#max_capacities_}"
   fi
@@ -104,8 +119,20 @@ slug_for_path() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '_'
 }
 
+time_step_tag() {
+  local time_step="$1"
+  time_step="${time_step%0}"
+  time_step="${time_step%.}"
+  printf '%sh\n' "${time_step//./p}"
+}
+
 if [[ -z "$LAND_TAG" ]]; then
   LAND_TAG="$(infer_land_tag || true)"
+fi
+
+if [[ -z "$LAND_TAG" ]]; then
+  echo "Could not infer land tag from $LAND_CSV. Use a max_capacities_<land_case>.csv filename or pass --land-tag." >&2
+  exit 2
 fi
 
 LAND_TAG_RUN=""
@@ -154,36 +181,68 @@ should_submit_scenario() {
   return 1
 }
 
+AVAILABLE_SCENARIOS=(
+  "way-2050-flat"
+  "way-2050-flat-amelired-4h"
+  "way-2050-spatial-build-remote-water"
+  "way-2050-spatial-build-remote-water-amelired-4h"
+  "dea-2050-flat"
+  "dea-2050-spatial-build-remote-water"
+  "dea-2030-flat"
+  "dea-2030-spatial-build-remote-water"
+)
+
+validate_scenario_filters() {
+  local requested known match
+
+  for requested in "${SCENARIO_FILTER[@]}"; do
+    match=false
+    for known in "${AVAILABLE_SCENARIOS[@]}"; do
+      if [[ "$requested" == "$known" ]]; then
+        match=true
+        break
+      fi
+    done
+    if [[ "$match" != "true" ]]; then
+      echo "Unknown scenario: $requested" >&2
+      echo "Available scenarios:" >&2
+      printf '  %s\n' "${AVAILABLE_SCENARIOS[@]}" >&2
+      exit 2
+    fi
+  done
+}
+
 submit_scenario() {
   local run_label="$1"
   local tech_yaml="$2"
   local plant_dir="$3"
-  local finance_mode="$4"
+  local override_csv="$4"
   local output_csv="$5"
+  local time_step="${6:-1.0}"
   local qualified_run_label
   local qualified_output_csv
 
   qualified_run_label="$(qualify_run_label "$run_label")"
   qualified_output_csv="$(qualify_output_csv "$output_csv")"
 
-  local interest_csv=""
-  if [[ "$finance_mode" == "spatial" ]]; then
-    interest_csv="inputs/spatial_cost_inputs.csv"
-  fi
-
   local -a scenario_env=(
     "ARC_TECH_YAML=$tech_yaml"
     "ARC_PLANT_DIR=$plant_dir"
     "ARC_LAND_CSV=$LAND_CSV"
-    "ARC_INTEREST_CSV=$interest_csv"
+    "ARC_OVERRIDE_CSV=$override_csv"
+    "ARC_TIME_STEP=$time_step"
     "ARC_FAIL_FAST=${ARC_FAIL_FAST:-0}"
   )
 
   echo
   echo "Scenario: $qualified_run_label"
   echo "  land csv: $LAND_CSV"
+  echo "  time step: $(time_step_tag "$time_step")"
   if [[ -n "$LAND_TAG" ]]; then
     echo "  land tag: $LAND_TAG"
+  fi
+  if [[ -n "$override_csv" ]]; then
+    echo "  override csv: $override_csv"
   fi
   env "${scenario_env[@]}" bash arc/arc_check_run_inputs.sh >/dev/null
 
@@ -194,43 +253,85 @@ submit_scenario() {
     "90 180 east2"
   )
   local -a job_ids=()
-  local lo hi quadrant qlabel job_id raw_job_id
+  local merge_cluster=""
+  local lo hi quadrant qlabel job_id job_cluster raw_job_id
   for spec in "${bounds[@]}"; do
     read -r lo hi quadrant <<<"$spec"
     qlabel="${qualified_run_label}-${quadrant}"
     raw_job_id=$(env "${scenario_env[@]}" sbatch --parsable --export="ALL,ARC_LON_MIN=${lo},ARC_LON_MAX=${hi}" arc/jobs/01_run_global.sh "$qlabel")
-    job_id=$(normalize_job_id "$raw_job_id")
+    job_id=$(job_id_from_parsable "$raw_job_id")
+    job_cluster=$(job_cluster_from_parsable "$raw_job_id")
+    if [[ -n "$job_cluster" ]]; then
+      if [[ -z "$merge_cluster" ]]; then
+        merge_cluster="$job_cluster"
+      elif [[ "$merge_cluster" != "$job_cluster" ]]; then
+        echo "Shard jobs for ${qualified_run_label} landed on multiple clusters: ${merge_cluster} and ${job_cluster}" >&2
+        exit 2
+      fi
+    fi
     job_ids+=("$job_id")
-    echo "  ${quadrant}: ${job_id}"
+    echo "  ${quadrant}: ${job_id}${job_cluster:+;${job_cluster}}"
   done
 
   local deps
   deps=$(IFS=:; echo "${job_ids[*]}")
   local merge_job
-  merge_job=$(sbatch --parsable \
-    --dependency="afterok:${deps}" \
-    --job-name="merge-${qualified_run_label}" \
-    --output="logs/merge-${qualified_run_label}-%j.log" \
-    --wrap="cd '$REPO_ROOT' && '$ARC_PYTHON' scripts/merge_global_results.py '$qualified_run_label' --output '$qualified_output_csv'")
+  local -a merge_sbatch_args=(
+    --parsable
+    --partition=short
+    --time=01:00:00
+    --dependency="afterok:${deps}"
+    --job-name="merge-${qualified_run_label}"
+    --output="logs/merge-${qualified_run_label}-%j.log"
+    --wrap="cd '$REPO_ROOT' && '$ARC_PYTHON' scripts/merge_global_results.py '$qualified_run_label' --output '$qualified_output_csv'"
+  )
+  if [[ -n "$merge_cluster" ]]; then
+    merge_sbatch_args=(--clusters="$merge_cluster" "${merge_sbatch_args[@]}")
+  fi
+  merge_job=$(sbatch "${merge_sbatch_args[@]}")
   echo "  merge: ${merge_job} -> ${qualified_output_csv}"
 }
+
+validate_scenario_filters
 
 if should_submit_scenario "way-2050-flat"; then
   submit_scenario \
     "way-2050-flat" \
     "inputs/tech_config_ammonia_plant_2050_way_eur.yaml" \
     "basic_ammonia_plant_2050_way" \
-    "none" \
-    "results/way_2050_flat/global_run_results_1h_2050.csv"
+    "" \
+    "results/way_2050_flat/global_run_results_1h_2050.csv" \
+    "1.0"
 fi
 
-if should_submit_scenario "way-2050-spatial"; then
+if should_submit_scenario "way-2050-flat-amelired-4h"; then
   submit_scenario \
-    "way-2050-spatial" \
+    "way-2050-flat-amelired-4h" \
     "inputs/tech_config_ammonia_plant_2050_way_eur.yaml" \
     "basic_ammonia_plant_2050_way" \
-    "spatial" \
-    "results/way_2050_spatial/global_run_results_1h_2050.csv"
+    "inputs/amelired_interest_inputs_2050.csv" \
+    "results/way_2050_flat_amelired_4h/global_run_results_4h_2050.csv" \
+    "4.0"
+fi
+
+if should_submit_scenario "way-2050-spatial-build-remote-water"; then
+  submit_scenario \
+    "way-2050-spatial-build-remote-water" \
+    "inputs/tech_config_ammonia_plant_2050_way_eur.yaml" \
+    "basic_ammonia_plant_2050_way" \
+    "inputs/spatial_cost_inputs.csv" \
+    "results/way_2050_spatial_build_remote_water/global_run_results_1h_2050.csv" \
+    "1.0"
+fi
+
+if should_submit_scenario "way-2050-spatial-build-remote-water-amelired-4h"; then
+  submit_scenario \
+    "way-2050-spatial-build-remote-water-amelired-4h" \
+    "inputs/tech_config_ammonia_plant_2050_way_eur.yaml" \
+    "basic_ammonia_plant_2050_way" \
+    "inputs/spatial_cost_inputs_amelired_2050.csv" \
+    "results/way_2050_spatial_build_remote_water_amelired_4h/global_run_results_4h_2050.csv" \
+    "4.0"
 fi
 
 if should_submit_scenario "dea-2050-flat"; then
@@ -238,17 +339,19 @@ if should_submit_scenario "dea-2050-flat"; then
     "dea-2050-flat" \
     "inputs/tech_config_ammonia_plant_2050_dea.yaml" \
     "basic_ammonia_plant_2050" \
-    "none" \
-    "results/dea_2050_flat/global_run_results_1h_2050.csv"
+    "" \
+    "results/dea_2050_flat/global_run_results_1h_2050.csv" \
+    "1.0"
 fi
 
-if should_submit_scenario "dea-2050-spatial"; then
+if should_submit_scenario "dea-2050-spatial-build-remote-water"; then
   submit_scenario \
-    "dea-2050-spatial" \
+    "dea-2050-spatial-build-remote-water" \
     "inputs/tech_config_ammonia_plant_2050_dea.yaml" \
     "basic_ammonia_plant_2050" \
-    "spatial" \
-    "results/dea_2050_spatial/global_run_results_1h_2050.csv"
+    "inputs/spatial_cost_inputs.csv" \
+    "results/dea_2050_spatial_build_remote_water/global_run_results_1h_2050.csv" \
+    "1.0"
 fi
 
 if [[ "$INCLUDE_2030" == "true" ]]; then
@@ -257,16 +360,18 @@ if [[ "$INCLUDE_2030" == "true" ]]; then
       "dea-2030-flat" \
       "inputs/tech_config_ammonia_plant_2030_dea.yaml" \
       "basic_ammonia_plant" \
-      "none" \
-      "results/dea_2030_flat/global_run_results_1h_2030.csv"
+      "" \
+      "results/dea_2030_flat/global_run_results_1h_2030.csv" \
+      "1.0"
   fi
 
-  if should_submit_scenario "dea-2030-spatial"; then
+  if should_submit_scenario "dea-2030-spatial-build-remote-water"; then
     submit_scenario \
-      "dea-2030-spatial" \
+      "dea-2030-spatial-build-remote-water" \
       "inputs/tech_config_ammonia_plant_2030_dea.yaml" \
       "basic_ammonia_plant" \
-      "spatial" \
-      "results/dea_2030_spatial/global_run_results_1h_2030.csv"
+      "inputs/spatial_cost_inputs.csv" \
+      "results/dea_2030_spatial_build_remote_water/global_run_results_1h_2030.csv" \
+      "1.0"
   fi
 fi
