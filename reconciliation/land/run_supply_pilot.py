@@ -254,9 +254,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("land", "weather-run", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
-    parser.add_argument("--experiment-config", type=Path,
-                        default=ROOT / "reconciliation/land/supply_curve/config_v1.json")
-    parser.add_argument("--pv-policy", choices=list(PV_POLICIES), default="both")
+    parser.add_argument("--experiment-config", type=Path, required=True)
+    parser.add_argument("--pv-policy", choices=list(PV_POLICIES), required=True)
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()
     if args.output.exists():

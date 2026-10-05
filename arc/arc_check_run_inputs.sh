@@ -6,9 +6,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 LOCATIONS_CSV="${1:-${ARC_LOCATIONS_CSV:-}}"
-TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
+TECH_YAML="${ARC_TECH_YAML:?ARC_TECH_YAML must name the technology YAML of the run}"
 OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
-LAND_CSV="${ARC_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
+LAND_CSV="${ARC_LAND_CSV:?ARC_LAND_CSV must point at a centred land table (cell_anchor=center)}"
 
 echo "Preflight checks"
 echo "  repo:        $REPO_ROOT"

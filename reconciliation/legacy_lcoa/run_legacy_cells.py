@@ -451,9 +451,9 @@ def run_cell(cell, variant_name, variant, wacc_name, wacc_rate, args, aux, plc, 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--era", choices=list(ERAS), default="june2023",
-                   help="which frozen state: june2023 = cd56c11 (default), may2023 = 94de8ce; sets the default "
-                        "--source and the variant table")
+    p.add_argument("--era", choices=list(ERAS), default="may2023",
+                   help="which frozen state: may2023 = 94de8ce (default; replicates the archived table), "
+                        "june2023 = cd56c11; sets the default --source and the variant table")
     p.add_argument("--source", type=Path, default=None, help="frozen legacy source directory (default from --era)")
     p.add_argument("--weather-dir", type=Path, default=None,
                    help="directory with Solar*.nc, SolarTracking*.nc, WindPowers*.nc (full stack or subsets)")

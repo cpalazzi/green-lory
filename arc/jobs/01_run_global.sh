@@ -96,9 +96,9 @@ if [[ -n "$LOCATIONS_ARG" ]]; then
   export ARC_LOCATIONS_CSV="$LOCATIONS_ARG"
 fi
 
-export ARC_TECH_YAML="${ARC_TECH_YAML:-inputs/tech_config_ammonia_plant_2030_dea.yaml}"
+export ARC_TECH_YAML="${ARC_TECH_YAML:?ARC_TECH_YAML must name the technology YAML of the run}"
 export ARC_OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
-export ARC_LAND_CSV="${ARC_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
+export ARC_LAND_CSV="${ARC_LAND_CSV:?ARC_LAND_CSV must point at a centred land table (cell_anchor=center)}"
 export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
 
 bash arc/arc_check_run_inputs.sh "${ARC_LOCATIONS_CSV:-}" >/dev/null

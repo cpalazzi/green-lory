@@ -7,8 +7,8 @@
 #      flat water 3.3245 USD2018/t) with its contract;
 #   4. submit the four green-porpoise runs with the settings of the September comparisons.
 set -euo pipefail
-R="${KEYRUN_RELEASE:-/data/engs-df-green-ammonia/engs2523/green-lory-releases/20260928-keyruns-v4}"
-RUN_ID="${KEYRUN_ID:-20260928-v3}"
+R="${KEYRUN_RELEASE:?KEYRUN_RELEASE must name the pinned release to run from}"
+RUN_ID="${KEYRUN_ID:?KEYRUN_ID must name the accepted global run id (20260928-v4)}"
 LEG=/data/engs-df-green-ammonia/engs2523/green-lory-releases/20260924-legacy-v4
 NT=/data/engs-df-green-ammonia/engs2523/green-lory-releases/20260916-network-tools-v1
 ROOT=/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/keyruns_20260923_v1

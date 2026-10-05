@@ -1,19 +1,22 @@
 #!/bin/bash
-#SBATCH --job-name=glr-land-supply-3-v1
-#SBATCH --clusters=htc
+#SBATCH --job-name=glr-land-supply-3
+#SBATCH --clusters=all
 #SBATCH --partition=short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=32G
-#SBATCH --time=02:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=carlo.palazzi@eng.ox.ac.uk
+# Three-cell finite-site supply curves; the v6 pilots needed 8-9 h, hence the 12 h limit.
 set -euo pipefail
 : "${SUPPLY_RELEASE:?Pinned source release required}"
-: "${SUPPLY_LAND:?Versioned common land CSV required}"
+: "${SUPPLY_LAND:?Centred land CSV (cell_anchor=center) required}"
 : "${SUPPLY_WEATHER_RUN:?Completed fixed-PV run containing hashed weather required}"
 : "${SUPPLY_OUTPUT:?New output directory required}"
+: "${SUPPLY_CONFIG:?Experiment config required, e.g. reconciliation/land/supply_curve/config_v3_center.json}"
+: "${SUPPLY_PV_POLICY:?PV policy required (fixed-only, tracking-only or both)}"
 cd "$SUPPLY_RELEASE"
 scontrol show job "$SLURM_JOB_ID"
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
@@ -22,5 +25,5 @@ export GRB_LICENSE_FILE=/apps/system/easybuild/software/Gurobi/10.0.3-GCCcore-12
 /data/engs-df-green-ammonia/engs2523/envs/green-lory-env/bin/python \
   reconciliation/land/run_supply_pilot.py --land "$SUPPLY_LAND" \
   --weather-run "$SUPPLY_WEATHER_RUN" --output "$SUPPLY_OUTPUT" \
-  --pv-policy "${SUPPLY_PV_POLICY:-both}" \
-  --experiment-config "${SUPPLY_CONFIG:-reconciliation/land/supply_curve/config_v1.json}"
+  --pv-policy "$SUPPLY_PV_POLICY" \
+  --experiment-config "$SUPPLY_CONFIG"

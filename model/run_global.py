@@ -46,7 +46,9 @@ LOGGER = logging.getLogger(__name__)
 
 REPO_ROOT = data_paths.REPO_ROOT
 DEFAULT_WEATHER_DIR = data_paths.WEATHER_DATA_DIR
-DEFAULT_LAND_CSV = data_paths.MAX_CAPACITIES_FILE
+# Land tables must come from a centred build (23 Sep 2026 or later); earlier tables label
+# each 1-degree cell by the MODIS band one degree south of it.
+REQUIRED_CELL_ANCHOR = "center"
 DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_dea.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
 _LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
@@ -820,19 +822,23 @@ def _load_land_table(path: str | Path | None) -> pd.DataFrame | None:
     df.columns = [col.lower() for col in df.columns]
     expected = {"latitude", "longitude"}
     if not expected.issubset(df.columns):
-        LOGGER.warning("Land CSV %s is missing %s", resolved, expected - set(df.columns))
-        return None
+        raise ValueError(f"Land CSV {resolved} is missing {sorted(expected - set(df.columns))}")
+    anchors = (
+        set(df["cell_anchor"].dropna().astype(str)) if "cell_anchor" in df.columns else set()
+    )
+    if anchors != {REQUIRED_CELL_ANCHOR}:
+        raise ValueError(
+            f"Land CSV {resolved} must be a centred build (cell_anchor={REQUIRED_CELL_ANCHOR}), "
+            f"found {sorted(anchors) if anchors else 'no cell_anchor column'}; tables built "
+            "before 23 Sep 2026 are offset by one degree"
+        )
     # Backfill elevation_m from bathymetry NetCDF when the CSV column is absent or all-NaN.
     if "elevation_m" not in df.columns or df["elevation_m"].isna().all():
         bathymetry_path = data_paths.BATHYMETRY_FILE
         if bathymetry_path.exists():
-            # Sample at the cell centre implied by the table's own anchoring.
-            anchor = (
-                str(df["cell_anchor"].dropna().iloc[0])
-                if "cell_anchor" in df.columns and df["cell_anchor"].notna().any()
-                else "southwest"
+            df = land_processing._attach_bathymetry_depth(
+                df, bathymetry_path, 1.0, REQUIRED_CELL_ANCHOR
             )
-            df = land_processing._attach_bathymetry_depth(df, bathymetry_path, 1.0, anchor)
             LOGGER.info("Backfilled elevation_m from %s", bathymetry_path)
     return df
 
@@ -2183,7 +2189,11 @@ def run_global(
 
     with _quiet_logging(quiet), _override_env("GREEN_LORY_SOLVER_LOG", "0", quiet):
         weather_dir_path = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
-        land_csv_path = _resolve_path(land_csv or DEFAULT_LAND_CSV)
+        if land_csv is None:
+            raise ValueError(
+                "land_csv is required: pass a centred land table (cell_anchor=center)"
+            )
+        land_csv_path = _resolve_path(land_csv)
         override_csv_path = _resolve_path(override_csv) if override_csv is not None else None
         tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
         plant_dir_path = _resolve_path(
@@ -2479,7 +2489,7 @@ if __name__ == "__main__":
             "Generate with notebook 02_spatial_cost_inputs."
         ),
     )
-    parser.add_argument("--land-csv", type=str, default=None, help="Optional override for the max-capacities CSV.")
+    parser.add_argument("--land-csv", type=str, default=None, help="Centred land table (cell_anchor=center); required.")
     parser.add_argument("--output-csv", type=str, default="results/run_global.csv", help="Where to write aggregated results.")
     parser.add_argument(
         "--quiet",

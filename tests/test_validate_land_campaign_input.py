@@ -28,6 +28,7 @@ class ValidateLandCampaignInputTest(unittest.TestCase):
         return {
             "latitude": latitude,
             "longitude": longitude,
+            "cell_anchor": "center",
             "availability": 0.6,
             "area": 100.0,
             "land_competition_fraction": 0.02,
@@ -75,6 +76,7 @@ class ValidateLandCampaignInputTest(unittest.TestCase):
 
         coordinate_payload = "-1.00000000,-2.00000000\n1.00000000,2.00000000"
         self.assertEqual(summary["status"], "passed")
+        self.assertEqual(summary["cell_anchor"], "center")
         self.assertEqual(summary["row_count"], 2)
         self.assertEqual(summary["land_competition_fraction"], 0.02)
         self.assertEqual(
@@ -154,6 +156,16 @@ class ValidateLandCampaignInputTest(unittest.TestCase):
                 row = self._row()
                 row[column] = value
                 self._assert_invalid([row], f"expected {column}")
+
+    def test_rejects_tables_that_are_not_centred_builds(self):
+        missing = self._row()
+        del missing["cell_anchor"]
+        self._assert_invalid([missing], "missing required columns: cell_anchor")
+        for anchor in ("southwest", ""):
+            with self.subTest(anchor=anchor):
+                row = self._row()
+                row["cell_anchor"] = anchor
+                self._assert_invalid([row], "expected cell_anchor='center'")
 
     def test_rejects_nonfinite_or_negative_area_and_capacity(self):
         for column, value, pattern in (

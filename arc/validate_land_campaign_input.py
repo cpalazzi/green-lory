@@ -29,10 +29,14 @@ RENEWABLE_UNION_METHOD_COLUMN = "renewable_union_method"
 RENEWABLE_UNION_METHOD_VERSION_COLUMN = "renewable_union_method_version"
 EXPECTED_RENEWABLE_UNION_METHOD = "classwise_nested_overlap_lower_bound"
 EXPECTED_RENEWABLE_UNION_METHOD_VERSION = "v1"
+# Tables built before 23 Sep 2026 have no cell_anchor column and are offset by one degree.
+CELL_ANCHOR_COLUMN = "cell_anchor"
+EXPECTED_CELL_ANCHOR = "center"
 
 REQUIRED_COLUMNS = (
     "latitude",
     "longitude",
+    CELL_ANCHOR_COLUMN,
     "land_competition_fraction",
     "wind_onshore_area_km2",
     "solar_area_km2",
@@ -199,6 +203,13 @@ def validate_land_campaign_input(
             )
         coordinates.add(coordinate)
 
+        anchor = row.get(CELL_ANCHOR_COLUMN)
+        if anchor != EXPECTED_CELL_ANCHOR:
+            raise LandCampaignInputError(
+                f"Row {row_number}: expected {CELL_ANCHOR_COLUMN}="
+                f"{EXPECTED_CELL_ANCHOR!r}, found {anchor!r}"
+            )
+
         fraction = _number(row, "land_competition_fraction", row_number)
         if not -RANGE_ABS_TOLERANCE <= fraction <= 1.0 + RANGE_ABS_TOLERANCE:
             raise LandCampaignInputError(
@@ -309,6 +320,7 @@ def validate_land_campaign_input(
         )
 
     return {
+        "cell_anchor": EXPECTED_CELL_ANCHOR,
         "coordinate_sha256": _coordinate_sha256(coordinates),
         "file": str(csv_path.expanduser().resolve()),
         "file_sha256": _sha256(csv_path),

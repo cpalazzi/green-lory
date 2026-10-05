@@ -11,14 +11,13 @@ Required:
   --stage <stage>       smoke: 3 cells / 168 simulated hours by default
                         diagnostic: 3 cells / full year
                         global: 4 longitude shards / full year
+  --campaign <id>       Campaign ID.
+  --scenario <id>       Scenario to submit; repeatable.
+  --land-csv <path>     Centred, versioned land table (cell_anchor=center).
 
 Options:
-  --campaign <id>       Campaign ID (default: lory_reconcile_20260722_v1).
-  --scenario <id>       Scenario to submit; repeatable. If omitted, submit both.
   --run-id <id>         Immutable run ID. Default: UTC timestamp + source commit.
   --results-root <path> Campaign result root. Default: results/campaigns/<campaign>.
-  --land-csv <path>     Versioned land table for both scenarios. Default:
-                        data/max_capacities_paper_2pct_slope15.csv.
   --cluster <name>      Pin all jobs for a scenario to one ARC cluster.
   --smoke-hours <n>     Simulated duration for smoke jobs (default: 168 hours).
                         This is 168 snapshots at 1h and 42 snapshots at 4h.
@@ -43,7 +42,7 @@ shards with a wildcard. Every QA/merge job receives its exact input paths.
 EOF
 }
 
-CAMPAIGN_ID="lory_reconcile_20260722_v1"
+CAMPAIGN_ID=""
 RUN_STAGE=""
 RUN_ID=""
 RESULTS_ROOT=""
@@ -120,6 +119,10 @@ done
 
 if [[ "$RUN_STAGE" != "smoke" && "$RUN_STAGE" != "diagnostic" && "$RUN_STAGE" != "global" ]]; then
   echo "--stage must be smoke, diagnostic, or global" >&2
+  exit 2
+fi
+if [[ -z "$CAMPAIGN_ID" || -z "$CAMPAIGN_LAND_CSV" || ${#REQUESTED_SCENARIOS[@]} -eq 0 ]]; then
+  echo "--campaign, --land-csv and at least one --scenario are required" >&2
   exit 2
 fi
 if [[ ! "$CAMPAIGN_ID" =~ ^[a-zA-Z0-9._-]+$ ]]; then
@@ -211,13 +214,6 @@ if [[ -z "$SOURCE_DIFF_SHA256" ]] && git rev-parse --is-inside-work-tree >/dev/n
 fi
 SOURCE_DIFF_SHA256="${SOURCE_DIFF_SHA256:-unknown}"
 
-if [[ ${#REQUESTED_SCENARIOS[@]} -eq 0 ]]; then
-  REQUESTED_SCENARIOS=(
-    "rep_way2050_flat_amelired_4h_tracking_nominal_h2"
-    "central_way2050_flat_amelired_1h_tracking_explicit_compressor_dea_tank"
-  )
-fi
-
 for i in "${!REQUESTED_SCENARIOS[@]}"; do
   for j in "${!REQUESTED_SCENARIOS[@]}"; do
     if (( j >= i )); then
@@ -244,7 +240,7 @@ configure_scenario() {
       TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml"
       PLANT_DIR="basic_ammonia_plant_2050_way_tracking"
       OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="${CAMPAIGN_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
+      LAND_CSV="$CAMPAIGN_LAND_CSV"
       TIME_STEP="4.0"
       LAND_CONSTRAINT="after_solve"
       CAPACITY_RULE="scaled_reference_design"
@@ -265,7 +261,7 @@ configure_scenario() {
       fi
       PLANT_DIR="basic_ammonia_plant_2050_way_tracking"
       OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="${CAMPAIGN_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
+      LAND_CSV="$CAMPAIGN_LAND_CSV"
       TIME_STEP="1.0"
       LAND_CONSTRAINT="after_solve"
       CAPACITY_RULE="scaled_reference_design"
@@ -281,7 +277,7 @@ configure_scenario() {
       TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml"
       PLANT_DIR="basic_ammonia_plant_2050_way_tracking"
       OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="${CAMPAIGN_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
+      LAND_CSV="$CAMPAIGN_LAND_CSV"
       TIME_STEP="1.0"
       LAND_CONSTRAINT="after_solve"
       CAPACITY_RULE="scaled_reference_design"
@@ -297,7 +293,7 @@ configure_scenario() {
       TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml"
       PLANT_DIR="basic_ammonia_plant_2050_way"
       OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="${CAMPAIGN_LAND_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
+      LAND_CSV="$CAMPAIGN_LAND_CSV"
       TIME_STEP="1.0"
       LAND_CONSTRAINT="after_solve"
       CAPACITY_RULE="scaled_reference_design"
