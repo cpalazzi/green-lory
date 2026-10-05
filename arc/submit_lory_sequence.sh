@@ -12,8 +12,9 @@ Required:
                         diagnostic: 3 cells / full year
                         global: 4 longitude shards / full year
   --campaign <id>       Campaign ID.
-  --scenario <id>       Scenario to submit; repeatable.
-  --land-csv <path>     Centred, versioned land table (cell_anchor=center).
+  --scenario <id>       Run id from runs.yaml (runner: green_lory); repeatable.
+  --land-csv <path>     Centred land table; its sha256 must match land_table_sha256
+                        of the run in runs.yaml.
 
 Options:
   --run-id <id>         Immutable run ID. Default: UTC timestamp + source commit.
@@ -31,11 +32,9 @@ Options:
   --dry-run             Validate local source inputs and print commands only.
   -h, --help            Show this help.
 
-Scenarios:
-  rep_way2050_flat_amelired_4h_tracking_nominal_h2
-  central_way2050_flat_amelired_1h_tracking_explicit_compressor_dea_tank
-  oat_way2050_flat_amelired_1h_tracking_nominal_h2
-  oat_way2050_flat_amelired_1h_tracking_explicit_compressor_legacy_tank
+Runs:
+  Every setting of a run is defined in runs.yaml; list them with
+  python3 arc/run_definitions.py list (or table for a side-by-side view).
 
 This wrapper never overwrites an existing run directory and never discovers
 shards with a wildcard. Every QA/merge job receives its exact input paths.
@@ -51,8 +50,6 @@ REQUESTED_CLUSTER="${ARC_CLUSTER:-}"
 SMOKE_HOURS="${ARC_SMOKE_HOURS:-168}"
 GLOBAL_LOCATIONS_CSV="${ARC_GLOBAL_LOCATIONS_CSV:-}"
 DIAGNOSTIC_LOCATIONS_OVERRIDE="${ARC_DIAGNOSTIC_LOCATIONS:-}"
-DEFAULT_COST_SCOPE="flat_amelired_uniform_baseline_water_no_land_rent"
-DEFAULT_EXPECTED_LAND_COMPETITION_FRACTION="${ARC_CAMPAIGN_LAND_COMPETITION_FRACTION:-0.02}"
 RELEASE_SOURCE_INVENTORY="${ARC_RELEASE_INVENTORY:-}"
 MAIL_USER="${ARC_MAIL_USER:-carlo.palazzi@eng.ox.ac.uk}"
 MAIL_TYPE="BEGIN,END,FAIL"
@@ -228,113 +225,14 @@ done
 
 configure_scenario() {
   SCENARIO_ID="$1"
-  COST_SCOPE="$DEFAULT_COST_SCOPE"
-  EXPECTED_LAND_COMPETITION_FRACTION="$DEFAULT_EXPECTED_LAND_COMPETITION_FRACTION"
-  PV_POLICY="both"   # both: tracking generator must be extendable; fixed: it must not be
-  FLAT_WATER_MODEL_PER_M3="1.751012"   # 2 USD2020/m3 x 0.875506: the September 2026 baseline
-  case "$SCENARIO_ID" in
-    rep_way2050_flat_amelired_4h_tracking_nominal_h2)
-      SCENARIO_CLASS="10_replication"
-      SCENARIO_JOB_TOKEN="rep-nomh2"
-      SCENARIO_DESCRIPTION="WAY 2050, flat build/remoteness, Ameli reduced WACC, uniform 2 USD/m3 baseline water reported outside the headline, no land rent, 4-hour weather, tracking PV, nominal compressor CAPEX, legacy bundled hydrogen storage"
-      TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml"
-      PLANT_DIR="basic_ammonia_plant_2050_way_tracking"
-      OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="$CAMPAIGN_LAND_CSV"
-      TIME_STEP="4.0"
-      LAND_CONSTRAINT="after_solve"
-      CAPACITY_RULE="scaled_reference_design"
-      LAND_ALLOCATION="exclusive"
-      TEMPORAL_ACCOUNTING_MODE="legacy_scaled"
-      RAMP_LIMIT_BASIS="legacy_per_snapshot"
-      INCLUDE_SITE_COSTS="0"
-      ;;
-    oat_way2050_flat_amelired_1h_tracking_nominal_h2|oat_way2050_flat_amelired_1h_tracking_explicit_compressor_legacy_tank)
-      SCENARIO_CLASS="15_attribution"
-      SCENARIO_JOB_TOKEN="oat-hourly-nomh2"
-      SCENARIO_DESCRIPTION="Attribution only: hourly resolution with the replication nominal-compressor and bundled-H2-storage cost assumptions; flat build/remoteness, Ameli reduced WACC, no headline water or land rent"
-      TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml"
-      if [[ "$SCENARIO_ID" == *explicit_compressor_legacy_tank ]]; then
-        SCENARIO_JOB_TOKEN="oat-compressor"
-        SCENARIO_DESCRIPTION="Attribution only: explicit compressor CAPEX added to legacy bundled H2 storage at hourly resolution. Deliberate intermediate double-count-risk case, not a recommended central estimate. Flat build/remoteness, Ameli reduced WACC, no headline water or land rent"
-        TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur.yaml"
-      fi
-      PLANT_DIR="basic_ammonia_plant_2050_way_tracking"
-      OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="$CAMPAIGN_LAND_CSV"
-      TIME_STEP="1.0"
-      LAND_CONSTRAINT="after_solve"
-      CAPACITY_RULE="scaled_reference_design"
-      LAND_ALLOCATION="exclusive"
-      TEMPORAL_ACCOUNTING_MODE="snapshot_weighted"
-      RAMP_LIMIT_BASIS="per_hour"
-      INCLUDE_SITE_COSTS="0"
-      ;;
-    central_way2050_flat_amelired_1h_tracking_explicit_compressor_dea_tank)
-      SCENARIO_CLASS="20_central"
-      SCENARIO_JOB_TOKEN="central-deatank"
-      SCENARIO_DESCRIPTION="WAY 2050, flat build/remoteness, Ameli reduced WACC, uniform 2 USD/m3 baseline water included in the headline, no land rent, hourly weather, tracking PV, explicit compressor CAPEX, DEA 2050 tank-only hydrogen storage"
-      TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml"
-      PLANT_DIR="basic_ammonia_plant_2050_way_tracking"
-      OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="$CAMPAIGN_LAND_CSV"
-      TIME_STEP="1.0"
-      LAND_CONSTRAINT="after_solve"
-      CAPACITY_RULE="scaled_reference_design"
-      LAND_ALLOCATION="exclusive"
-      TEMPORAL_ACCOUNTING_MODE="snapshot_weighted"
-      RAMP_LIMIT_BASIS="per_hour"
-      INCLUDE_SITE_COSTS="1"
-      ;;
-    central_way2050_flat_amelired_1h_fixed_explicit_compressor_dea_tank_colocated)
-      SCENARIO_CLASS="20_central"
-      SCENARIO_JOB_TOKEN="central-fixed-coloc"
-      SCENARIO_DESCRIPTION="Central case from 16 September 2026: WAY 2050, flat build/remoteness, Ameli reduced WACC, uniform 2 USD/m3 baseline water included in the headline, no land rent, hourly weather, fixed-tilt PV only (tracking disabled by plant bundle), explicit compressor CAPEX, DEA 2050 tank-only hydrogen storage, co-located wind/PV land (wind exclusive fraction from Denholm 2009)"
-      TECH_YAML="inputs/tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml"
-      PLANT_DIR="basic_ammonia_plant_2050_way"
-      OVERRIDE_CSV="inputs/amelired_interest_inputs_2050.csv"
-      LAND_CSV="$CAMPAIGN_LAND_CSV"
-      TIME_STEP="1.0"
-      LAND_CONSTRAINT="after_solve"
-      CAPACITY_RULE="scaled_reference_design"
-      LAND_ALLOCATION="colocated"
-      TEMPORAL_ACCOUNTING_MODE="snapshot_weighted"
-      RAMP_LIMIT_BASIS="per_hour"
-      INCLUDE_SITE_COSTS="1"
-      ;;
-    gl_dea2050_wacc5_bflat_wflat_land20c_fixed|gl_dea2050_ameli_bflat_wflat_land20c_fixed)
-      SCENARIO_CLASS="30_keyruns"
-      if [[ "$SCENARIO_ID" == *_wacc5_* ]]; then
-        SCENARIO_JOB_TOKEN="key-dea50-wacc5"
-        SCENARIO_DESCRIPTION="Key run 1 (23 Sep 2026): DEA 2050 costs, uniform 5 % WACC, flat build/remoteness, uniform baseline water of 2 EUR2020/m3 (2.284 USD2020 at the ECB 2020 rate) in the headline, no land rent, hourly weather, fixed-tilt PV only, explicit compressor and DEA tank, co-located wind/PV, centred land build at a 20 % share, onshore cells with suitable land"
-        OVERRIDE_CSV="inputs/uniform_interest_inputs_0p05_2050.csv"
-        COST_SCOPE="flat_wacc5_uniform_baseline_water_no_land_rent"
-      else
-        SCENARIO_JOB_TOKEN="key-dea50-ameli"
-        SCENARIO_DESCRIPTION="Key run 2 (23 Sep 2026): DEA 2050 costs, Ameli reduced WACC by country (cells without a September country assignment take the nearest covered cell's rate, see inputs/amelired_interest_fill_2050_center.csv), flat build/remoteness, uniform baseline water of 2 EUR2020/m3 (2.284 USD2020 at the ECB 2020 rate) in the headline, no land rent, hourly weather, fixed-tilt PV only, explicit compressor and DEA tank, co-located wind/PV, centred land build at a 20 % share, onshore cells with suitable land"
-        OVERRIDE_CSV="inputs/amelired_interest_inputs_2050_center.csv"
-        COST_SCOPE="flat_amelired_uniform_baseline_water_no_land_rent"
-      fi
-      TECH_YAML="inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml"
-      PLANT_DIR="basic_ammonia_plant_2050"
-      LAND_CSV="${CAMPAIGN_LAND_CSV:?--land-csv must point at the centred 20 % land table}"
-      EXPECTED_LAND_COMPETITION_FRACTION="0.20"
-      PV_POLICY="fixed"
-      FLAT_WATER_MODEL_PER_M3="2.0"
-      TIME_STEP="1.0"
-      LAND_CONSTRAINT="after_solve"
-      CAPACITY_RULE="scaled_reference_design"
-      LAND_ALLOCATION="colocated"
-      TEMPORAL_ACCOUNTING_MODE="snapshot_weighted"
-      RAMP_LIMIT_BASIS="per_hour"
-      INCLUDE_SITE_COSTS="1"
-      ;;
-    *)
-      echo "Unknown scenario: $SCENARIO_ID" >&2
-      echo "Run with --help to list supported scenarios." >&2
-      exit 2
-      ;;
-  esac
+  # Every per-run setting comes from runs.yaml (see arc/run_definitions.py).
+  local definition
+  if ! definition="$("$VALIDATION_PYTHON" arc/run_definitions.py shell "$SCENARIO_ID")"; then
+    echo "Run 'python3 arc/run_definitions.py list' to see the runs defined in runs.yaml." >&2
+    exit 2
+  fi
+  eval "$definition"
+  LAND_CSV="$CAMPAIGN_LAND_CSV"
 
   if [[ "$RUN_STAGE" == "smoke" ]]; then
     PATH_CLASS="00_smoke"
@@ -420,6 +318,19 @@ validate_explicit_union_area() {
     --expected-land-fraction "$EXPECTED_LAND_COMPETITION_FRACTION"
 }
 
+validate_pinned_sha256() {
+  local label="$1" path="$2" expected="$3"
+  if [[ -z "$expected" || ! -f "$path" ]]; then
+    return 0
+  fi
+  local actual
+  actual="$("$VALIDATION_PYTHON" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$path")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "$label $path has sha256 $actual; runs.yaml pins $expected for $SCENARIO_ID" >&2
+    return 2
+  fi
+}
+
 validate_release_source_inventory() {
   if [[ -z "$RELEASE_SOURCE_INVENTORY" ]]; then
     if $DRY_RUN; then
@@ -501,6 +412,8 @@ validate_scenario_sources() {
     fi
   done
   validate_plant_dir "$PLANT_DIR"
+  validate_pinned_sha256 "Land table" "$LAND_CSV" "$EXPECTED_LAND_TABLE_SHA256"
+  validate_pinned_sha256 "Finance CSV" "$OVERRIDE_CSV" "$EXPECTED_OVERRIDE_CSV_SHA256"
   validate_release_source_inventory
   if [[ "$ALLOW_CONSERVATIVE_UNION_FALLBACK" == "0" ]]; then
     validate_explicit_union_area "$LAND_CSV"

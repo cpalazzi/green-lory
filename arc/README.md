@@ -24,26 +24,41 @@ This folder contains ARC (Oxford) helper scripts for running full global jobs fr
 - `arc/write_campaign_submission.py`: records job IDs separately so the manifest hash cannot race running shards.
 - `scripts/merge_global_results.py`: canonical quadrant merge helper used by ARC workflows.
 
-## Green Lory Reconciliation Campaign
+## Green Lory campaign runs
 
-Use `submit_lory_sequence.sh` for the publication-replication and central-realism
-runs. It is intentionally additive: the older general-purpose wrappers remain
-available, while this path never reuses a mutable shard folder or discovers a
-result with a “latest file” glob.
+Every green-lory surface is defined in `runs.yaml` at the repository root: one
+entry per run id holding every setting (technology YAML, plant bundle, PV
+policy, finance CSV, time step, temporal accounting, ramp basis, site costs,
+water, land share and table, land constraint, capacity rule, allocation).
+`submit_lory_sequence.sh` takes a run id and reads its entry; no run is
+hard-coded in the wrapper. List or compare the runs with
 
-Supported scenarios:
+```bash
+python3 arc/run_definitions.py list
+python3 arc/run_definitions.py table
+```
 
-- `rep_way2050_flat_amelired_4h_tracking_nominal_h2`: four-hour historical replication with tracking PV, nominal compressor CAPEX, legacy bundled H2 storage, legacy-scaled temporal accounting and per-snapshot ramps. Land remains a post-processing capacity calculation using `scaled_reference_design` with the `exclusive` allocation (September name `paper_union`). The flat cost scope uses Ameli reduced WACC, unity build/remoteness multipliers, and uniform baseline water at 2 USD/m3; water is reported but excluded from the replication headline, and no land-rent input is available.
-- `central_way2050_flat_amelired_1h_fixed_explicit_compressor_dea_tank_colocated` (central case since 16 September 2026): hourly, fixed-tilt PV only (plant bundle without tracking), explicit compressor CAPEX, DEA 2050 tank-only H2 storage, snapshot-weighted accounting, and the `colocated` land allocation: wind and PV draw on the same suitable-land budget and only the exclusive fraction of the wind footprint (3 %, Denholm et al. 2009 direct-impact area) competes with PV. Tracking-only is the named sensitivity.
-- `central_way2050_flat_amelired_1h_tracking_explicit_compressor_dea_tank` (September 2026 definition, retained for reproducibility): hourly central case with tracking PV, explicit compressor CAPEX, DEA 2050 tank-only H2 storage, snapshot-weighted temporal accounting and per-hour ramps. Land remains a post-processing capacity calculation using `scaled_reference_design` with the `exclusive` allocation (September name `technology_shared`). The same flat cost scope uses Ameli reduced WACC, unity build/remoteness multipliers, and uniform baseline water at 2 USD/m3; baseline water is included in the headline, while land rent remains unmodelled and zero.
+Green-lory runs defined today:
 
-The `flat_amelired` token is deliberate. These baselines do not use the spatial
-build, remoteness, or water-access columns in
-`inputs/spatial_cost_inputs_amelired_2050.csv`. That combined input belongs in a
-separately named `spatial_build_remote_water_amelired` sensitivity; its current
-land-rent column is also zero.
+- `rep_way2050_flat_amelired_4h_tracking_nominal_h2` (reconciling): green-lory
+  configured like the legacy plant (Way 2050 costs, 4-hour step with legacy
+  store and ramp accounting, nominal compressor, bundled H2 storage, water
+  outside the headline). Its September surface stands; network D used it.
+- `gl_dea2050_wacc5_bflat_wflat_land20c_fixed` (improved, base): DEA 2050
+  costs, uniform 5 % WACC, hourly, fixed-tilt PV, co-located land at a 20 %
+  share, water in the headline.
+- `gl_dea2050_ameli_bflat_wflat_land20c_fixed` (improved, finance
+  sensitivity): as the base with Ameli reduced WACC.
 
-Both scientific scenarios disable the feasibility grid backstop. Conservative
+`runs.yaml` pins the sha256 of each run's land table and finance CSV; the
+wrapper refuses a `--land-csv` or finance file with another hash, and the land
+gate refuses any table that is not a centred build (`cell_anchor=center`).
+
+The `flat` cost scopes are deliberate. These runs do not use the spatial build,
+remoteness or water-access columns in `inputs/spatial_cost_inputs_amelired_2050.csv`;
+those belong in separately defined spatial runs.
+
+All runs disable the feasibility grid backstop. Conservative
 or unversioned renewable-union inputs are allowed only for runtime smoke work.
 Full-year diagnostic and global submissions require the versioned
 `renewable_union_area_km2_classwise_nested_v1` column and fail in preflight if
@@ -53,13 +68,13 @@ spatially resolved, it assumes perfect nested overlap and is a lower bound on
 the physical union, not an exact union. `renewable_union_area_km2` remains a
 numerically identical compatibility alias in newly generated tables.
 
-Start with a local or ARC-side dry run:
+Start with a dry run (local or on ARC):
 
 ```bash
-bash arc/submit_lory_sequence.sh \
-  --stage smoke \
-  --run-id review-only \
-  --dry-run
+bash arc/submit_lory_sequence.sh --dry-run --stage smoke \
+  --campaign <campaign> \
+  --scenario gl_dea2050_wacc5_bflat_wflat_land20c_fixed \
+  --land-csv /data/<group>/<user>/green-lory-campaigns/land_center_20260923_v1/max_capacities_center_20pct_slope15.csv
 ```
 
 Local dry runs validate the tracked YAML, override, diagnostic-cell, and plant
@@ -68,29 +83,12 @@ Non-dry submissions require the full ARC preflight to pass. Preflight also
 requires the interest-only override to cover every explicit diagnostic cell or
 every positive-capacity global land cell.
 
-The intended gated sequence is:
-
-```bash
-# Three cells over 168 simulated hours: operational check.
-bash arc/submit_lory_sequence.sh --stage smoke
-
-# Same three cells over the full weather year: scientific comparison. Point to
-# the immutable 2% table produced for this campaign.
-bash arc/submit_lory_sequence.sh \
-  --stage diagnostic \
-  --land-csv /data/<group>/<user>/green-lory-campaigns/<campaign>/land/paper_2pct_slope15.csv
-
-# Submit one global baseline only after reviewing its diagnostic result.
-bash arc/submit_lory_sequence.sh \
-  --stage global \
-  --land-csv /data/<group>/<user>/green-lory-campaigns/<campaign>/land/paper_2pct_slope15.csv \
-  --scenario rep_way2050_flat_amelired_4h_tracking_nominal_h2
-
-bash arc/submit_lory_sequence.sh \
-  --stage global \
-  --land-csv /data/<group>/<user>/green-lory-campaigns/<campaign>/land/paper_2pct_slope15.csv \
-  --scenario central_way2050_flat_amelired_1h_tracking_explicit_compressor_dea_tank
-```
+The intended gated sequence is smoke (three cells, 168 simulated hours), then
+diagnostic (the same cells over the full year), then global, each with the same
+`--campaign`, `--scenario` and `--land-csv`; the global stage of the key runs
+also took `--global-locations` with the 16,509 onshore cells that have suitable
+land (`land_center_20260923_v1/locations_onshore_suitable_center_20260923.csv`).
+Submit a global stage only after reviewing its diagnostic result.
 
 Every invocation receives a unique UTC/source run ID by default. Passing
 `--run-id` is supported, but the wrapper refuses an existing destination.
@@ -111,8 +109,10 @@ Campaign results are stored under:
 ```text
 results/campaigns/<campaign>/
 ├── 00_smoke/<scenario>/runs/<run-id>/smoke/
-├── 10_replication/<scenario>/runs/<run-id>/<diagnostic-or-global>/
-└── 20_central/<scenario>/runs/<run-id>/<diagnostic-or-global>/
+├── 10_replication/<run id>/runs/<run-id>/<diagnostic-or-global>/
+└── 30_keyruns/<run id>/runs/<run-id>/<diagnostic-or-global>/
+
+(The class directory is the run's `results_class` in `runs.yaml`.)
 ```
 
 Each run contains a byte-immutable `manifest.json`, a separate `submission.json`
@@ -131,14 +131,15 @@ values contradict the manifest scope, or a failure-sidecar CSV exists.
 Useful controls:
 
 - `--campaign`, `--run-id`, and `--results-root` set immutable output identity.
-- `--land-csv` pins both scenarios to one versioned campaign land table; the
-  manifest hashes that exact file.
+- `--land-csv` names the centred land table; it must match the
+  `land_table_sha256` of every requested run, and the manifest hashes it.
 - `--cluster` pins every shard and merge/QA job to one ARC cluster. Without it,
   the first returned cluster is used for all remaining jobs in that scenario.
 - `--smoke-hours` changes the short-run simulated duration. The 168-hour
   default becomes 168 snapshots in the hourly central case and 42 snapshots in
   the four-hour replication case.
-- `--scenario` is repeatable; omitting it selects both baseline scenarios.
+- `--scenario` takes a run id from `runs.yaml` and is repeatable; `--campaign`,
+  `--scenario` and `--land-csv` are required.
 - `ARC_CAMPAIGN_THREADS_PER_WORKER`, `ARC_CAMPAIGN_DIAGNOSTIC_WORKERS`, and
   `ARC_CAMPAIGN_GLOBAL_WORKERS` control worker sizing.
 
@@ -327,10 +328,10 @@ You can override defaults without editing scripts:
 - `ARC_REPO_DIR` (default: `$ARC_WORK_BASE/green-lory`)
 - `ARC_ENV_PREFIX` (default: `$ARC_WORK_BASE/envs/green-lory-env`)
 - `ARC_ANACONDA_MODULE` (default: `Anaconda3/2024.06-1`)
-- `ARC_TECH_YAML` (default: `inputs/tech_config_ammonia_plant_2030_dea.yaml`)
+- `ARC_TECH_YAML` (required: the technology YAML of the run)
 - `ARC_OVERRIDE_CSV` (default: unset / no overrides)
 - `ARC_OVERRIDE_MODE` (default: `none`; alternatives: `spatial`, `custom`)
-- `ARC_LAND_CSV` (default: `data/max_capacities_paper_2pct_slope15.csv`)
+- `ARC_LAND_CSV` (required: a centred land table, `cell_anchor=center`)
 - `ARC_LOCATIONS_CSV` (optional location subset)
 - `ARC_MAX_SNAPSHOTS` (optional smoke-test cap)
 - `ARC_TIME_STEP` (default: `1.0`; set by constrained scenarios, `4.0` for Salmon/Verschuur Amelired replication)

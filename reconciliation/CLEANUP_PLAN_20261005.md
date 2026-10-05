@@ -49,7 +49,7 @@ no queued jobs; the test suite passed (184 tests).
 |---|---|---|---|
 | 1 | Commit the worktree directly on `main` as area commits; one branch, no PR (decided 5 Oct) | 45 min | done 5 Oct |
 | 2 | Decisions a-f (§2) | you | |
-| 3 | Fix the run hazards (§5) | 1 h | 1 |
+| 3 | Fix the run hazards (§5, all but item 6) and define runs as data in `runs.yaml` (§2e) | 1 h | done 5 Oct |
 | 4 | Fetch the accepted ARC outputs (key surfaces, legacy key table, centred land tables; about 50 MB of summaries) so they exist in two places | 15 min | socket |
 | 5 | Build the final evidence: `three_cells_v3`, one network digest (A2, E, D, four key networks), the centred land comparison and maps | 2-3 h | 4 |
 | 6 | Optional compute: corrected run B and legacy key run at 20 % (§2f) | post-processing + 2 network jobs (4 CPUs, 2 h each, `arc`) | 2f |
@@ -99,6 +99,8 @@ e. **Runs are defined as data, not switches (decided 5 Oct).** One run-definitio
    backstop, the `aggregation_count` plumbing, the legacy `max_*` column family (after
    editing the QA gate), and the run-time PV-density recomputation once (c) is settled.
    `exclusive` allocation, the in-solve land constraint and solved-quantity capacity stay.
+   Implemented 5 Oct: `runs.yaml`, read by `arc/run_definitions.py`; the wrapper's dry-run output
+   is byte-identical to the preset version for the three runs kept.
 
 f. **Optional symmetry runs.** Recommend one: the corrected run B (reconciling costs with the
    green-lory land method on the centred 2 % table). B is the most-cited divergent network

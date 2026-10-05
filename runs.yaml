@@ -1,0 +1,177 @@
+# Run definitions: every setting of the runs we keep, one entry per run id.
+#
+# - runner: green_lory entries are read by arc/submit_lory_sequence.sh --scenario <id>; the run
+#   manifest records the resolved values. `python arc/run_definitions.py table` prints them side
+#   by side.
+# - reconciliation/run_store.csv records each execution (jobs, release, status, outputs) under
+#   the same id; this file says what a run is, the run store says when and where it ran.
+# - Paths are relative to the repository root. The land table is passed with --land-csv because
+#   its location differs between ARC and a laptop; land_table_sha256 pins which table it must be.
+# - Ids follow the grammar in reconciliation/RUN_STORE.md, except the reconciling run, which keeps
+#   its September id so that its results directory stays findable.
+# - Settings that do not differ between runs (no grid backstop, no land rent, full-year global
+#   stage, solver retry chain) live in the wrapper and the model, not here.
+
+runs:
+
+  rep_way2050_flat_amelired_4h_tracking_nominal_h2:
+    role: reconciling
+    runner: green_lory
+    description: >-
+      WAY 2050, flat build/remoteness, Ameli reduced WACC, uniform 2 USD/m3 baseline water
+      reported outside the headline, no land rent, 4-hour weather, tracking PV, nominal
+      compressor CAPEX, legacy bundled hydrogen storage
+    results_class: 10_replication
+    job_token: rep-nomh2
+    tech_yaml: inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml
+    plant_dir: basic_ammonia_plant_2050_way_tracking
+    pv_policy: both
+    finance_csv: inputs/amelired_interest_inputs_2050.csv
+    finance_csv_sha256: b6cb3600a9a0a2a7d5a0c0fef016304d62b049ea308512224ba30e0bfb020ba8
+    time_step_h: 4
+    temporal_accounting: legacy_scaled
+    ramp_limit_basis: legacy_per_snapshot
+    site_costs_in_headline: false
+    water_eur2020_per_m3: 1.751012  # 2 USD2020/m3
+    cost_scope: flat_amelired_uniform_baseline_water_no_land_rent
+    land_share: 0.02
+    land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
+    land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: exclusive
+    notes: >-
+      Green-lory configured like the legacy plant: Way 2050 costs, 4-hour step with the legacy
+      store and ramp accounting, nominal compressor, bundled hydrogen storage. The September
+      surface (run global-20260907-v1, release 20260907-v1-c570c5153d04) solved costs and
+      designs without land, so they stand; its capacity columns came from the mislabelled land
+      table and are superseded. Network D combined this surface with the legacy capacity rule.
+      A rerun or a capacity re-export uses the centred 2 % table pinned here.
+
+  gl_dea2050_wacc5_bflat_wflat_land20c_fixed:
+    role: improved
+    runner: green_lory
+    description: >-
+      Key run 1 (23 Sep 2026): DEA 2050 costs, uniform 5 % WACC, flat build/remoteness, uniform
+      baseline water of 2 EUR2020/m3 (2.284 USD2020 at the ECB 2020 rate) in the headline, no
+      land rent, hourly weather, fixed-tilt PV only, explicit compressor and DEA tank, co-located
+      wind/PV, centred land build at a 20 % share, onshore cells with suitable land
+    results_class: 30_keyruns
+    job_token: key-dea50-wacc5
+    tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: basic_ammonia_plant_2050
+    pv_policy: fixed
+    finance_csv: inputs/uniform_interest_inputs_0p05_2050.csv  # generated: arc/build_finance_overrides.py
+    finance_csv_sha256: d29259c8e4d094a3a56f2007e61a48b56e6e6fc7bbbe62b7f9ad0a2caea08a3d
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0
+    cost_scope: flat_wacc5_uniform_baseline_water_no_land_rent
+    land_share: 0.20
+    land_table: land_center_20260923_v1/max_capacities_center_20pct_slope15.csv
+    land_table_sha256: 12277da14986a8ba9af481505d70072dd20846e2fe975903713ac9384bea8c21
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    notes: >-
+      Base of the improved model. Global stage restricted to the 16,509 onshore cells with
+      suitable land (land_center_20260923_v1/locations_onshore_suitable_center_20260923.csv).
+
+  gl_dea2050_ameli_bflat_wflat_land20c_fixed:
+    role: improved, finance sensitivity
+    runner: green_lory
+    description: >-
+      Key run 2 (23 Sep 2026): DEA 2050 costs, Ameli reduced WACC by country (cells without a
+      September country assignment take the nearest covered cell's rate, see
+      inputs/amelired_interest_fill_2050_center.csv), flat build/remoteness, uniform baseline
+      water of 2 EUR2020/m3 (2.284 USD2020 at the ECB 2020 rate) in the headline, no land rent,
+      hourly weather, fixed-tilt PV only, explicit compressor and DEA tank, co-located wind/PV,
+      centred land build at a 20 % share, onshore cells with suitable land
+    results_class: 30_keyruns
+    job_token: key-dea50-ameli
+    tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: basic_ammonia_plant_2050
+    pv_policy: fixed
+    finance_csv: inputs/amelired_interest_inputs_2050_center.csv  # generated: arc/build_finance_overrides.py
+    finance_csv_sha256: bddbc6dbd47a2c0b5eb0db3300d2c07dd10ec9bad8baec14e4515667fcf68333
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0
+    cost_scope: flat_amelired_uniform_baseline_water_no_land_rent
+    land_share: 0.20
+    land_table: land_center_20260923_v1/max_capacities_center_20pct_slope15.csv
+    land_table_sha256: 12277da14986a8ba9af481505d70072dd20846e2fe975903713ac9384bea8c21
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+
+  gl_dea2050_wacc5_bflat_wflat_land2c_fixed:
+    role: improved, land-share sensitivity
+    runner: derived
+    derived_from: gl_dea2050_wacc5_bflat_wflat_land20c_fixed
+    land_share: 0.02
+    land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
+    notes: >-
+      No new solve: land does not enter the solve, so capacities scale with the share
+      (x 0.1, reconciliation/derive_land_share_surface.py, run by arc/postprocess_keyruns_20260924.sh).
+
+  ll_xcost45_ameli_bflat_wnone_landarch_track_4h:
+    role: legacy replication (accepted baseline)
+    runner: legacy_lcoa
+    source: reconciliation/legacy_lcoa/source/94de8ce  # lcoa-opt at 94de8ce, 3 May 2023
+    harness: >-
+      reconciliation/legacy_lcoa/run_legacy_cells.py --era may2023 --variants stated_4h_mean
+      --enable-tracking 1.0587 --capex-source xcost45 (one array task per shard,
+      arc/jobs/08_legacy_global.sh)
+    cells: reconciliation/legacy_lcoa/shards/cells_archived_shard_*.csv  # 15,377 archived cells, Ameli WACC per cell
+    annuity: workbook factor 0.1143 (8 %, 20 years, 2 % O&M), rescaled to the cell WACC
+    capacity_rule: >-
+      recovered rule, Q = 1 Mt x min(A_solar x 140 / P_pv, A_wind x 7.3 / P_wind) with
+      A = 2 % of the Table-2 suitable area (legacy_land_areas.py), complete overlap, no
+      exclusions (reconciliation/legacy_lcoa/legacy_capacity.py)
+    water: none
+    release: 20260915-legacy-v2
+    notes: Reproduces the archived supplier table; network E.
+
+  ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity:
+    role: legacy key run
+    runner: legacy_lcoa
+    source: reconciliation/legacy_lcoa/source/94de8ce
+    harness: >-
+      reconciliation/legacy_lcoa/run_legacy_cells.py --era may2023 --variants stated_4h_mean
+      --enable-tracking 1.0587 --capex-source xcost45 --annuity green_lory
+      (arc/jobs/08_legacy_global.sh with LEGACY_EXTRA_ARGS)
+    cells: reconciliation/legacy_lcoa/shards/cells_archived_shard_*.csv
+    annuity: >-
+      green-lory convention: lifetimes and O&M from
+      inputs/tech_config_ammonia_plant_2050_way_eur.yaml
+    capacity_rule: >-
+      stated method on the centred 2 % land table (WDPA and slope exclusions), applied after
+      the solve by build_legacy_supplier_table.py
+    land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
+    land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
+    water_usd2018_per_t: 3.3245  # 1.5 m3/t x 2 EUR2020/m3, added after the solve
+    release: 20260924-legacy-v4
+    notes: >-
+      The id says way2050, but the CAPEX is the x_Cost RCP4.5 sheet (token xcost45); kept
+      unchanged because the results and network are filed under this id.
+
+  gl_way2050_ameli_bflat_wnone_land2c_fixed_pilot3cells:
+    role: finite-site supply curves at the three focal cells, fixed-tilt PV
+    runner: supply_pilot
+    config: reconciliation/land/supply_curve/config_v3_center.json
+    pv_policy: fixed-only
+    land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
+    land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
+
+  gl_way2050_ameli_bflat_wnone_land2c_track_pilot3cells:
+    role: finite-site supply curves at the three focal cells, tracking PV
+    runner: supply_pilot
+    config: reconciliation/land/supply_curve/config_v3_center_tracking.json
+    pv_policy: tracking-only
+    land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
+    land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
