@@ -19,6 +19,10 @@
 !*.yaml
 !*.yml
 
+# Reconciliation package: frozen legacy cost workbooks and small experiment configs
+!/reconciliation/legacy_lcoa/source/**/*.xlsx
+!/reconciliation/**/*.json
+
 # Never commit virtualenvs or Python caches
 .venv/
 references/
@@ -31,9 +35,14 @@ references/
 # (we still keep .gitkeep in each)
 /data/**
 !/data/**/.gitkeep
+!/data/README.md
+!/data/**/
 
 /results/**
 !/results/**/.gitkeep
+!/results/README.md
+!/results/**/
+!/results/**/README.md
 
 # Only the documented helper scripts are part of the supported interface.
 # Local diagnostics and Copilot scratch helpers under scripts/ stay ignored.
@@ -43,3 +52,11 @@ references/
 !/scripts/fetch_travel_time.py
 !/scripts/build_ameli_wacc_inputs.py
 !/scripts/merge_global_results.py
+
+# Claude session ARC file-queue bridge (local operational scratch)
+arc_exchange/
+
+# Generated finance overrides for the key runs (arc/build_finance_overrides.py);
+# their hashes are pinned in the ARC release manifests
+/inputs/uniform_interest_inputs_0p05_2050.csv
+/inputs/amelired_interest_inputs_2050_center.csv
