@@ -1,0 +1,37 @@
+{
+  "file": "country_reference_20260928_v1.csv",
+  "sha256": "e2a7bbd54ca8a1f2924d70cf7fc0322558a3ece9b415f261815dbd41e81ef68f",
+  "rows": 194,
+  "base": {
+    "path": "results/campaigns/verschuur_reconcile_20260907_v1/lory/global_exports/20260914-v1/country_reference.csv",
+    "sha256": "74f8e02938d56abd42680da96a539235390f640c8c6409677bd96b0a238460dc",
+    "rows": 177
+  },
+  "added_aliases": {
+    "Antarctica": "ATA",
+    "Czechia": "CZE",
+    "East Timor": "TLS",
+    "Falkland Islands": "FLK",
+    "French Southern and Antarctic Lands": "ATF",
+    "Gambia": "GMB",
+    "Ivory Coast": "CIV",
+    "North Macedonia": "MKD",
+    "Northern Cyprus": "CYP",
+    "Palestine": "PSE",
+    "Republic of Serbia": "SRB",
+    "Republic of the Congo": "COG",
+    "The Bahamas": "BHS",
+    "Trinidad and Tobago": "TTO",
+    "United Republic of Tanzania": "TZA",
+    "United States of America": "USA",
+    "eSwatini": "SWZ",
+    "Somaliland": "SOM",
+    "Kosovo": "XKX",
+    "Democratic Republic of the Congo": "COD"
+  },
+  "notes": [
+    "Names added are the spellings of data/countries.geojson (property 'country'), the source of the 'country' column written by model/run_global.py through location_tools.build_country_lookup_by_cell_overlap.",
+    "Northern Cyprus is mapped to CYP and Somaliland to SOM (de facto entities without their own ISO3); Kosovo uses the user-assigned code XKX. Antarctica, the Falkland Islands and the French Southern Lands receive their ISO3 codes but hold no demand in green-porpoise.",
+    "Cells with no country polygon overlap (NaN country) are dropped by export_lory_surface.py --drop-unassigned and counted in the contract."
+  ]
+}

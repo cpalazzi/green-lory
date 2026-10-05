@@ -1,0 +1,33 @@
+# Preferred coherent 2050 Way-cost case for the Green Lory reconciliation.
+#
+# The base Way configuration includes the explicit DEA compressor but retains
+# lcoa-opt's bundled-compression hydrogen-store cost.  That combination counts
+# part of compression twice.  This overlay keeps the explicit compressor and
+# replaces the store with the DEA 2050 tank-only cost.
+
+extends: tech_config_ammonia_plant_2050_way_eur.yaml
+
+techs:
+  solar_tracking:
+    # Land use per MW relative to fixed tilt from Bolinger & Bolinger (2022, IEEE J.
+    # Photovoltaics 12(2), doi:10.1109/JPHOTOV.2021.3136805): 2019 median direct-array
+    # power density 0.35 MWdc/acre fixed-tilt versus 0.24 MWdc/acre single-axis
+    # tracking, i.e. tracking needs 0.35/0.24 = 1.4583 times the fixed-tilt area.
+    # Replaces the September 2026 assumption of twice the fixed footprint. The fixed
+    # density itself stays the paper-method latitude-adjusted value carried by the
+    # land table (about 83 MW/km2 at 23 degrees), which Bolinger's fixed-tilt
+    # median of 0.35 MWdc/acre (87 MW/km2) supports.
+    land_use_km2_per_mw: 0.0145833333333333
+  wind:
+    # Fraction of the wind footprint (turbine spacing, 0.2 km2/MW) that excludes
+    # co-located PV: Denholm et al. (2009, NREL/TP-6A2-45834, Table 1) direct impact
+    # 1.0 +/- 0.7 ha/MW (0.3 permanent + 0.7 temporary) of 34.5 +/- 22.4 ha/MW total.
+    # Used by the colocated land allocation; ignored under exclusive.
+    # TODO: replace by a co-location study value covering PV row losses from turbine
+    # shading, wake spacing and access setbacks.
+    land_use_exclusive_fraction: 0.03
+  compressed_hydrogen_store:
+    source_note: DEA 2050 tank-only storage paired with the explicit DEA compressor
+    overnight_cost_per_mwh: 15300
+    tech_cost_per_mwh: 10200
+    build_cost_per_mwh: 5100

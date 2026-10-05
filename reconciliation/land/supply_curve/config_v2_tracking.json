@@ -1,0 +1,71 @@
+{
+  "experiment": "land_constrained_three_site_supply_curve_v2_tracking",
+  "land_stack": "revised_common_geography_fixed_candidate",
+  "land_sha256": "7f786de930bd7585f9862e3f753df73fa18222d0fb690ea248bd1f46ff417ac5",
+  "tracking_footprint_ratio": 1.45833333333333,
+  "land_allocation": "colocated",
+  "control_lcoa_tolerance_eur_per_t": 0.15,
+  "reference_central_csv_sha256": "6e08eb4299385c7487353ac2bf2b2d158d499532523ccdcb61e322af26b340a4",
+  "sites": [
+    {
+      "id": "atacama",
+      "latitude": -23.0,
+      "longitude": -69.0,
+      "control_LCOA_EUR2020_per_t": null,
+      "historical_Mtpa": 9.769406259,
+      "quantities_Mtpa": [
+        1.0,
+        2.5,
+        3.0,
+        4.0,
+        4.5,
+        5.0,
+        9.769406259
+      ],
+      "control_reference": "no prior tracking-only control; recorded, not compared"
+    },
+    {
+      "id": "northwest_australia",
+      "latitude": -23.0,
+      "longitude": 117.0,
+      "control_LCOA_EUR2020_per_t": null,
+      "historical_Mtpa": 4.019748515,
+      "quantities_Mtpa": [
+        0.5,
+        1.0,
+        1.25,
+        1.75,
+        2.0,
+        2.5,
+        4.019748515
+      ],
+      "control_reference": "no prior tracking-only control; recorded, not compared"
+    },
+    {
+      "id": "central_australia",
+      "latitude": -21.0,
+      "longitude": 135.0,
+      "control_LCOA_EUR2020_per_t": null,
+      "historical_Mtpa": 4.324243441,
+      "quantities_Mtpa": [
+        0.25,
+        0.375,
+        0.5,
+        1.0,
+        1.5,
+        2.0,
+        4.324243441
+      ],
+      "control_reference": "no prior tracking-only control; recorded, not compared"
+    }
+  ],
+  "wind_land_exclusive_fraction": 0.03,
+  "pv_policy": "tracking-only",
+  "changes_from_v1": [
+    "land_allocation exclusive -> colocated (wind exclusive fraction 0.03, Denholm 2009)",
+    "tracking_footprint_ratio 2.0 -> 1.4583 (Bolinger & Bolinger 2022)",
+    "pv_policy both -> fixed-only (central PV technology decision, 16 September 2026); tracking-only is the named sensitivity"
+  ],
+  "tech_yaml_sha256": "ad695957a7c73d42fdabd2099ef4d9fbdc0bc270b4457b677bfcc69ce5198c86",
+  "tech_yaml_note": "overlay tech YAML differs from the fixed_pv_3cells_v2 reference only in land-use parameters (tracking footprint ratio, wind exclusive fraction); plant bundle costs unchanged and verified"
+}

@@ -1,0 +1,16 @@
+{
+  "stack": "revised_fixed_pv_candidate",
+  "status": "pilot_not_promoted",
+  "preferred_pv": "fixed",
+  "land_competition_fraction_for_controlled_comparison": 0.02,
+  "land_competition_is_scenario_not_empirical_constant": true,
+  "maximum_slope_degrees_for_controlled_comparison": 15,
+  "joint_slope_and_protected_mask": true,
+  "below_sea_level_is_not_a_land_exclusion": true,
+  "cell_anchor": "center",
+  "pv_reference_density": "paper_method_9_km2_per_gw_equator_pending_engineering_calibration",
+  "tracking_footprint_ratios_for_sensitivity": [1.0, 1.25, 1.5, 2.0],
+  "tracking_comparison_requires_own_generation_profile_and_cost": true,
+  "native_land_cover_target": "MCD12Q1_500m_or_equivalent_native_class_mask",
+  "available_cmg_product_requires_subpixel_uncertainty_bounds": true
+}

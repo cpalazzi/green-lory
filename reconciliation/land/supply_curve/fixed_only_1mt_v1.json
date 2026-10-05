@@ -1,0 +1,21 @@
+{
+  "experiment": "fixed_only_enforced_land_supplier_threshold_v1",
+  "pv_policy": "fixed-only",
+  "land_stack": "revised_common_geography_fixed_candidate",
+  "land_sha256": "7f786de930bd7585f9862e3f753df73fa18222d0fb690ea248bd1f46ff417ac5",
+  "tracking_footprint_ratio": 2.0,
+  "land_allocation": "technology_shared",
+  "control_lcoa_tolerance_eur_per_t": 0.15,
+  "control_reference": "Completed fixed-PV pilot 8809820, same land/weather/Way costs",
+  "sites": [
+    {"id": "atacama", "latitude": -23.0, "longitude": -69.0,
+     "control_LCOA_EUR2020_per_t": 234.712526841, "historical_Mtpa": 9.769406259,
+     "quantities_Mtpa": [1.0]},
+    {"id": "northwest_australia", "latitude": -23.0, "longitude": 117.0,
+     "control_LCOA_EUR2020_per_t": 251.856200317, "historical_Mtpa": 4.019748515,
+     "quantities_Mtpa": [1.0]},
+    {"id": "central_australia", "latitude": -21.0, "longitude": 135.0,
+     "control_LCOA_EUR2020_per_t": 213.165817119, "historical_Mtpa": 4.324243441,
+     "quantities_Mtpa": [1.0]}
+  ]
+}

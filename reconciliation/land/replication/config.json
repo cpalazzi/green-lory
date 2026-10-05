@@ -1,0 +1,17 @@
+{
+  "stack": "replication_paper_method",
+  "status": "source_substituted_reconstruction_not_exact_historical",
+  "source": "Verschuur 2024 section 4.7 and Supplementary Table 2",
+  "land_competition_fraction": 0.02,
+  "maximum_slope_degrees": 15,
+  "wind_land_use_km2_per_gw": 200,
+  "pv_equator_land_use_km2_per_gw": 9,
+  "pv_latitude_rule": "van_de_Ven_2021_equation_6_beta_equals_abs_latitude",
+  "cell_anchor": "center",
+  "anchor_status": "representative_weather_node_assumption_test_southwest_separately",
+  "modis_available": "MCD12C1_2022_Collection_6.1_0.05_degree_class_fractions",
+  "protected_available": "WDPA_February_2026",
+  "dem_available": "GEBCO_2025",
+  "source_dates_match_publication": false,
+  "pv_density_is_prose_normalization_not_recovered_original_code": true
+}
