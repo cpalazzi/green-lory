@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import copy
 import io
 import logging
@@ -25,6 +26,9 @@ try:
     from . import data_store as results_store
     from . import data_paths
     from . import land_processing
+    from . import land_capacity
+    from . import land_union
+    from . import result_accounting
 except ImportError:  # pragma: no cover - fallback for direct execution
     PACKAGE_ROOT = Path(__file__).resolve().parent
     if str(PACKAGE_ROOT) not in sys.path:
@@ -34,6 +38,9 @@ except ImportError:  # pragma: no cover - fallback for direct execution
     import data_store as results_store  # type: ignore
     import data_paths  # type: ignore
     import land_processing  # type: ignore
+    import land_capacity  # type: ignore
+    import land_union  # type: ignore
+    import result_accounting  # type: ignore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +62,72 @@ _WORKER_STATE: Dict[str, Any] = {}
 _SHARED_DATASET: Any = None
 
 
+# Gurobi settings for a fresh-network retry after a numerical termination.  Barrier without
+# crossover (the fast default in model/main.py) occasionally ends SUBOPTIMAL on hard cells;
+# dual simplex with numeric focus is slower but robust.  Same set as the supply pilots.
+ROBUST_GUROBI_OPTIONS = {"Method": 1, "DualReductions": 0, "NumericFocus": 3, "InfUnbdInfo": 1}
+# Retry chain after a numerical termination, cheapest first (probes of 28 Sep 2026 on stalling
+# cells: baseline barrier 5 s; barrier with crossover about one minute; dual simplex about
+# fifteen minutes).  Each attempt rebuilds the network from scratch.
+CROSSOVER_GUROBI_OPTIONS = {"Method": 2, "Crossover": 1, "BarConvTol": 1e-8}
+NUMERICAL_RETRY_OPTIONS = (CROSSOVER_GUROBI_OPTIONS, ROBUST_GUROBI_OPTIONS)
+NUMERICAL_RETRY_CONDITIONS = frozenset({"suboptimal", "numeric", "numerical", "infeasible_or_unbounded"})
+
+
+def _solver_failure(error: BaseException | None):
+    """The OptimizationFailure behind a wrapped error, or None."""
+    while error is not None:
+        if isinstance(error, plant_main.OptimizationFailure):
+            return error
+        error = error.__cause__
+    return None
+
+
+def _gurobi_selected() -> bool:
+    return os.environ.get("GREEN_LORY_SOLVER", "gurobi").strip().lower() == "gurobi"
+
+
+def _run_single_location_with_numerical_retry(*, fail_fast: bool, **kwargs) -> Tuple[str, Dict[str, Any] | None]:
+    """Run one cell; after a suboptimal or numerical Gurobi termination, rebuild the network and
+    solve again with each option set of NUMERICAL_RETRY_OPTIONS in turn (barrier with crossover,
+    then dual simplex).  Other failures follow the fail_fast contract: raised when fail_fast,
+    otherwise logged and returned as a status without results."""
+    lat, lon = kwargs.get("lat"), kwargs.get("lon")
+    attempts = [None, *NUMERICAL_RETRY_OPTIONS]
+    first_condition = ""
+    for index, options in enumerate(attempts):
+        try:
+            status, results = _run_single_location(fail_fast=True, solver_options_override=options, **kwargs)
+        except RuntimeError as error:
+            failure = _solver_failure(error)
+            retryable = (
+                failure is not None
+                and failure.condition in NUMERICAL_RETRY_CONDITIONS
+                and _gurobi_selected()
+                and index < len(attempts) - 1
+            )
+            if not retryable:
+                if fail_fast:
+                    raise
+                LOGGER.warning("Cell (%s, %s) failed after %d attempt(s): %s", lat, lon, index + 1, error)
+                message = str(error)
+                return ("setup" if message.startswith("Network setup failed") else "solver"), None
+            if index == 0:
+                first_condition = failure.condition
+            LOGGER.warning(
+                "Numerical termination %s at (%s, %s) on attempt %d; retrying on a fresh network with %s",
+                failure.condition, lat, lon, index + 1, attempts[index + 1],
+            )
+            continue
+        if results is not None:
+            results["solver_numerical_retry"] = index > 0
+            results["solver_retry_attempts"] = index
+            results["solver_retry_termination"] = first_condition
+            results["solver_retry_options"] = json.dumps(options, sort_keys=True) if options else ""
+        return status, results
+    raise AssertionError("retry chain exhausted without a result or an exception")
+
+
 def _annuity_factor(interest_rate: float, lifetime_years: float) -> float:
     if lifetime_years <= 0:
         raise ValueError("lifetime_years must be positive")
@@ -74,14 +147,48 @@ def _annualised_capital_cost(
     return float(overnight_cost) * (crf + float(fixed_om_fraction))
 
 
+def _deep_merge_dicts(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge a small YAML overlay without mutating either input."""
+    merged: Dict[str, Any] = copy.deepcopy(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dicts(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _load_tech_config(
+    path: str | Path,
+    _seen: set[Path] | None = None,
+) -> Dict[str, Any]:
+    """Load a tech YAML, resolving an optional relative ``extends`` chain."""
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.exists():
+        raise FileNotFoundError(f"Tech YAML not found: {resolved}")
+    seen = set() if _seen is None else set(_seen)
+    if resolved in seen:
+        chain = " -> ".join(str(item) for item in [*seen, resolved])
+        raise ValueError(f"Circular tech YAML extends chain: {chain}")
+    seen.add(resolved)
+
+    raw = yaml.safe_load(resolved.read_text()) or {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"Tech YAML must contain a mapping: {resolved}")
+    parent = raw.pop("extends", None)
+    if parent is None:
+        return raw
+    parent_path = Path(parent)
+    if not parent_path.is_absolute():
+        parent_path = resolved.parent / parent_path
+    return _deep_merge_dicts(_load_tech_config(parent_path, seen), raw)
+
+
 def _load_tech_inputs(path: str | Path | None) -> Dict[str, dict]:
     resolved = _resolve_path(path) or DEFAULT_TECH_YAML
-    if not resolved.exists():
-        LOGGER.warning("Tech YAML %s not found; financing overrides will not affect costs.", resolved)
-        return {}
-    data = yaml.safe_load(resolved.read_text()) or {}
+    data = _load_tech_config(resolved)
     currency = data.get("currency")
-    if currency and not os.environ.get("GREEN_LORY_CURRENCY"):
+    if currency:
         os.environ["GREEN_LORY_CURRENCY"] = str(currency).strip().upper()
     techs = data.get("techs")
     if not isinstance(techs, dict):
@@ -104,12 +211,20 @@ def _load_tech_inputs(path: str | Path | None) -> Dict[str, dict]:
     return out
 
 
-def _load_tech_meta(path: str | Path | None) -> Dict[str, float]:
+def _load_tech_meta(path: str | Path | None) -> Dict[str, Any]:
     resolved = _resolve_path(path) or DEFAULT_TECH_YAML
-    if not resolved.exists():
-        return {}
-    data = yaml.safe_load(resolved.read_text()) or {}
-    meta: Dict[str, float] = {}
+    data = _load_tech_config(resolved)
+    meta: Dict[str, Any] = {}
+    if "currency" in data:
+        meta["currency"] = str(data["currency"]).strip().upper()
+    for key in (
+        "model_currency_price_year",
+        "spatial_cost_currency",
+        "spatial_cost_price_year",
+        "spatial_cost_to_model_currency",
+    ):
+        if key in data:
+            meta[key] = data[key]
     if "water_usage_m3_per_t_nh3" in data:
         meta["water_usage_m3_per_t_nh3"] = float(data["water_usage_m3_per_t_nh3"])
     if "water_cost_baseline_usd_per_m3" in data:
@@ -122,6 +237,7 @@ def _apply_yaml_base_costs(
     tech_inputs: Dict[str, dict],
     aggregation_count: int,
     time_step: float,
+    temporal_accounting_mode: str = "snapshot_weighted",
 ) -> None:
     """Unconditionally set capital_cost for every tech using YAML defaults.
 
@@ -134,13 +250,17 @@ def _apply_yaml_base_costs(
     - YAML overnight costs are quoted on an output basis (MW_out / MWh_out).
     - PyPSA Links are sized on bus0 (input) MW, so link capital_cost is
       converted to per-MW_in/year by multiplying by bus0→bus1 efficiency.
-    - Stores are scaled by time_step * aggregation_count to match
-      generate_network() scaling.
+    - Corrected runs use physical MWh and PyPSA snapshot weights.  Store-cost
+      scaling is retained only in the explicit ``legacy_scaled`` mode.
     """
     if not tech_inputs:
         return
 
-    store_scale = float(time_step) * float(aggregation_count)
+    store_scale = (
+        float(time_step) * float(aggregation_count)
+        if temporal_accounting_mode == "legacy_scaled"
+        else 1.0
+    )
 
     for name, raw in tech_inputs.items():
         if not isinstance(raw, dict):
@@ -189,6 +309,7 @@ def _apply_finance_overrides(
     overrides: Dict[str, Dict[str, float]] | None,
     aggregation_count: int,
     time_step: float,
+    temporal_accounting_mode: str = "snapshot_weighted",
 ) -> None:
     """Apply per-location interest_rate and build_cost_multiplier overrides.
 
@@ -199,8 +320,7 @@ def _apply_finance_overrides(
     - Build cost multiplier applies to build_cost (labor + remoteness sensitive).
     - PyPSA Links are sized on an input basis (bus0 MW_in), so link capital_cost
       must be currency/MW_in/year.
-    - Stores are scaled in generate_network() by time_step * aggregation_count;
-      we mirror that scaling here so the objective remains consistent.
+    - Store scaling is applied only in the explicit legacy temporal mode.
     """
     if not overrides or not tech_inputs:
         return
@@ -265,7 +385,12 @@ def _apply_finance_overrides(
 
             annual = _annualised_capital_cost(overnight, float(rate), lifetime_years, fixed_om_fraction)
             if normalized in network.stores.index:
-                network.stores.loc[normalized, "capital_cost"] = annual * float(time_step) * float(aggregation_count)
+                store_scale = (
+                    float(time_step) * float(aggregation_count)
+                    if temporal_accounting_mode == "legacy_scaled"
+                    else 1.0
+                )
+                network.stores.loc[normalized, "capital_cost"] = annual * store_scale
 
 
 def _link_capacity_mw_out(network, link_name: str) -> float:
@@ -303,6 +428,7 @@ def _compute_headline_splits(
     overrides: Dict[str, Dict[str, float]] | None,
     aggregation_count: int,
     time_step: float,
+    temporal_accounting_mode: str = "snapshot_weighted",
 ) -> Dict[str, float]:
     """Compute headline cost splits without double counting.
 
@@ -325,7 +451,11 @@ def _compute_headline_splits(
     weighted_build_cost = 0.0
 
     overrides = overrides or {}
-    store_scale = float(aggregation_count) * float(time_step)
+    store_scale = (
+        float(aggregation_count) * float(time_step)
+        if temporal_accounting_mode == "legacy_scaled"
+        else 1.0
+    )
 
     for name, raw in tech_inputs.items():
         if not isinstance(raw, dict):
@@ -369,7 +499,11 @@ def _compute_headline_splits(
         total_build_principal += build_cost_total / lifetime_years
         total_interest += interest_total
         total_fixed_om += fixed_om_total
-        base_build_cost += build_cost_total_base
+        base_build_cost += (
+            build_cost_total_base * store_scale
+            if component_type == "store"
+            else build_cost_total_base
+        )
         weighted_build_cost += build_cost_total
 
     build_mult_applied = None
@@ -390,7 +524,10 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         return df
     currency_code = str(df["currency"].iloc[0]).strip().lower() if "currency" in df.columns else "usd"
     lcoa_col = f"lcoa_{currency_code}_per_t"
+    plant_lcoa_col = f"lcoa_plant_{currency_code}_per_t"
     total_cost_col = f"total_cost_{currency_code}_per_year"
+    plant_total_cost_col = f"plant_objective_cost_{currency_code}_per_year"
+    headline_identity_col = f"headline_cost_identity_residual_{currency_code}_per_year"
     water_cost_col = f"water_cost_{currency_code}_per_t"
     land_cost_col = f"land_cost_{currency_code}_per_t"
 
@@ -398,12 +535,25 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "latitude",
         "longitude",
         "country",
+        "scenario_id",
+        "run_id",
+        "manifest_sha256",
+        "land_constraint",
+        "capacity_rule",
+        "land_allocation",
+        "temporal_accounting_mode",
+        "ramp_limit_basis",
         "currency",
         lcoa_col,
+        plant_lcoa_col,
         "annual_ammonia_demand_mwh",
         "annual_ammonia_production_t",
         "gridless_ammonia_production_t",
         total_cost_col,
+        plant_total_cost_col,
+        "site_costs_in_headline",
+        "site_cost_source_currency",
+        "site_cost_source_to_output_fx",
         "build_cost_multiplier",
         "build_cost_pct",
         "tech_cost_pct",
@@ -412,6 +562,21 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "water_cost_pct",
         "land_cost_pct",
         "other_cost_pct",
+        "plant_cost_pct",
+        "headline_cost_share_total_pct",
+        "headline_cost_share_residual_pct",
+        headline_identity_col,
+        "cost_percentage_basis",
+        "uses_grid_backstop",
+        "grid_energy_mwh",
+        "grid_energy_share",
+        "grid_energy_reference_mwh",
+        "grid_energy_reference_basis",
+        "grid_energy_tolerance_mwh",
+        "grid_free_result_status",
+        "is_gridless_feasible",
+        "simulated_hours",
+        "is_full_year_result",
     ]
 
     land_water = [
@@ -435,6 +600,19 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "max_onshore_ammonia_capacity_mtpa",
         "max_gridless_onshore_ammonia_capacity_t",
         "max_gridless_onshore_ammonia_capacity_mtpa",
+        "scaled_design_max_onshore_ammonia_capacity_t",
+        "scaled_design_max_onshore_ammonia_capacity_mtpa",
+        "scaled_design_max_gridless_onshore_ammonia_capacity_t",
+        "scaled_design_max_gridless_onshore_ammonia_capacity_mtpa",
+        "scaled_design_renewable_capacity_scale_factor",
+        "scaled_design_limiting_constraint",
+        "preferred_supplier_capacity_column",
+        "legacy_capacity_alias_method",
+        "renewable_union_area_source",
+        "renewable_union_area_is_conservative_fallback",
+        "renewable_union_area_is_lower_bound_approximation",
+        "renewable_union_area_method",
+        "renewable_union_area_method_version",
         "capacity_limit_technology",
         "onshore_capacity_limit_technology",
         "renewable_capacity_scale_factor",
@@ -453,6 +631,9 @@ def _order_results_columns(df: pd.DataFrame) -> pd.DataFrame:
         "wind_offshore_area_km2",
         "wind_density_mw_per_km2",
         "solar_density_mw_per_km2",
+        "solar_tracking_density_mw_per_km2",
+        "renewable_union_area_km2",
+        land_union.CLASSWISE_NESTED_UNION_AREA_COLUMN,
         "max_power_wind_mw",
         "max_power_solar_mw",
     ]
@@ -616,8 +797,7 @@ def _load_interest_table(path: str | Path | None) -> pd.DataFrame:
     if resolved is None:
         return pd.DataFrame(columns=["lat", "lon", "tech", "interest_rate"])
     if not resolved.exists():
-        LOGGER.warning("Interest CSV %s not found; continuing without overrides.", resolved)
-        return pd.DataFrame(columns=["lat", "lon", "tech", "interest_rate"])
+        raise FileNotFoundError(f"Requested override CSV not found: {resolved}")
     df = pd.read_csv(resolved)
     column_map = {col.lower(): col for col in df.columns}
     for required in ("lat", "lon", "tech", "interest_rate"):
@@ -635,8 +815,7 @@ def _load_land_table(path: str | Path | None) -> pd.DataFrame | None:
     if resolved is None:
         return None
     if not resolved.exists():
-        LOGGER.warning("Max-capacities CSV %s not found; skipping capacity caps.", resolved)
-        return None
+        raise FileNotFoundError(f"Max-capacities CSV not found: {resolved}")
     df = pd.read_csv(resolved)
     df.columns = [col.lower() for col in df.columns]
     expected = {"latitude", "longitude"}
@@ -647,9 +826,67 @@ def _load_land_table(path: str | Path | None) -> pd.DataFrame | None:
     if "elevation_m" not in df.columns or df["elevation_m"].isna().all():
         bathymetry_path = data_paths.BATHYMETRY_FILE
         if bathymetry_path.exists():
-            df = land_processing._attach_bathymetry_depth(df, bathymetry_path)
+            # Sample at the cell centre implied by the table's own anchoring.
+            anchor = (
+                str(df["cell_anchor"].dropna().iloc[0])
+                if "cell_anchor" in df.columns and df["cell_anchor"].notna().any()
+                else "southwest"
+            )
+            df = land_processing._attach_bathymetry_depth(df, bathymetry_path, 1.0, anchor)
             LOGGER.info("Backfilled elevation_m from %s", bathymetry_path)
     return df
+
+
+def _validate_versioned_union_land_table(
+    frame: pd.DataFrame | None,
+    path: Path,
+) -> None:
+    """Require the publication-grade, versioned v1 union lower bound."""
+
+    if frame is None:
+        raise ValueError(f"Land table could not be loaded: {path}")
+    required = {
+        land_union.CLASSWISE_NESTED_UNION_AREA_COLUMN,
+        land_union.RENEWABLE_UNION_METHOD_COLUMN,
+        land_union.RENEWABLE_UNION_METHOD_VERSION_COLUMN,
+    }
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError(
+            f"Land table {path} lacks versioned renewable-union provenance: "
+            + ", ".join(missing)
+        )
+
+    methods = set(frame[land_union.RENEWABLE_UNION_METHOD_COLUMN].dropna().astype(str))
+    versions = set(
+        frame[land_union.RENEWABLE_UNION_METHOD_VERSION_COLUMN].dropna().astype(str)
+    )
+    if methods != {land_union.CLASSWISE_NESTED_UNION_METHOD}:
+        raise ValueError(
+            f"Land table {path} has unexpected renewable-union methods: {sorted(methods)}"
+        )
+    if versions != {land_union.CLASSWISE_NESTED_UNION_VERSION}:
+        raise ValueError(
+            f"Land table {path} has unexpected renewable-union versions: {sorted(versions)}"
+        )
+
+    versioned = pd.to_numeric(
+        frame[land_union.CLASSWISE_NESTED_UNION_AREA_COLUMN], errors="coerce"
+    )
+    if versioned.isna().any() or (versioned < 0.0).any():
+        raise ValueError(
+            f"Land table {path} contains invalid values in "
+            f"{land_union.CLASSWISE_NESTED_UNION_AREA_COLUMN}"
+        )
+    if "renewable_union_area_km2" in frame.columns:
+        generic = pd.to_numeric(frame["renewable_union_area_km2"], errors="coerce")
+        if generic.isna().any() or not np.allclose(
+            versioned.to_numpy(), generic.to_numpy(), rtol=0.0, atol=1e-9
+        ):
+            raise ValueError(
+                f"Land table {path} has a generic renewable-union alias that "
+                "diverges from the versioned v1 column"
+            )
 
 
 def _solar_base_land_use_from_tech_inputs(tech_inputs: Dict[str, dict]) -> float | None:
@@ -666,6 +903,21 @@ def _solar_base_land_use_from_tech_inputs(tech_inputs: Dict[str, dict]) -> float
     return None
 
 
+def _solar_land_uses_from_tech_inputs(
+    tech_inputs: Dict[str, dict],
+) -> tuple[float | None, float | None]:
+    def _land_use(name: str) -> float | None:
+        raw = tech_inputs.get(name)
+        if not isinstance(raw, dict):
+            return None
+        value = raw.get("land_use_km2_per_mw")
+        if value is None or float(value) <= 0:
+            return None
+        return float(value)
+
+    return _land_use("solar"), _land_use("solar_tracking")
+
+
 def _apply_spatial_solar_density_from_tech_config(
     land_df: pd.DataFrame | None,
     tech_inputs: Dict[str, dict],
@@ -675,16 +927,36 @@ def _apply_spatial_solar_density_from_tech_config(
     if "latitude" not in land_df.columns:
         return land_df
 
-    base_land_use = _solar_base_land_use_from_tech_inputs(tech_inputs)
-    if base_land_use is None:
-        return land_df
-
     updated = land_df.copy()
-    updated["solar_density_mw_per_km2"] = land_processing._solar_density(
-        updated["latitude"],
-        scale=1.0,
-        base_land_use_km2_per_mw=base_land_use,
-    )
+    if "solar_density_method" in updated.columns:
+        methods = set(updated["solar_density_method"].fillna("").astype(str))
+        if methods != {"explicit_fixed_pv_density_v1"}:
+            raise ValueError(f"Unknown or mixed explicit solar density methods: {methods}")
+        if "solar_density_mw_per_km2" not in updated.columns:
+            raise ValueError("Explicit solar density method requires solar_density_mw_per_km2")
+        density = pd.to_numeric(updated["solar_density_mw_per_km2"], errors="coerce")
+        if not np.isfinite(density).all() or (density <= 0).any():
+            raise ValueError("Explicit fixed-PV densities must be finite and positive")
+        # New versioned inputs own their geometry/normalization. Do not silently
+        # replace their density with the historical latitude-packing equation.
+        updated["solar_density_mw_per_km2"] = density
+    else:
+        # Preserve the existing contract for all unversioned historical inputs.
+        base_land_use = _solar_base_land_use_from_tech_inputs(tech_inputs)
+        if base_land_use is None:
+            return land_df
+        updated["solar_density_mw_per_km2"] = land_processing._solar_density(
+            updated["latitude"],
+            scale=1.0,
+            base_land_use_km2_per_mw=base_land_use,
+        )
+    fixed_land_use, tracking_land_use = _solar_land_uses_from_tech_inputs(tech_inputs)
+    if fixed_land_use is not None and tracking_land_use is not None:
+        updated["solar_tracking_density_mw_per_km2"] = (
+            updated["solar_density_mw_per_km2"]
+            * fixed_land_use
+            / tracking_land_use
+        )
 
     if "solar_area_km2" in updated.columns:
         updated["max_power_solar_mw"] = (
@@ -940,6 +1212,41 @@ def _apply_component_caps(
     return total_cap
 
 
+def _apply_renewable_land_budget(
+    network,
+    budget: land_capacity.RenewableLandBudget,
+    land_allocation: land_capacity.LandAllocation,
+) -> float:
+    """Attach area-based land constraints and conservative component bounds."""
+    land_allocation = land_capacity.normalise_land_allocation(land_allocation)
+
+    setattr(network, "_renewable_land_budget", budget)
+    setattr(network, "_land_allocation", land_allocation)
+    # Disable the old MW-sum constraints; Linopy consumes the area budget above.
+    setattr(network, "_shared_solar_cap_mw", None)
+    setattr(network, "_shared_wind_cap_mw", None)
+
+    wind_area = budget.wind_area_km2
+    solar_area = budget.solar_area_km2
+
+    total_cap = 0.0
+    component_specs = (
+        ("wind", wind_area, budget.wind_density_mw_per_km2),
+        ("solar", solar_area, budget.fixed_solar_density_mw_per_km2),
+        (
+            "solar_tracking",
+            solar_area,
+            budget.tracking_solar_density_mw_per_km2,
+        ),
+    )
+    for component, area_km2, density_mw_per_km2 in component_specs:
+        if area_km2 is None or density_mw_per_km2 is None:
+            continue
+        cap_mw = max(0.0, float(area_km2)) * max(0.0, float(density_mw_per_km2))
+        total_cap += _set_component_cap(network, component, cap_mw)
+    return total_cap
+
+
 def _apply_land_caps(
     network, land_df: pd.DataFrame | None, lat: float, lon: float
 ) -> Tuple[float | None, pd.Series | None]:
@@ -1035,10 +1342,12 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
     solar_area = _maybe("solar_area_km2")
     if solar_area is not None:
         metadata["solar_area_used_km2"] = solar_area
+        metadata["solar_available_area_km2"] = solar_area
 
     wind_area = _maybe("wind_area_km2")
     if wind_area is not None:
         metadata["wind_area_used_km2"] = wind_area
+        metadata["wind_available_area_km2"] = wind_area
 
     for column in [
         "protected_area_pct",
@@ -1051,6 +1360,10 @@ def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
         "wind_offshore_area_km2",
         "wind_density_mw_per_km2",
         "solar_density_mw_per_km2",
+        "solar_tracking_density_mw_per_km2",
+        "renewable_union_area_km2",
+        "renewable_union_availability",
+        land_union.CLASSWISE_NESTED_UNION_AREA_COLUMN,
     ]:
         value = _maybe(column)
         if value is not None:
@@ -1376,47 +1689,30 @@ def _estimate_land_used_km2(
     land_row: pd.Series | None,
     tech_inputs: Dict[str, dict],
 ) -> float | None:
-    if not tech_inputs:
+    if not tech_inputs or land_row is None:
         return None
-
-    land_used_km2 = 0.0
-    solar_density = None
-    if land_row is not None:
-        raw_density = land_row.get("solar_density_mw_per_km2")
-        if pd.notna(raw_density) and float(raw_density) > 0:
-            solar_density = float(raw_density)
-
-    total_solar_capacity = 0.0
-    for gen_name in ("solar", "solar_tracking"):
-        if gen_name not in network.generators.index:
-            continue
-        value = network.generators.at[gen_name, "p_nom_opt"]
-        if pd.isna(value):
-            continue
-        total_solar_capacity += max(0.0, float(value))
-
-    if total_solar_capacity > 0:
-        if solar_density is not None and solar_density > 0:
-            land_used_km2 += total_solar_capacity / solar_density
-        else:
-            land_use = tech_inputs.get("solar", {}).get("land_use_km2_per_mw")
-            if land_use is not None:
-                land_used_km2 += total_solar_capacity * float(land_use)
-
-    for gen_name in ("wind",):
-        if gen_name not in network.generators.index:
-            continue
-        value = network.generators.at[gen_name, "p_nom_opt"]
-        if pd.isna(value):
-            continue
-        capacity = max(0.0, float(value))
-        if capacity <= 0:
-            continue
-        land_use = tech_inputs.get("wind", {}).get("land_use_km2_per_mw")
-        if land_use is not None:
-            land_used_km2 += capacity * float(land_use)
-
-    return land_used_km2
+    budget = land_capacity.build_renewable_land_budget(
+        land_row,
+        tech_inputs,
+        onshore=True,
+        allow_conservative_union_fallback=True,
+    )
+    capacities = {
+        name: (
+            max(0.0, float(network.generators.at[name, "p_nom_opt"]))
+            if name in network.generators.index
+            and pd.notna(network.generators.at[name, "p_nom_opt"])
+            else 0.0
+        )
+        for name in ("wind", "solar", "solar_tracking")
+    }
+    used = land_capacity.renewable_land_use_from_capacities(
+        wind_mw=capacities["wind"],
+        solar_mw=capacities["solar"],
+        solar_tracking_mw=capacities["solar_tracking"],
+        budget=budget,
+    )
+    return used.total_km2
 
 
 def _run_single_location(
@@ -1425,14 +1721,22 @@ def _run_single_location(
     dataset: lt.all_locations,
     interest_lookup: Dict[Tuple[float, float], Dict[str, Dict[str, float]]],
     tech_inputs: Dict[str, dict],
-    tech_meta: Dict[str, float],
+    tech_meta: Dict[str, Any],
     land_lookup: Dict[Tuple[float, float], pd.Series],
     base_network,
     aggregation_count: int,
     time_step: float,
     max_snapshots: int | None,
     quiet: bool,
+    land_constraint: str = "after_solve",
+    capacity_rule: str = "scaled_reference_design",
+    land_allocation: land_capacity.LandAllocation = "colocated",
+    allow_conservative_union_fallback: bool = True,
+    temporal_accounting_mode: str = "snapshot_weighted",
+    ramp_limit_basis: str = "per_hour",
+    include_site_costs: bool = True,
     fail_fast: bool = False,
+    solver_options_override: dict | None = None,
 ) -> Tuple[str, Dict[str, Any] | None]:
     """Run optimisation for a single (lat, lon).  With fail_fast=True any exception
     propagates immediately instead of being swallowed — use for debugging.
@@ -1470,6 +1774,8 @@ def _run_single_location(
 
         # Deep-copy the pre-built base network instead of re-importing CSVs.
         network = copy.deepcopy(base_network)
+        network._ramp_limit_basis = ramp_limit_basis
+        network._currency = str(tech_meta.get("currency", "USD")).strip().upper()
 
         # Always apply YAML default costs first (the CSV bundle may be stale).
         _apply_yaml_base_costs(
@@ -1477,6 +1783,7 @@ def _run_single_location(
             tech_inputs=tech_inputs,
             aggregation_count=aggregation_count,
             time_step=time_step,
+            temporal_accounting_mode=temporal_accounting_mode,
         )
         # Then apply per-location finance overrides on top (if any).
         _apply_finance_overrides(
@@ -1485,8 +1792,37 @@ def _run_single_location(
             overrides=overrides,
             aggregation_count=aggregation_count,
             time_step=time_step,
+            temporal_accounting_mode=temporal_accounting_mode,
         )
-        land_cap, land_row = _apply_land_caps_fast(network, land_lookup, lat, lon)
+        land_row = _match_land_row_fast(land_lookup, lat, lon)
+        if land_row is None:
+            raise ValueError(f"No land row found for ({lat}, {lon})")
+        land_allocation = land_capacity.normalise_land_allocation(land_allocation)
+        land_budget = land_capacity.build_renewable_land_budget(
+            land_row,
+            tech_inputs,
+            onshore=True,
+            allow_conservative_union_fallback=allow_conservative_union_fallback,
+        )
+        if land_constraint == "in_solve":
+            land_cap = _apply_renewable_land_budget(
+                network,
+                land_budget,
+                land_allocation,
+            )
+        elif land_constraint == "after_solve":
+            land_cap = None
+            # The reference design is intentionally independent of the land
+            # table.  Remove finite placeholder bounds from the plant bundle so
+            # they cannot masquerade as a land or resource constraint.
+            for renewable in RENEWABLES:
+                if (
+                    renewable in network.generators.index
+                    and bool(network.generators.at[renewable, "p_nom_extendable"])
+                ):
+                    network.generators.at[renewable, "p_nom_max"] = math.inf
+        else:
+            raise ValueError("land_constraint must be 'after_solve' or 'in_solve'")
     except Exception as exc:  # noqa: BLE001
         if fail_fast:
             raise RuntimeError(f"Network setup failed at ({lat}, {lon}): {exc}") from exc
@@ -1508,6 +1844,7 @@ def _run_single_location(
                 water_usage_m3_per_t=water_usage_m3_per_t,
                 land_cost_usd_per_km2_year=land_cost_usd_per_km2_year,
                 land_used_km2=None,
+                solver_options_override=solver_options_override,
             )
     except Exception as exc:  # noqa: BLE001
         if fail_fast:
@@ -1517,26 +1854,31 @@ def _run_single_location(
 
     t_solve = time.perf_counter()
 
-    land_used_km2 = _estimate_land_used_km2(network, land_row, tech_inputs)
+    renewable_land_use = land_capacity.renewable_land_use_from_results(results, land_budget)
+    land_used_km2 = renewable_land_use.total_km2
     if land_used_km2 is not None:
         results["land_used_km2"] = float(land_used_km2)
-        production_t = results.get("annual_ammonia_production_t")
-        if (
-            land_cost_usd_per_km2_year is not None
-            and production_t is not None
-            and float(production_t) > 0
-        ):
-            currency_code = str(results.get("currency", "USD")).strip().lower()
-            land_cost_per_t = float(land_cost_usd_per_km2_year) * float(land_used_km2) / float(production_t)
-            results["land_cost_usd_per_km2_year"] = float(land_cost_usd_per_km2_year)
-            results[f"land_cost_{currency_code}_per_t"] = land_cost_per_t
+        results["wind_land_used_km2"] = renewable_land_use.wind_km2
+        results["fixed_solar_land_used_km2"] = renewable_land_use.fixed_solar_km2
+        results["tracking_solar_land_used_km2"] = renewable_land_use.tracking_solar_km2
+        results["solar_land_used_km2"] = renewable_land_use.solar_km2
 
     if land_cap is not None:
         results["land_capacity_cap"] = land_cap
         results["land_capacity_cap_mw"] = land_cap
     if land_row is not None:
         results.update(_land_metadata_from_row(land_row))
-    results.update(_estimate_paper_ammonia_capacity(results, land_row))
+    results["land_constraint"] = land_constraint
+    results["capacity_rule"] = capacity_rule
+    results["land_allocation"] = land_allocation
+    results["wind_land_exclusive_fraction_effective"] = (
+        land_capacity.effective_wind_land_exclusive_fraction(land_allocation, land_budget)
+    )
+    results["temporal_accounting_mode"] = temporal_accounting_mode
+    results["ramp_limit_basis"] = ramp_limit_basis
+    results["scenario_id"] = os.environ.get("ARC_SCENARIO_ID", "adhoc")
+    results["run_id"] = os.environ.get("ARC_RUN_ID", "adhoc")
+    results["manifest_sha256"] = os.environ.get("ARC_MANIFEST_SHA256", "")
     results["interest_overrides_applied"] = bool(overrides)
 
     # Headline cost splits (no double counting).
@@ -1546,40 +1888,88 @@ def _run_single_location(
         overrides,
         aggregation_count=aggregation_count,
         time_step=time_step,
+        temporal_accounting_mode=temporal_accounting_mode,
     )
     if headline_splits:
         results.update(headline_splits)
 
-    # Add water/land cost percentages and rescale headline splits to include them.
-    currency_code = str(results.get("currency", "USD")).strip().lower()
-    total_cost_col = f"total_cost_{currency_code}_per_year"
-    water_cost_col = f"water_cost_{currency_code}_per_t"
-    land_cost_col = f"land_cost_{currency_code}_per_t"
+    output_currency = str(tech_meta.get("currency", results.get("currency", "USD"))).strip().upper()
+    source_currency = str(tech_meta.get("spatial_cost_currency", "USD")).strip().upper()
+    source_to_output_fx = tech_meta.get("spatial_cost_to_model_currency")
+    if source_to_output_fx is None:
+        if source_currency != output_currency:
+            raise ValueError(
+                "Tech YAML must define spatial_cost_to_model_currency when site-cost "
+                "and model currencies differ"
+            )
+        source_to_output_fx = 1.0
+    results = result_accounting.finalize_site_cost_accounting(
+        results,
+        output_currency=output_currency,
+        source_currency=source_currency,
+        source_to_output_fx=float(source_to_output_fx),
+        water_cost_source_per_m3=water_cost_usd_per_m3,
+        water_usage_m3_per_t_nh3=(
+            water_usage_m3_per_t if water_cost_usd_per_m3 is not None else None
+        ),
+        land_cost_source_per_km2_year=(
+            float(land_cost_usd_per_km2_year)
+            if land_cost_usd_per_km2_year is not None
+            else 0.0
+        ),
+        land_used_km2=land_used_km2,
+        include_site_costs_in_headline=include_site_costs,
+    )
 
-    production = results.get("annual_ammonia_production_t")
-    total_cost = results.get(total_cost_col)
-    water_cost_per_t = results.get(water_cost_col)
-    land_cost_per_t = results.get(land_cost_col)
+    results = result_accounting.finalize_headline_cost_percentages(
+        results,
+        plant_split_percentages=headline_splits,
+    )
 
-    if production and total_cost:
-        extra_cost = 0.0
-        if water_cost_per_t is not None:
-            extra_cost += float(water_cost_per_t) * float(production)
-        if land_cost_per_t is not None:
-            extra_cost += float(land_cost_per_t) * float(production)
+    results.setdefault("grid_energy_mwh", 0.0)
+    if "power_bus_generator_supply_mwh" not in results:
+        raise ValueError(
+            "Solved results are missing the electrical grid-share denominator "
+            "'power_bus_generator_supply_mwh'"
+        )
+    grid_reference_mwh = float(results["power_bus_generator_supply_mwh"])
+    results = result_accounting.finalize_grid_reporting(
+        results,
+        electrical_reference_energy_mwh=grid_reference_mwh,
+        absolute_tolerance_mwh=1.0,
+        relative_tolerance=1e-6,
+    )
 
-        total_with_extras = float(total_cost) + extra_cost
-        if total_with_extras > 0:
-            if water_cost_per_t is not None:
-                results["water_cost_pct"] = float(water_cost_per_t) * float(production) / total_with_extras * 100.0
-            if land_cost_per_t is not None:
-                results["land_cost_pct"] = float(land_cost_per_t) * float(production) / total_with_extras * 100.0
+    if capacity_rule == "solved_quantity":
+        if land_constraint != "in_solve":
+            raise ValueError("solved_quantity requires land_constraint='in_solve'")
+        results.update(land_capacity.report_land_feasible_quantity(
+            results, land_budget, land_allocation=land_allocation,
+        ))
+        return "done", results
+    if capacity_rule != "scaled_reference_design":
+        raise ValueError(
+            "Only capacity_rule='scaled_reference_design' is implemented in this campaign phase"
+        )
+    paper_capacity = land_capacity.estimate_scaled_design_capacity(
+        results,
+        land_budget,
+        land_allocation=land_allocation,
+    )
+    results.update(paper_capacity.to_mapping())
 
-            # Rescale headline splits to keep 100% stack including water/land.
-            scale = float(total_cost) / total_with_extras
-            for key in ("build_cost_pct", "tech_cost_pct", "om_cost_pct", "interest_pct"):
-                if key in results and results[key] is not None:
-                    results[key] = float(results[key]) * scale
+    # Preserve the historical result contract separately.  In these legacy
+    # aliases max_ammonia_capacity_* uses total wind (including offshore), while
+    # max_onshore_* uses onshore wind; solar tracking is folded into the old
+    # fixed-solar power cap.  Green Porpoise should use the explicit
+    # scaled_design_* columns for corrected supplier bounds.
+    results.update(_estimate_paper_ammonia_capacity(results, land_row))
+    results["legacy_capacity_alias_method"] = (
+        "historical_independent_total_vs_onshore_power_caps_v0"
+    )
+    results["preferred_supplier_capacity_column"] = (
+        "scaled_design_max_gridless_onshore_ammonia_capacity_t"
+    )
 
     t_end = time.perf_counter()
     LOGGER.debug(
@@ -1600,11 +1990,18 @@ def _worker_init(
     land_lookup: Dict,
     base_network: Any,
     tech_inputs: Dict[str, dict],
-    tech_meta: Dict[str, float],
+    tech_meta: Dict[str, Any],
     aggregation_count: int,
     time_step: float,
     max_snapshots: int | None,
     quiet: bool,
+    land_constraint: str,
+    capacity_rule: str,
+    land_allocation: land_capacity.LandAllocation,
+    allow_conservative_union_fallback: bool,
+    temporal_accounting_mode: str,
+    ramp_limit_basis: str,
+    include_site_costs: bool,
     fail_fast: bool = False,
 ) -> None:
     """Initialise per-worker state.  Called once when each pool worker starts.
@@ -1623,6 +2020,13 @@ def _worker_init(
     _WORKER_STATE["time_step"] = time_step
     _WORKER_STATE["max_snapshots"] = max_snapshots
     _WORKER_STATE["quiet"] = quiet
+    _WORKER_STATE["land_constraint"] = land_constraint
+    _WORKER_STATE["capacity_rule"] = capacity_rule
+    _WORKER_STATE["land_allocation"] = land_allocation
+    _WORKER_STATE["allow_conservative_union_fallback"] = allow_conservative_union_fallback
+    _WORKER_STATE["temporal_accounting_mode"] = temporal_accounting_mode
+    _WORKER_STATE["ramp_limit_basis"] = ramp_limit_basis
+    _WORKER_STATE["include_site_costs"] = include_site_costs
     _WORKER_STATE["fail_fast"] = fail_fast
 
 
@@ -1639,7 +2043,7 @@ def _worker_task(lat_lon: Tuple[float, float]) -> Tuple[float, float, str, Dict[
     fail_fast = ws.get("fail_fast", False)
     if fail_fast:
         # Let any exception propagate — pool will re-raise it in the parent.
-        status, results = _run_single_location(
+        status, results = _run_single_location_with_numerical_retry(
             lat=lat,
             lon=lon,
             dataset=ws["dataset"],
@@ -1652,11 +2056,18 @@ def _worker_task(lat_lon: Tuple[float, float]) -> Tuple[float, float, str, Dict[
             time_step=ws["time_step"],
             max_snapshots=ws["max_snapshots"],
             quiet=ws["quiet"],
+            land_constraint=ws["land_constraint"],
+            capacity_rule=ws["capacity_rule"],
+            land_allocation=ws["land_allocation"],
+            allow_conservative_union_fallback=ws["allow_conservative_union_fallback"],
+            temporal_accounting_mode=ws["temporal_accounting_mode"],
+            ramp_limit_basis=ws["ramp_limit_basis"],
+            include_site_costs=ws["include_site_costs"],
             fail_fast=True,
         )
     else:
         try:
-            status, results = _run_single_location(
+            status, results = _run_single_location_with_numerical_retry(
                 lat=lat,
                 lon=lon,
                 dataset=ws["dataset"],
@@ -1669,6 +2080,13 @@ def _worker_task(lat_lon: Tuple[float, float]) -> Tuple[float, float, str, Dict[
                 time_step=ws["time_step"],
                 max_snapshots=ws["max_snapshots"],
                 quiet=ws["quiet"],
+                land_constraint=ws["land_constraint"],
+                capacity_rule=ws["capacity_rule"],
+                land_allocation=ws["land_allocation"],
+                allow_conservative_union_fallback=ws["allow_conservative_union_fallback"],
+                temporal_accounting_mode=ws["temporal_accounting_mode"],
+                ramp_limit_basis=ws["ramp_limit_basis"],
+                include_site_costs=ws["include_site_costs"],
                 fail_fast=False,
             )
         except Exception as exc:  # noqa: BLE001
@@ -1683,6 +2101,7 @@ def run_global(
     land_csv: str | Path | None = None,
     override_csv: str | Path | None = None,
     tech_yaml: str | Path | None = None,
+    plant_dir: str | Path | None = None,
     aggregation_count: int = 1,
     time_step: float = 1.0,
     max_snapshots: int | None = None,
@@ -1694,6 +2113,13 @@ def run_global(
     lon_max: float | None = None,
     fail_fast: bool = False,
     ensure_feasibility: bool = True,
+    land_constraint: str = "after_solve",
+    capacity_rule: str = "scaled_reference_design",
+    land_allocation: land_capacity.LandAllocation = "colocated",
+    allow_conservative_union_fallback: bool = True,
+    temporal_accounting_mode: str = "snapshot_weighted",
+    ramp_limit_basis: str = "per_hour",
+    include_site_costs: bool = True,
 ) -> pd.DataFrame:
     """Run the ammonia plant optimisation for every requested location.
 
@@ -1726,16 +2152,65 @@ def run_global(
             LCOA.  Set to False to reproduce the original hard-infeasibility behaviour.
     """
     requested_threads = 1 if threads_per_worker is None else int(threads_per_worker)
+    if aggregation_count != 1:
+        raise ValueError(
+            "run_global requires aggregation_count=1; use time_step for explicit resampling"
+        )
+    if not float(time_step).is_integer() or float(time_step) < 1:
+        raise ValueError("time_step must be a positive whole number of hours")
+    timestep_hours = int(time_step)
+    if 8760 % timestep_hours != 0:
+        raise ValueError("time_step must divide the 8760-hour model year exactly")
+    if temporal_accounting_mode not in {"snapshot_weighted", "legacy_scaled"}:
+        raise ValueError(
+            "temporal_accounting_mode must be 'snapshot_weighted' or 'legacy_scaled'"
+        )
+    if ramp_limit_basis not in {"per_hour", "legacy_per_snapshot"}:
+        raise ValueError("ramp_limit_basis must be 'per_hour' or 'legacy_per_snapshot'")
+    if land_constraint not in {"after_solve", "in_solve"}:
+        raise ValueError("land_constraint must be 'after_solve' or 'in_solve'")
+    if capacity_rule not in {"scaled_reference_design", "solved_quantity"}:
+        raise ValueError("capacity_rule must be 'scaled_reference_design' or 'solved_quantity'")
+    if capacity_rule == "solved_quantity" and land_constraint != "in_solve":
+        raise ValueError("capacity_rule='solved_quantity' requires land_constraint='in_solve'")
+    if capacity_rule == "scaled_reference_design" and land_constraint != "after_solve":
+        raise ValueError(
+            "capacity_rule='scaled_reference_design' requires land_constraint='after_solve'; "
+            "scaling a land-constrained reference design would reintroduce circular "
+            "1 Mt admission and double-apply the land budget"
+        )
+    land_allocation = land_capacity.normalise_land_allocation(land_allocation)
 
     with _quiet_logging(quiet), _override_env("GREEN_LORY_SOLVER_LOG", "0", quiet):
         weather_dir_path = _resolve_path(weather_dir) or DEFAULT_WEATHER_DIR
         land_csv_path = _resolve_path(land_csv or DEFAULT_LAND_CSV)
         override_csv_path = _resolve_path(override_csv) if override_csv is not None else None
         tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
+        plant_dir_path = _resolve_path(
+            plant_dir or os.environ.get("ARC_PLANT_DIR", "basic_ammonia_plant")
+        )
+        if plant_dir_path is None or not plant_dir_path.is_dir():
+            raise FileNotFoundError(f"Plant directory not found: {plant_dir_path}")
+        required_plant_files = {
+            "buses.csv",
+            "generators.csv",
+            "links.csv",
+            "loads.csv",
+            "stores.csv",
+        }
+        missing_plant_files = sorted(
+            name for name in required_plant_files if not (plant_dir_path / name).is_file()
+        )
+        if missing_plant_files:
+            raise FileNotFoundError(
+                f"Plant directory {plant_dir_path} is missing: {', '.join(missing_plant_files)}"
+            )
 
         tech_inputs = _load_tech_inputs(tech_yaml_path)
         tech_meta = _load_tech_meta(tech_yaml_path)
         land_df = _load_land_table(land_csv_path)
+        if not allow_conservative_union_fallback:
+            _validate_versioned_union_land_table(land_df, land_csv_path)
         land_df = _apply_spatial_solar_density_from_tech_config(land_df, tech_inputs)
         world = _load_country_shapes()
         store = results_store.Data_store()
@@ -1783,13 +2258,15 @@ def run_global(
             if time_step > 1:
                 probe_weather = _resample_weather_frame(probe_weather, int(time_step))
             n_snapshots = max_snapshots if max_snapshots is not None else len(probe_weather)
-            _plant_dir = os.environ.get("ARC_PLANT_DIR", "basic_ammonia_plant")
             base_network = plant_main.generate_network(
                 n_snapshots,
-                _plant_dir,
+                str(plant_dir_path),
                 aggregation_count=aggregation_count,
                 time_step=time_step,
+                temporal_accounting_mode=temporal_accounting_mode,
             )
+            base_network._currency = str(tech_meta.get("currency", "USD")).strip().upper()
+            base_network._ramp_limit_basis = ramp_limit_basis
 
             # ── Feasibility backstop ───────────────────────────────────────
             # When ensure_feasibility=True AND the tech YAML contains a
@@ -1868,6 +2345,9 @@ def run_global(
                         initargs=(
                             interest_lookup, land_lookup, base_network,
                             tech_inputs, tech_meta, aggregation_count, time_step, max_snapshots, quiet,
+                            land_constraint, capacity_rule, land_allocation,
+                            allow_conservative_union_fallback, temporal_accounting_mode,
+                            ramp_limit_basis, include_site_costs,
                             fail_fast,
                         ),
                     ) as pool:
@@ -1913,7 +2393,7 @@ def run_global(
                     # ── Serial path: use _SHARED_DATASET directly ──
                     for lat, lon in location_list:
                         try:
-                            status, results = _run_single_location(
+                            status, results = _run_single_location_with_numerical_retry(
                                 lat=lat,
                                 lon=lon,
                                 dataset=_SHARED_DATASET,
@@ -1926,6 +2406,13 @@ def run_global(
                                 time_step=time_step,
                                 max_snapshots=max_snapshots,
                                 quiet=quiet,
+                                land_constraint=land_constraint,
+                                capacity_rule=capacity_rule,
+                                land_allocation=land_allocation,
+                                allow_conservative_union_fallback=allow_conservative_union_fallback,
+                                temporal_accounting_mode=temporal_accounting_mode,
+                                ramp_limit_basis=ramp_limit_basis,
+                                include_site_costs=include_site_costs,
                                 fail_fast=fail_fast,
                             )
                         except Exception as exc:  # noqa: BLE001
@@ -1975,6 +2462,12 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Path to the tech-config YAML (overrides the built-in default).",
+    )
+    parser.add_argument(
+        "--plant-dir",
+        type=str,
+        default=None,
+        help="Plant CSV bundle controlling topology, efficiencies, loads, and ramp limits.",
     )
     parser.add_argument(
         "--override-csv",
@@ -2033,6 +2526,55 @@ if __name__ == "__main__":
         default=True,
         help="Disable the grid backstop and allow hard LP infeasibility (reproduces original behaviour).",
     )
+    parser.add_argument(
+        "--land-constraint",
+        choices=("after_solve", "in_solve"),
+        default="after_solve",
+        help=("after_solve: optimise the 1 Mt/yr reference design without land limits and apply the land "
+             "budget afterwards as a capacity multiplier; in_solve: bound wind and PV inside the optimisation."),
+    )
+    parser.add_argument(
+        "--capacity-rule",
+        choices=("scaled_reference_design", "solved_quantity"),
+        default="scaled_reference_design",
+        help=("scaled_reference_design: scale the unconstrained reference design until wind, PV or their shared "
+             "footprint fills the land (Salmon/Verschuur rule); solved_quantity: report the production solved "
+             "under in_solve land limits (a feasible quantity, not a maximum)."),
+    )
+    parser.add_argument(
+        "--land-allocation",
+        choices=land_capacity.LAND_ALLOCATIONS,
+        default="colocated",
+        help=("Renewable land allocation rule: colocated (base; only the exclusive fraction of the wind "
+              "footprint competes with PV for the shared budget) or exclusive (September 2026 rule)."),
+    )
+    parser.add_argument(
+        "--no-conservative-union-fallback",
+        dest="allow_conservative_union_fallback",
+        action="store_false",
+        default=True,
+        help=(
+            "Require the versioned classwise-nested v1 renewable-union lower-bound "
+            "columns and provenance in the land table."
+        ),
+    )
+    parser.add_argument(
+        "--temporal-accounting-mode",
+        choices=("snapshot_weighted", "legacy_scaled"),
+        default="snapshot_weighted",
+    )
+    parser.add_argument(
+        "--ramp-limit-basis",
+        choices=("per_hour", "legacy_per_snapshot"),
+        default="per_hour",
+    )
+    parser.add_argument(
+        "--exclude-site-costs",
+        dest="include_site_costs",
+        action="store_false",
+        default=True,
+        help="Keep water and land out of the headline for strict plant-gate replication.",
+    )
     args = parser.parse_args()
 
     if args.locations_csv:
@@ -2045,6 +2587,7 @@ if __name__ == "__main__":
     results_df = run_global(
         locations=requested_locations,
         tech_yaml=args.tech_yaml,
+        plant_dir=args.plant_dir,
         override_csv=args.override_csv,
         land_csv=args.land_csv,
         time_step=args.time_step,
@@ -2057,5 +2600,12 @@ if __name__ == "__main__":
         lon_max=args.lon_max,
         fail_fast=args.fail_fast,
         ensure_feasibility=args.ensure_feasibility,
+        land_constraint=args.land_constraint,
+        capacity_rule=args.capacity_rule,
+        land_allocation=args.land_allocation,
+        allow_conservative_union_fallback=args.allow_conservative_union_fallback,
+        temporal_accounting_mode=args.temporal_accounting_mode,
+        ramp_limit_basis=args.ramp_limit_basis,
+        include_site_costs=args.include_site_costs,
     )
     print(f"Processed {len(results_df)} locations. Results saved to {args.output_csv}.")

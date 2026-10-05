@@ -30,6 +30,11 @@
 # Land use: DEA 2050 values.
 
 currency: EUR
+model_currency_price_year: 2020
+spatial_cost_currency: USD
+spatial_cost_price_year: 2020
+# ECB 2020 average: 1 EUR = 1.142196 USD.
+spatial_cost_to_model_currency: 0.875506
 
 # Global water and land cost parameters
 water_usage_m3_per_t_nh3: 1.5

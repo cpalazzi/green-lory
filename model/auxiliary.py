@@ -58,6 +58,22 @@ def _snapshot_weightings(network):
     return weightings.reindex(network.snapshots).ffill().bfill().fillna(1.0)
 
 
+def _store_reporting_scale(network, aggregation_count=1, time_step=1.0):
+    """Return the historical-to-physical factor for reported store energy.
+
+    Duration-aware networks already store ``e_nom_opt`` and ``stores_t.e`` in
+    physical MWh, irrespective of snapshot duration.  Historical Green Lory
+    networks encoded duration by scaling store costs and multiplied solved
+    store energy by ``aggregation_count * time_step`` when reporting.  Missing
+    mode metadata is treated as legacy for backwards compatibility.
+    """
+
+    temporal_mode = getattr(network, "_temporal_accounting_mode", "legacy_scaled")
+    if temporal_mode == "snapshot_weighted":
+        return 1.0
+    return float(aggregation_count) * float(time_step)
+
+
 def _component_table(network, component_type):
     if component_type == "generator":
         return network.generators
@@ -352,7 +368,12 @@ def get_scale(n, file_name=None):
 
 
 def get_results_dict_for_excel(n, scale, aggregation_count=1, operating=False, time_step=1.0):
-    """Takes the results and puts them in a dictionary ready to be sent to Excel"""
+    """Takes the results and puts them in a dictionary ready to be sent to Excel.
+
+    Store capacities and state-of-charge are physical MWh for explicit
+    ``snapshot_weighted`` networks.  Legacy and unlabelled networks retain the
+    historical ``aggregation_count * time_step`` reporting conversion.
+    """
     # Rename the components:
     links_name_dct = {'p_nom_opt': 'Rated Capacity (MW)',
                       'carrier': 'Carrier',
@@ -395,6 +416,11 @@ def get_results_dict_for_excel(n, scale, aggregation_count=1, operating=False, t
     # cols.append(cols.pop(cols.index('penalty_link')))
     # consumption = consumption.reindex(columns=cols)
 
+    store_reporting_scale = _store_reporting_scale(
+        n,
+        aggregation_count=aggregation_count,
+        time_step=time_step,
+    )
     output = {
         'Headlines': pd.DataFrame({
             'Objective function (USD/t)': [
@@ -405,11 +431,11 @@ def get_results_dict_for_excel(n, scale, aggregation_count=1, operating=False, t
         'Generators': n.generators.rename(columns={'p_nom_opt': 'Rated Capacity (MW)'})[
                           ['Rated Capacity (MW)']] * scale,
         'Components': comps,
-        'Stores': scale * aggregation_count * time_step * n.stores.rename(columns={
+        'Stores': scale * store_reporting_scale * n.stores.rename(columns={
                                         'e_nom_opt': 'Storage Capacity (MWh)'})[['Storage Capacity (MWh)']],
         'Energy generation (MW)': n.generators_t.p * scale,
         'Energy consumption': consumption,
-        'Stored energy capacity (MWh)': n.stores_t.e * scale * aggregation_count * time_step
+        'Stored energy capacity (MWh)': n.stores_t.e * scale * store_reporting_scale
     }
     print('get_results_dict_for_excel n.objective: ', n.objective)
 
@@ -472,14 +498,34 @@ def get_results_dict_for_multi_site(
     """
     dct = dict()
 
-    currency_code = os.environ.get("GREEN_LORY_CURRENCY", "USD").strip().upper()
+    currency_code = str(
+        getattr(n, "_currency", os.environ.get("GREEN_LORY_CURRENCY", "USD"))
+    ).strip().upper()
     currency_slug = currency_code.lower()
+    temporal_mode = getattr(n, "_temporal_accounting_mode", "legacy_scaled")
+    snapshot_hours = float(getattr(n, "_snapshot_hours", time_step))
+    if temporal_mode == "snapshot_weighted":
+        objective_weights = n.snapshot_weightings["objective"].reindex(n.snapshots)
+        simulated_hours = float(objective_weights.sum())
+    else:
+        objective_weights = pd.Series(snapshot_hours, index=n.snapshots)
+        simulated_hours = float(len(n.snapshots) * snapshot_hours)
+
+    def _energy_mwh(series):
+        aligned = pd.Series(series, index=n.snapshots, dtype=float)
+        return float((aligned * objective_weights).sum())
+
     if not operating:
         load = float(n.loads.p_set.values[0])
-        production = load / AMMONIA_HHV_MWH_PER_T * 8760
-        demand_mwh = load * 8760
+        production_hours = simulated_hours if temporal_mode == "snapshot_weighted" else 8760.0
+        production = load / AMMONIA_HHV_MWH_PER_T * production_hours
+        demand_mwh = load * production_hours
         total_cost = float(n.objective)
         dct['currency'] = currency_code
+        dct['temporal_accounting_mode'] = temporal_mode
+        dct['snapshot_hours'] = snapshot_hours
+        dct['simulated_hours'] = simulated_hours
+        dct['is_full_year_result'] = bool(abs(simulated_hours - 8760.0) < 1e-6)
         dct[f'lcoa_{currency_slug}_per_t'] = total_cost / production if production > 0 else np.nan
         dct['annual_ammonia_demand_mwh'] = demand_mwh
         dct['annual_ammonia_production_t'] = production
@@ -549,41 +595,26 @@ def get_results_dict_for_multi_site(
     # rather than its optimised capacity (MW) — energy used is more meaningful than
     # the size of the fictitious relief valve.
     if 'penalty_link' in n.links.index and not n.links_t.p0.empty and 'penalty_link' in n.links_t.p0.columns:
-        dct['penalty_link'] = float(n.links_t.p0['penalty_link'].sum()) * time_step
+        dct['penalty_link'] = _energy_mwh(n.links_t.p0['penalty_link'])
     elif 'penalty_link' in n.links.index:
         dct['penalty_link'] = 0.0
-    # grid: report total annual energy drawn from the feasibility backstop (MWh).
-    # Non-zero values indicate the local renewables alone cannot meet demand;
-    # filter on grid_energy_mwh == 0 to retain only resource-sufficient cells.
+    # Extract solved grid energy here.  Classification is performed once, after
+    # headline accounting, by result_accounting.finalize_grid_reporting().
     if 'grid' in n.generators.index:
         if not n.generators_t.p.empty and 'grid' in n.generators_t.p.columns:
-            dct['grid_energy_mwh'] = float(n.generators_t.p['grid'].sum()) * time_step
+            dct['grid_energy_mwh'] = _energy_mwh(n.generators_t.p['grid'])
         else:
             dct['grid_energy_mwh'] = 0.0
 
-    # ── Gridless energy fraction & gridless LCOA ─────────────────────────────
-    # Fraction of power-bus generation from renewables (excl. grid backstop
-    # and ramp_dummy).  Allows post-hoc estimation of ammonia producible
-    # without the grid backstop and the corresponding "gridless" LCOA.
+    # ── Grid-backstop diagnostics ─────────────────────────────────────────────
+    # Record the electrical denominator only.  Status and counterfactual fields
+    # are intentionally left to the downstream classifier so they cannot be
+    # calculated with a different denominator or tolerance.
     if not operating and not n.generators_t.p.empty:
         _power_gens = [g for g in n.generators.index
                        if n.generators.loc[g, 'bus'] == 'power']
-        _total_gen_mwh = float(n.generators_t.p[_power_gens].sum().sum()) * time_step
-        _grid_mwh = dct.get('grid_energy_mwh', 0.0)
-        if _total_gen_mwh > 0:
-            _gridless_frac = float(np.clip(1.0 - _grid_mwh / _total_gen_mwh, 0.0, 1.0))
-        else:
-            _gridless_frac = 0.0
-        dct['gridless_energy_fraction'] = _gridless_frac
-        dct['gridless_ammonia_production_t'] = production * _gridless_frac
-        # Grid backstop marginal cost dominates where used; strip it out to
-        # get the cost the plant would incur using only renewables.
-        _grid_cost = _grid_mwh * float(n.generators.loc['grid', 'marginal_cost']) if 'grid' in n.generators.index else 0.0
-        _gridless_total_cost = total_cost - _grid_cost
-        _gridless_prod = production * _gridless_frac
-        dct[f'lcoa_gridless_{currency_slug}_per_t'] = (
-            _gridless_total_cost / _gridless_prod if _gridless_prod > 0 else np.nan
-        )
+        _total_gen_mwh = sum(_energy_mwh(n.generators_t.p[g]) for g in _power_gens)
+        dct['power_bus_generator_supply_mwh'] = float(_total_gen_mwh)
 
     # Consolidate battery PCS charge/discharge into a single reported capacity
     if 'battery_pcs_charge' in dct or 'battery_pcs_discharge' in dct:
@@ -592,10 +623,17 @@ def get_results_dict_for_multi_site(
         dct['battery_pcs_mw'] = max(charge, discharge)
         dct.pop('battery_pcs_charge', None)
         dct.pop('battery_pcs_discharge', None)
+    store_reporting_scale = _store_reporting_scale(
+        n,
+        aggregation_count=aggregation_count,
+        time_step=time_step,
+    )
     for store in n.stores.index.to_list():
-        dct[store] = n.stores.loc[store, 'e_nom_opt'] * aggregation_count * time_step
+        dct[store] = n.stores.loc[store, 'e_nom_opt'] * store_reporting_scale
     dct['hydrogen_storage_capacity'] = (
-        n.stores.loc['compressed_hydrogen_store', 'e_nom_opt'] * aggregation_count * time_step / HYDROGEN_HHV_MWH_PER_T
+        n.stores.loc['compressed_hydrogen_store', 'e_nom_opt']
+        * store_reporting_scale
+        / HYDROGEN_HHV_MWH_PER_T
     )
     return dct
 
@@ -724,9 +762,135 @@ def _prepare_linopy_context(network, snapshots):
     return network.model, sns
 
 
+_AMMONIA_RAMP_RATE_ATTRS = {
+    "up": "_ammonia_synthesis_ramp_limit_up_per_hour",
+    "down": "_ammonia_synthesis_ramp_limit_down_per_hour",
+}
+
+
+def prepare_ammonia_ramp_constraints(network):
+    """Prepare corrected ammonia ramping before PyPSA builds its model.
+
+    PyPSA interprets ``Link.ramp_limit_*`` as a fraction of nominal capacity
+    per *snapshot*.  Green Lory's corrected ``per_hour`` mode instead treats
+    the CSV values as hourly rates and applies the physical snapshot duration
+    in :func:`linopy_constraints`.  Native constraints are created before that
+    callback, so leaving the raw values in the component table would impose an
+    additional (and, for multi-hour snapshots, tighter) per-snapshot limit.
+
+    Preserve the source hourly rates on the network and clear only the ammonia
+    synthesis native fields.  Legacy replication mode deliberately retains the
+    historical native/custom constraints and is left untouched.
+    """
+    if getattr(network, "_ramp_limit_basis", "legacy_per_snapshot") != "per_hour":
+        return
+    if "ammonia_synthesis" not in network.links.index:
+        return
+
+    for direction, private_attr in _AMMONIA_RAMP_RATE_ATTRS.items():
+        column = f"ramp_limit_{direction}"
+        if column not in network.links.columns:
+            continue
+        native_rate = network.links.at["ammonia_synthesis", column]
+        if pd.notna(native_rate):
+            setattr(network, private_attr, float(native_rate))
+        network.links.at["ammonia_synthesis", column] = np.nan
+
+
+def _ammonia_ramp_rate(network, direction):
+    """Return the preserved source ramp rate for one direction."""
+    private_attr = _AMMONIA_RAMP_RATE_ATTRS[direction]
+    preserved_rate = getattr(network, private_attr, np.nan)
+    if pd.notna(preserved_rate):
+        return float(preserved_rate)
+
+    column = f"ramp_limit_{direction}"
+    if (
+        "ammonia_synthesis" in network.links.index
+        and column in network.links.columns
+    ):
+        native_rate = network.links.at["ammonia_synthesis", column]
+        if pd.notna(native_rate):
+            return float(native_rate)
+    return np.nan
+
+
+def _ammonia_ramp_limit_per_snapshot(network, direction):
+    """Translate the configured ramp rate to a fraction per snapshot."""
+    ramp_rate = _ammonia_ramp_rate(network, direction)
+    if pd.isna(ramp_rate):
+        return np.nan
+    ramp_basis = getattr(network, "_ramp_limit_basis", "legacy_per_snapshot")
+    ramp_multiplier = (
+        float(getattr(network, "_snapshot_hours", 1.0))
+        if ramp_basis == "per_hour"
+        else 1.0
+    )
+    return min(1.0, ramp_rate * ramp_multiplier)
+
+
 def linopy_constraints(network, snapshots):
     """Linopy equivalent of the legacy pyomo_constraints for PyPSA >= 1.0."""
     model, sns = _prepare_linopy_context(network, snapshots)
+
+    land_budget = getattr(network, "_renewable_land_budget", None)
+    land_allocation = getattr(network, "_land_allocation", None)
+    if land_budget is not None and land_allocation is not None:
+        def _generator_nom(name):
+            try:
+                return model["Generator-p_nom"].sel(name=name)
+            except KeyError:
+                return None
+
+        wind_nom = _generator_nom("wind")
+        solar_nom = _generator_nom("solar")
+        tracking_nom = _generator_nom("solar_tracking")
+
+        wind_land = (
+            wind_nom / float(land_budget.wind_density_mw_per_km2)
+            if wind_nom is not None and land_budget.wind_density_mw_per_km2
+            else None
+        )
+        fixed_solar_land = (
+            solar_nom / float(land_budget.fixed_solar_density_mw_per_km2)
+            if solar_nom is not None and land_budget.fixed_solar_density_mw_per_km2
+            else None
+        )
+        tracking_solar_land = (
+            tracking_nom / float(land_budget.tracking_solar_density_mw_per_km2)
+            if tracking_nom is not None and land_budget.tracking_solar_density_mw_per_km2
+            else None
+        )
+
+        solar_terms = [term for term in (fixed_solar_land, tracking_solar_land) if term is not None]
+        solar_land = sum(solar_terms[1:], solar_terms[0]) if solar_terms else None
+        # colocated: only the exclusive fraction of the wind footprint (pads, roads,
+        # substations) competes with PV for the shared budget; exclusive: all of it.
+        from .land_capacity import effective_wind_land_exclusive_fraction, normalise_land_allocation
+
+        land_allocation = normalise_land_allocation(land_allocation)
+        fraction = effective_wind_land_exclusive_fraction(land_allocation, land_budget)
+        union_terms = [term for term in (
+            (wind_land * fraction) if (wind_land is not None and fraction > 0) else None,
+            solar_land,
+        ) if term is not None]
+        union_land = sum(union_terms[1:], union_terms[0]) if union_terms else None
+
+        if wind_land is not None and land_budget.wind_area_km2 is not None:
+            model.add_constraints(
+                wind_land <= float(land_budget.wind_area_km2),
+                name="wind_land_area_cap",
+            )
+        if solar_land is not None and land_budget.solar_area_km2 is not None:
+            model.add_constraints(
+                solar_land <= float(land_budget.solar_area_km2),
+                name="solar_land_area_cap",
+            )
+        if union_land is not None and land_budget.renewable_union_area_km2 is not None:
+            model.add_constraints(
+                union_land <= float(land_budget.renewable_union_area_km2),
+                name="renewable_union_land_area_cap",
+            )
 
     shared_solar_cap = getattr(network, "_shared_solar_cap_mw", None)
     if shared_solar_cap is not None and float(shared_solar_cap) > 0:
@@ -786,18 +950,20 @@ def linopy_constraints(network, snapshots):
         except KeyError:
             ammonia_synthesis_capacity = network.links.loc["ammonia_synthesis", "p_nom"]
 
-        ramp_down = network.links.at["ammonia_synthesis", "ramp_limit_down"]
-        ramp_up = network.links.at["ammonia_synthesis", "ramp_limit_up"]
+        ramp_down = _ammonia_ramp_limit_per_snapshot(network, "down")
+        ramp_up = _ammonia_ramp_limit_per_snapshot(network, "up")
 
         if pd.notna(ramp_down):
             model.add_constraints(
-                ammonia_synthesis_prev - ammonia_synthesis_dispatch <= ramp_down * ammonia_synthesis_capacity,
+                ammonia_synthesis_prev - ammonia_synthesis_dispatch
+                <= ramp_down * ammonia_synthesis_capacity,
                 name="ammonia_synthesis_ramp_down",
             )
 
         if pd.notna(ramp_up):
             model.add_constraints(
-                ammonia_synthesis_dispatch - ammonia_synthesis_prev <= ramp_up * ammonia_synthesis_capacity,
+                ammonia_synthesis_dispatch - ammonia_synthesis_prev
+                <= ramp_up * ammonia_synthesis_capacity,
                 name="ammonia_synthesis_ramp_up",
             )
 
@@ -816,18 +982,20 @@ def linopy_operating_constraints(network, snapshots):
 
     ammonia_synthesis_prev = ammonia_synthesis_dispatch.roll(snapshot=1, roll_coords=False)
     ammonia_synthesis_capacity = network.links.loc["ammonia_synthesis", "p_nom"]
-    ramp_down = network.links.at["ammonia_synthesis", "ramp_limit_down"]
-    ramp_up = network.links.at["ammonia_synthesis", "ramp_limit_up"]
+    ramp_down = _ammonia_ramp_limit_per_snapshot(network, "down")
+    ramp_up = _ammonia_ramp_limit_per_snapshot(network, "up")
 
     if pd.notna(ramp_down):
         model.add_constraints(
-            ammonia_synthesis_prev - ammonia_synthesis_dispatch <= ramp_down * ammonia_synthesis_capacity,
+            ammonia_synthesis_prev - ammonia_synthesis_dispatch
+            <= ramp_down * ammonia_synthesis_capacity,
             name="ammonia_synthesis_operating_ramp_down",
         )
 
     if pd.notna(ramp_up):
         model.add_constraints(
-            ammonia_synthesis_dispatch - ammonia_synthesis_prev <= ramp_up * ammonia_synthesis_capacity,
+            ammonia_synthesis_dispatch - ammonia_synthesis_prev
+            <= ramp_up * ammonia_synthesis_capacity,
             name="ammonia_synthesis_operating_ramp_up",
         )
 
@@ -868,6 +1036,7 @@ def convert_network_to_operating(n, ammonia_cost_per_ton=500, aggregation_count=
         pd.read_csv('ammonia_synthesis_p_max_pu.csv').set_index('snapshot').rename(columns={'ammonia_synthesis_max': 'ammonia_synthesis'}), aggregation_count)
 
     # Re-solves model:
+    prepare_ammonia_ramp_constraints(n)
     status, condition = n.optimize(
         solver_name='gurobi',
         extra_functionality=linopy_operating_constraints,

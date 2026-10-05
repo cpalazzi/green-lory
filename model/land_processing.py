@@ -18,16 +18,32 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import xarray as xr
-from shapely.geometry import box
+from shapely.geometry import MultiPolygon, box
 from shapely.errors import GEOSException
 
 try:
     from . import data_paths
+    from .land_union import (
+        CLASSWISE_NESTED_UNION_AREA_COLUMN,
+        CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+        CLASSWISE_NESTED_UNION_METHOD,
+        CLASSWISE_NESTED_UNION_VERSION,
+        RENEWABLE_UNION_METHOD_COLUMN,
+        RENEWABLE_UNION_METHOD_VERSION_COLUMN,
+    )
 except ImportError:  # pragma: no cover - fallback for direct execution
     PACKAGE_ROOT = Path(__file__).resolve().parent
     if str(PACKAGE_ROOT) not in sys.path:
         sys.path.insert(0, str(PACKAGE_ROOT))
     import data_paths  # type: ignore
+    from land_union import (  # type: ignore
+        CLASSWISE_NESTED_UNION_AREA_COLUMN,
+        CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+        CLASSWISE_NESTED_UNION_METHOD,
+        CLASSWISE_NESTED_UNION_VERSION,
+        RENEWABLE_UNION_METHOD_COLUMN,
+        RENEWABLE_UNION_METHOD_VERSION_COLUMN,
+    )
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +64,12 @@ LAND_COMPETITION_SCENARIOS = {
 DEFAULT_LAND_COMPETITION_FRACTION = LAND_COMPETITION_SCENARIOS[DEFAULT_LAND_SCENARIO_NAME]
 DEFAULT_MAX_SLOPE_DEGREES = 15.0
 EQUAL_AREA_CRS = "EPSG:6933"
+# Cell anchoring: a cell labelled (lat, lon) covers [lat, lat + 1] x [lon, lon + 1]
+# when anchored at its south-west corner and [lat - 0.5, lat + 0.5] x
+# [lon - 0.5, lon + 0.5] when centred.  The weather nodes and the legacy land
+# step are centred on the integer coordinate, so centred cells are the default.
+CELL_ANCHORS = ("center", "southwest")
+DEFAULT_CELL_ANCHOR = "center"
 DEFAULT_SLOPE_RASTER_FILE = data_paths.GEBCO_SLOPE_FILE
 DEFAULT_PROTECTED_AREA_PATHS = data_paths.WDPA_SHAPEFILES
 # First Solar Series 6 (2018) constants used in van de Ven et al. (2021) style packing
@@ -62,7 +84,12 @@ SOLAR_GCR_MIN = 0.05
 SOLAR_GCR_MAX = 0.8
 
 # Suitability factors expressed separately for wind and solar siting. The generic
-# availability (used for quick inspection) is the max of the two technology maps.
+# availability (used for quick inspection) remains the max of the two aggregated
+# technology maps for backwards compatibility.  The renewable-union v1 fields
+# sum the classwise maximum of onshore-wind and solar suitability.  Because the
+# source data do not locate the eligible wind and solar fractions within each
+# MODIS class, this assumes perfect nesting of their footprints.  It is an
+# explicit lower-bound approximation to the physical union, not an exact union.
 #
 # IGBP Land Cover Type 1 classes (MODIS MCD12C1):
 #   0  Water bodies                    6  Closed shrublands        12  Croplands
@@ -104,6 +131,7 @@ MODIS_CLASS_SOLAR_AVAILABILITY = {
 FINAL_COLUMNS = [
     "latitude",
     "longitude",
+    "cell_anchor",
     "availability",
     "area",
     "onshore_land_pct",
@@ -121,10 +149,16 @@ FINAL_COLUMNS = [
     "wind_offshore_availability",
     "wind_availability",
     "solar_availability",
+    CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+    "renewable_union_availability",
+    RENEWABLE_UNION_METHOD_COLUMN,
+    RENEWABLE_UNION_METHOD_VERSION_COLUMN,
     "solar_area_km2",
     "wind_area_km2",
     "wind_onshore_area_km2",
     "wind_offshore_area_km2",
+    CLASSWISE_NESTED_UNION_AREA_COLUMN,
+    "renewable_union_area_km2",
     "wind_density_mw_per_km2",
     "solar_density_mw_per_km2",
     "max_power_solar_mw",
@@ -262,6 +296,7 @@ class LandAvailabilityConfig:
     slope_exclusion_csv: Path | None = None
     max_slope_degrees: float = DEFAULT_MAX_SLOPE_DEGREES
     skip_slope_exclusion: bool = False
+    cell_anchor: str = DEFAULT_CELL_ANCHOR
 
     def resolved(self) -> "LandAvailabilityConfig":
         return LandAvailabilityConfig(
@@ -279,12 +314,61 @@ class LandAvailabilityConfig:
             slope_exclusion_csv=_resolve_optional_path(self.slope_exclusion_csv),
             max_slope_degrees=float(self.max_slope_degrees),
             skip_slope_exclusion=bool(self.skip_slope_exclusion),
+            cell_anchor=_normalise_cell_anchor(self.cell_anchor),
         )
 
 
-def _cell_area_km2(latitudes: pd.Series, delta_deg: float) -> pd.Series:
-    radians = np.deg2rad(latitudes.to_numpy())
-    radians_upper = np.deg2rad(latitudes.to_numpy() + delta_deg)
+def _normalise_cell_anchor(name: str | None) -> str:
+    anchor = str(name or DEFAULT_CELL_ANCHOR).strip().lower()
+    if anchor not in CELL_ANCHORS:
+        raise ValueError(f"cell_anchor must be one of {CELL_ANCHORS}, got {name!r}")
+    return anchor
+
+
+def _anchor_offset(coarse_degree: float, anchor: str) -> float:
+    """Degrees from a cell's label to its south-west corner."""
+    return 0.5 * float(coarse_degree) if _normalise_cell_anchor(anchor) == "center" else 0.0
+
+
+def _bin_coordinates(values, coarse_degree: float, anchor: str) -> np.ndarray:
+    """Label of the coarse cell containing each coordinate (pixel centres expected).
+
+    South-west anchored cells are labelled by their south-west corner and cover
+    [label, label + coarse); centred cells are labelled by their centre and cover
+    [label - coarse / 2, label + coarse / 2).
+    """
+    offset = _anchor_offset(coarse_degree, anchor)
+    return np.floor((np.asarray(values, dtype=float) + offset) / coarse_degree) * coarse_degree
+
+
+def _wrap_longitude_labels(values) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    return np.where(values >= 180.0, values - 360.0, values)
+
+
+def _cell_polygon(lat: float, lon: float, coarse_degree: float, anchor: str):
+    """Polygon of one coarse cell; a centred cell on the dateline becomes two boxes."""
+    offset = _anchor_offset(coarse_degree, anchor)
+    south, west = float(lat) - offset, float(lon) - offset
+    north, east = south + coarse_degree, west + coarse_degree
+    if west < -180.0:
+        return MultiPolygon([box(-180.0, south, east, north), box(west + 360.0, south, 180.0, north)])
+    if east > 180.0:
+        return MultiPolygon([box(west, south, 180.0, north), box(-180.0, south, east - 360.0, north)])
+    return box(west, south, east, north)
+
+
+def _cell_centre_latitudes(latitudes: pd.Series, coarse_degree: float, anchor: str) -> pd.Series:
+    """Latitude of each cell centre given the label convention."""
+    return latitudes.astype(float) + (0.5 * coarse_degree - _anchor_offset(coarse_degree, anchor))
+
+
+def _cell_area_km2(
+    latitudes: pd.Series, delta_deg: float, anchor: str = DEFAULT_CELL_ANCHOR
+) -> pd.Series:
+    south = latitudes.to_numpy(dtype=float) - _anchor_offset(delta_deg, anchor)
+    radians = np.deg2rad(south)
+    radians_upper = np.deg2rad(south + delta_deg)
     band_height = np.sin(radians_upper) - np.sin(radians)
     area = (EARTH_RADIUS_KM ** 2) * np.deg2rad(delta_deg) * band_height
     return pd.Series(np.abs(area), index=latitudes.index)
@@ -303,18 +387,34 @@ def _load_land_cover_frame(config: LandAvailabilityConfig) -> pd.DataFrame:
     )
 
     df["class_fraction"] = df["percentage"].astype(float) / 100.0
-    df["latitude"] = 90.0 - config.fine_degree * df["y_index"]
-    df["longitude"] = -180.0 + config.fine_degree * df["x_index"]
-
-    df["latitude"] = np.floor(df["latitude"] / config.coarse_degree) * config.coarse_degree
-    df["longitude"] = np.floor(df["longitude"] / config.coarse_degree) * config.coarse_degree
+    # Pixel centres: row y spans [90 - fine * (y + 1), 90 - fine * y].
+    df["latitude"] = 90.0 - config.fine_degree * (df["y_index"] + 0.5)
+    df["longitude"] = -180.0 + config.fine_degree * (df["x_index"] + 0.5)
+    df["latitude"] = _bin_coordinates(df["latitude"], config.coarse_degree, config.cell_anchor)
+    df["longitude"] = _wrap_longitude_labels(
+        _bin_coordinates(df["longitude"], config.coarse_degree, config.cell_anchor)
+    )
     df = df[(df["latitude"] >= config.lat_bounds[0]) & (df["latitude"] <= config.lat_bounds[1])]
 
     return df[["latitude", "longitude", "modis_class", "class_fraction"]]
 
 
+def _reduce_band(field: np.ndarray, group_size: int, row_weights: np.ndarray) -> np.ndarray:
+    """Area-weighted mean of a (group_size, n_fine_lon) band for each coarse column.
+
+    Fine rows are weighted by their spherical area (row_weights); fine columns
+    within a coarse cell all have the same area, so a plain mean applies there.
+    """
+    blocks = field.reshape(group_size, -1, group_size)
+    return np.tensordot(row_weights, blocks, axes=([0], [0])).mean(axis=1)
+
+
 def _aggregate_availability_from_hdf4(config: LandAvailabilityConfig) -> pd.DataFrame:
     """Aggregate MODIS land-cover suitability directly from the HDF4 input.
+
+    Class fractions are averaged over each coarse cell with exact spherical
+    row weights, so a cell's availability is an area fraction, not a pixel
+    fraction (identical to the legacy land step's per-pixel weighting).
 
     Some netCDF4 builds (common on macOS/Homebrew) do not enable the HDF4 feature
     set, which makes `xr.open_dataset(..., engine="netcdf4")` fail for MODIS .hdf
@@ -366,70 +466,113 @@ def _aggregate_availability_from_hdf4(config: LandAvailabilityConfig) -> pd.Data
         for klass, weight in MODIS_CLASS_SOLAR_AVAILABILITY.items():
             if 0 <= int(klass) < n_classes:
                 solar_factors[int(klass)] = float(weight)
+        # With no sub-class spatial masks, max(...) is the minimum possible
+        # wind/solar union: it assumes the smaller eligible footprint is fully
+        # nested inside the larger footprint for every MODIS class.
+        renewable_union_factors = np.maximum(wind_onshore_factors, solar_factors)
 
         if not (0 <= water_class < n_classes):
             raise ValueError(
                 f"Water class index {water_class} out of bounds for n_classes={n_classes}."
             )
 
-        # Compute y indices that intersect the latitude bounds.
-        # lat = 90 - fine_degree * y
+        # Fine row y spans latitudes [90 - fine * (y + 1), 90 - fine * y] and fine
+        # column x spans longitudes [-180 + fine * x, -180 + fine * (x + 1)].  A
+        # coarse band of group_size rows starting at y0 covers [top - coarse, top]
+        # with top = 90 - fine * y0.  South-west anchored bands start on multiples
+        # of group_size; centred bands are shifted by half a cell so that the
+        # label sits at the cell centre, and the first coarse column then wraps
+        # the dateline.
+        anchor = _normalise_cell_anchor(config.cell_anchor)
+        shift = 0
+        if anchor == "center":
+            if group_size % 2:
+                raise ValueError(
+                    "Centred cells need an even coarse/fine ratio so that cell edges "
+                    "fall on MODIS pixel edges."
+                )
+            shift = group_size // 2
         lat_min, lat_max = config.lat_bounds
-        y_start = int(np.floor((90.0 - lat_max) / config.fine_degree))
-        y_end = int(np.ceil((90.0 - lat_min) / config.fine_degree))
-        y_start = max(0, min(n_y, y_start))
-        y_end = max(0, min(n_y, y_end))
+        band_starts = np.arange(shift, n_y - group_size + 1, group_size)
+        band_tops = 90.0 - config.fine_degree * band_starts
+        band_labels = (
+            band_tops - config.coarse_degree + _anchor_offset(config.coarse_degree, anchor)
+        )
+        keep = (band_labels >= lat_min - 1e-9) & (band_labels <= lat_max + 1e-9)
+        band_starts = band_starts[keep]
+        band_labels = band_labels[keep]
 
-        # Ensure we only process complete coarse bands.
-        y_start = (y_start // group_size) * group_size
-        y_end = (y_end // group_size) * group_size
-
-        # Similarly, ensure longitude dimension divides neatly.
         x_end = (n_x // group_size) * group_size
         if x_end == 0:
             raise ValueError("Longitude dimension too small for requested aggregation.")
+        if shift and x_end != n_x:
+            raise ValueError(
+                "Centred cells need the MODIS longitude axis to divide exactly into coarse cells."
+            )
 
         lon_coarse = -180.0 + config.coarse_degree * np.arange(x_end // group_size)
 
-        rows: list[dict[str, float]] = []
+        rows: list[dict[str, float | str]] = []
 
-        for y0 in range(y_start, y_end, group_size):
+        for y0, lat_coarse in zip(band_starts, band_labels):
             # Read a single coarse latitude band (group_size rows) for all longitudes/classes.
-            cube = sds[y0 : y0 + group_size, 0:x_end, :]
+            cube = sds[int(y0) : int(y0) + group_size, 0:x_end, :]
             cube = np.asarray(cube, dtype=float) / 100.0
+            if shift:
+                # Rotate the fine columns eastward so that coarse column 0 covers
+                # [-180 - coarse / 2, -180 + coarse / 2] across the dateline.
+                cube = np.roll(cube, shift, axis=1)
+            # Fine row r of the band covers [top - fine * (r + 1), top - fine * r].
+            top = 90.0 - config.fine_degree * float(y0)
+            row_edges = np.deg2rad(top - config.fine_degree * np.arange(group_size + 1))
+            row_weights = np.sin(row_edges[:-1]) - np.sin(row_edges[1:])
+            row_weights = row_weights / row_weights.sum()
 
             # Weighted availability: sum_class(class_fraction * factor)
             wind_component_fine = np.tensordot(cube, wind_factors, axes=([2], [0]))
             solar_component_fine = np.tensordot(cube, solar_factors, axes=([2], [0]))
             wind_onshore_fine = np.tensordot(cube, wind_onshore_factors, axes=([2], [0]))
+            renewable_union_fine = np.tensordot(
+                cube,
+                renewable_union_factors,
+                axes=([2], [0]),
+            )
             water_fraction_fine = cube[:, :, water_class]
             wind_offshore_fine = (
                 water_fraction_fine if config.include_offshore_wind else np.zeros_like(water_fraction_fine)
             )
 
-            # Reduce to coarse cells: average across fine y and fine x.
+            # Reduce to coarse cells: area-weighted mean across fine y and fine x.
             # Shapes: (group_size, x_end) -> (n_lon_coarse,)
-            wind_band = wind_component_fine.reshape(group_size, -1, group_size).mean(axis=(0, 2))
-            wind_onshore_band = wind_onshore_fine.reshape(group_size, -1, group_size).mean(axis=(0, 2))
-            wind_offshore_band = wind_offshore_fine.reshape(group_size, -1, group_size).mean(axis=(0, 2))
-            solar_band = solar_component_fine.reshape(group_size, -1, group_size).mean(axis=(0, 2))
-            water_band = water_fraction_fine.reshape(group_size, -1, group_size).mean(axis=(0, 2))
+            wind_band = _reduce_band(wind_component_fine, group_size, row_weights)
+            wind_onshore_band = _reduce_band(wind_onshore_fine, group_size, row_weights)
+            wind_offshore_band = _reduce_band(wind_offshore_fine, group_size, row_weights)
+            solar_band = _reduce_band(solar_component_fine, group_size, row_weights)
+            renewable_union_band = _reduce_band(renewable_union_fine, group_size, row_weights)
+            water_band = _reduce_band(water_fraction_fine, group_size, row_weights)
 
-            lat_center = 90.0 - config.fine_degree * float(y0)
-            lat_coarse = np.floor(lat_center / config.coarse_degree) * config.coarse_degree
-
-            for lon, wind_val, wind_onshore_val, wind_offshore_val, solar_val, water_val in zip(
+            for (
+                lon,
+                wind_val,
+                wind_onshore_val,
+                wind_offshore_val,
+                solar_val,
+                renewable_union_val,
+                water_val,
+            ) in zip(
                 lon_coarse,
                 wind_band,
                 wind_onshore_band,
                 wind_offshore_band,
                 solar_band,
+                renewable_union_band,
                 water_band,
             ):
                 wind_val = float(np.clip(wind_val, 0.0, 1.0))
                 wind_onshore_val = float(np.clip(wind_onshore_val, 0.0, 1.0))
                 wind_offshore_val = float(np.clip(wind_offshore_val, 0.0, 1.0))
                 solar_val = float(np.clip(solar_val, 0.0, 1.0))
+                renewable_union_val = float(np.clip(renewable_union_val, 0.0, 1.0))
                 water_val = float(np.clip(water_val, 0.0, 1.0))
                 onshore = float(np.clip(1.0 - water_val, 0.0, 1.0))
                 avail = float(max(wind_val, solar_val))
@@ -441,6 +584,10 @@ def _aggregate_availability_from_hdf4(config: LandAvailabilityConfig) -> pd.Data
                         "wind_offshore_availability": wind_offshore_val,
                         "wind_availability": wind_val,
                         "solar_availability": solar_val,
+                        CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN: renewable_union_val,
+                        "renewable_union_availability": renewable_union_val,
+                        RENEWABLE_UNION_METHOD_COLUMN: CLASSWISE_NESTED_UNION_METHOD,
+                        RENEWABLE_UNION_METHOD_VERSION_COLUMN: CLASSWISE_NESTED_UNION_VERSION,
                         "onshore_land_pct": onshore * 100.0,
                         "availability": avail,
                     }
@@ -473,15 +620,37 @@ def _aggregate_availability(df: pd.DataFrame, include_offshore_wind: bool) -> pd
     grouped["solar_component"] = (
         grouped["class_fraction"] * grouped["modis_class"].map(MODIS_CLASS_SOLAR_AVAILABILITY).fillna(0.0)
     )
+    # This is a classwise nested-overlap lower bound.  MODIS class fractions do
+    # not reveal whether the eligible wind and solar subareas actually overlap.
+    renewable_union_map = {
+        klass: max(
+            float(wind_onshore_map.get(klass, 0.0)),
+            float(MODIS_CLASS_SOLAR_AVAILABILITY.get(klass, 0.0)),
+        )
+        for klass in set(wind_onshore_map) | set(MODIS_CLASS_SOLAR_AVAILABILITY)
+    }
+    grouped["renewable_union_component"] = (
+        grouped["class_fraction"]
+        * grouped["modis_class"].map(renewable_union_map).fillna(0.0)
+    )
 
     agg = grouped.groupby(["latitude", "longitude"], as_index=False).agg(
         wind_availability=("wind_component", "sum"),
         wind_onshore_availability=("wind_onshore_component", "sum"),
         solar_availability=("solar_component", "sum"),
+        renewable_union_availability=("renewable_union_component", "sum"),
     )
     agg["wind_availability"] = agg["wind_availability"].clip(0.0, 1.0)
     agg["wind_onshore_availability"] = agg["wind_onshore_availability"].clip(0.0, 1.0)
     agg["solar_availability"] = agg["solar_availability"].clip(0.0, 1.0)
+    agg["renewable_union_availability"] = agg[
+        "renewable_union_availability"
+    ].clip(0.0, 1.0)
+    agg[CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN] = agg[
+        "renewable_union_availability"
+    ]
+    agg[RENEWABLE_UNION_METHOD_COLUMN] = CLASSWISE_NESTED_UNION_METHOD
+    agg[RENEWABLE_UNION_METHOD_VERSION_COLUMN] = CLASSWISE_NESTED_UNION_VERSION
 
     water_fraction = (
         grouped.loc[grouped["modis_class"] == MODIS_WATER_CLASS, ["latitude", "longitude", "class_fraction"]]
@@ -502,7 +671,12 @@ def _aggregate_availability(df: pd.DataFrame, include_offshore_wind: bool) -> pd
     return availability.drop(columns=["water_fraction"])
 
 
-def _attach_bathymetry_depth(df: pd.DataFrame, bathymetry_path: Path) -> pd.DataFrame:
+def _attach_bathymetry_depth(
+    df: pd.DataFrame,
+    bathymetry_path: Path,
+    coarse_degree: float = 1.0,
+    anchor: str = DEFAULT_CELL_ANCHOR,
+) -> pd.DataFrame:
     if not bathymetry_path.exists():
         LOGGER.warning("Bathymetry file %s not found; offshore capacities will be zero.", bathymetry_path)
         output = df.copy()
@@ -512,11 +686,15 @@ def _attach_bathymetry_depth(df: pd.DataFrame, bathymetry_path: Path) -> pd.Data
     with xr.open_dataset(bathymetry_path) as dataset:
         variable_name = "depths" if "depths" in dataset.data_vars else next(iter(dataset.data_vars))
         depth_da = dataset[variable_name]
+        # Sample the depth at the cell centre whatever the label convention.
+        centre_shift = 0.5 * coarse_degree - _anchor_offset(coarse_degree, anchor)
+        centre_lon = df["longitude"].to_numpy(dtype=float) + centre_shift
+        centre_lon = np.where(centre_lon >= 180.0, centre_lon - 360.0, centre_lon)
         points = xr.Dataset(
             coords={
                 "points": np.arange(len(df)),
-                "latitude": ("points", df["latitude"].to_numpy()),
-                "longitude": ("points", df["longitude"].to_numpy()),
+                "latitude": ("points", df["latitude"].to_numpy(dtype=float) + centre_shift),
+                "longitude": ("points", centre_lon),
             }
         )
         selected = depth_da.sel(
@@ -539,8 +717,13 @@ def _merge_fraction_csv(
     value_columns: tuple[str, ...],
     default_value: float,
     coarse_degree: float,
+    anchor: str = DEFAULT_CELL_ANCHOR,
 ) -> pd.DataFrame:
-    """Merge a precomputed percentage/fraction mask onto the land grid."""
+    """Merge a precomputed percentage/fraction mask onto the land grid.
+
+    The mask must have been computed for the same cell anchoring; its labels are
+    re-binned with that convention (idempotent for correctly labelled input).
+    """
     if not path.exists():
         raise FileNotFoundError(f"Mask CSV not found: {path}")
 
@@ -560,11 +743,9 @@ def _merge_fraction_csv(
     cleaned = values[[lat_col, lon_col, value_col]].rename(
         columns={lat_col: "latitude", lon_col: "longitude", value_col: output_column}
     )
-    cleaned["latitude"] = (
-        np.floor(cleaned["latitude"].astype(float) / coarse_degree) * coarse_degree
-    )
-    cleaned["longitude"] = (
-        np.floor(cleaned["longitude"].astype(float) / coarse_degree) * coarse_degree
+    cleaned["latitude"] = _bin_coordinates(cleaned["latitude"], coarse_degree, anchor)
+    cleaned["longitude"] = _wrap_longitude_labels(
+        _bin_coordinates(cleaned["longitude"], coarse_degree, anchor)
     )
     cleaned[output_column] = pd.to_numeric(cleaned[output_column], errors="coerce")
     if cleaned[output_column].max(skipna=True) <= 1.0:
@@ -580,11 +761,13 @@ def _merge_fraction_csv(
     return output
 
 
-def _cell_geometries(df: pd.DataFrame, coarse_degree: float) -> gpd.GeoDataFrame:
+def _cell_geometries(
+    df: pd.DataFrame, coarse_degree: float, anchor: str = DEFAULT_CELL_ANCHOR
+) -> gpd.GeoDataFrame:
     cells = df[["latitude", "longitude"]].drop_duplicates().reset_index(drop=True)
     cells["cell_id"] = np.arange(len(cells), dtype=int)
     cells["geometry"] = [
-        box(lon, lat, lon + coarse_degree, lat + coarse_degree)
+        _cell_polygon(lat, lon, coarse_degree, anchor)
         for lat, lon in zip(cells["latitude"], cells["longitude"])
     ]
     return gpd.GeoDataFrame(cells, geometry="geometry", crs="EPSG:4326")
@@ -747,6 +930,7 @@ def _protected_area_pct_from_vectors(
     protected_area_paths: Tuple[Path, ...],
     coarse_degree: float,
     checkpoint_path: Path | None = None,
+    anchor: str = DEFAULT_CELL_ANCHOR,
 ) -> pd.DataFrame:
     output = df.copy()
     output["protected_area_pct"] = 0.0
@@ -757,7 +941,7 @@ def _protected_area_pct_from_vectors(
         if not path.exists():
             raise FileNotFoundError(f"Protected-area vector file not found: {path}")
 
-    cells = _cell_geometries(output, coarse_degree)
+    cells = _cell_geometries(output, coarse_degree, anchor)
     cells_equal_area = cells.to_crs(EQUAL_AREA_CRS)
     cell_areas = cells_equal_area.set_index("cell_id").geometry.area
     if checkpoint_path is not None:
@@ -951,9 +1135,11 @@ def _slope_suitable_land_pct_from_raster(
     raster_path: Path,
     coarse_degree: float,
     max_slope_degrees: float,
+    anchor: str = DEFAULT_CELL_ANCHOR,
 ) -> pd.DataFrame:
     if not raster_path.exists():
         raise FileNotFoundError(f"Slope/elevation raster not found: {raster_path}")
+    offset_deg = _anchor_offset(coarse_degree, anchor)
 
     frames: list[pd.DataFrame] = []
     requested_lats = sorted(float(value) for value in df["latitude"].dropna().unique())
@@ -991,17 +1177,26 @@ def _slope_suitable_land_pct_from_raster(
             )
 
         n_lon = (len(lon_values) // cols_per_cell) * cols_per_cell
-        lon_cells = (
-            np.floor(
-                lon_values[:n_lon].reshape(-1, cols_per_cell).mean(axis=1) / coarse_degree
+        if len(lon_values) > 1 and lon_values[1] < lon_values[0]:
+            raise ValueError("Slope raster longitudes must be ascending.")
+        cols_shift = int(round(offset_deg / dlon))
+        if cols_shift and n_lon != len(lon_values):
+            raise ValueError(
+                "Centred cells need the slope raster longitude axis to divide exactly into coarse cells."
             )
-            * coarse_degree
+        # After rolling the columns eastward by cols_shift, coarse column b holds
+        # raster columns [b * cols_per_cell - cols_shift, (b + 1) * cols_per_cell - cols_shift).
+        column_lons = lon_values[0] + dlon * (np.arange(n_lon) - cols_shift)
+        lon_cells = _wrap_longitude_labels(
+            _bin_coordinates(
+                column_lons.reshape(-1, cols_per_cell).mean(axis=1), coarse_degree, anchor
+            )
         )
         dy_m = EARTH_RADIUS_KM * 1000.0 * np.deg2rad(dlat)
 
         for lat_index, cell_lat in enumerate(requested_lats, start=1):
-            lat_lower = cell_lat
-            lat_upper = cell_lat + coarse_degree
+            lat_lower = cell_lat - offset_deg
+            lat_upper = lat_lower + coarse_degree
             pad_lower = lat_lower - dlat * 1.5
             pad_upper = lat_upper + dlat * 1.5
 
@@ -1013,6 +1208,8 @@ def _slope_suitable_land_pct_from_raster(
                 continue
 
             elevations = band.to_numpy().astype(np.float32)
+            if cols_shift:
+                elevations = np.roll(elevations, cols_shift, axis=1)
             grad_y = np.gradient(elevations, axis=0) / dy_m
             dx_m = (
                 EARTH_RADIUS_KM
@@ -1084,6 +1281,7 @@ def _apply_land_exclusions(
             ("protected_area_pct", "protected_fraction"),
             0.0,
             cfg.coarse_degree,
+            cfg.cell_anchor,
         )
     else:
         output = _protected_area_pct_from_vectors(
@@ -1091,6 +1289,7 @@ def _apply_land_exclusions(
             cfg.protected_area_paths,
             cfg.coarse_degree,
             _protected_area_checkpoint_path(cfg.output_csv),
+            cfg.cell_anchor,
         )
 
     if cfg.skip_slope_exclusion:
@@ -1104,6 +1303,7 @@ def _apply_land_exclusions(
             ("slope_suitable_land_pct", "slope_suitable_fraction", "non_steep_land_pct"),
             100.0,
             cfg.coarse_degree,
+            cfg.cell_anchor,
         )
         output["steep_slope_pct"] = 100.0 - output["slope_suitable_land_pct"]
     elif cfg.slope_raster_path is not None:
@@ -1112,6 +1312,7 @@ def _apply_land_exclusions(
             cfg.slope_raster_path,
             cfg.coarse_degree,
             cfg.max_slope_degrees,
+            cfg.cell_anchor,
         )
     else:
         output["slope_suitable_land_pct"] = 100.0
@@ -1140,10 +1341,19 @@ def _apply_land_exclusions(
     output["wind_onshore_availability"] = (
         output["wind_onshore_availability"] * output["land_exclusion_factor"]
     ).clip(0.0, 1.0)
+    for union_availability_column in (
+        CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+        "renewable_union_availability",
+    ):
+        if union_availability_column in output.columns:
+            output[union_availability_column] = (
+                output[union_availability_column] * output["land_exclusion_factor"]
+            ).clip(0.0, 1.0)
     output["wind_offshore_availability"] = output["wind_offshore_availability"].clip(0.0, 1.0)
     output["wind_availability"] = (
         output["wind_onshore_availability"] + output["wind_offshore_availability"]
     ).clip(0.0, 1.0)
+    output["availability"] = output[["wind_availability", "solar_availability"]].max(axis=1)
     return output
 
 
@@ -1165,12 +1375,53 @@ def _uniform_land_competition_fraction(
     return float(raw_values[0])
 
 
+def _validate_versioned_union_aliases(df: pd.DataFrame) -> None:
+    """Ensure compatibility aliases do not diverge from the v1 estimate."""
+
+    for versioned, generic in (
+        (
+            CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+            "renewable_union_availability",
+        ),
+        (CLASSWISE_NESTED_UNION_AREA_COLUMN, "renewable_union_area_km2"),
+    ):
+        if versioned not in df.columns or generic not in df.columns:
+            continue
+        versioned_values = pd.to_numeric(df[versioned], errors="coerce")
+        generic_values = pd.to_numeric(df[generic], errors="coerce")
+        if not np.allclose(
+            versioned_values.to_numpy(),
+            generic_values.to_numpy(),
+            equal_nan=True,
+        ):
+            raise ValueError(
+                f"Compatibility alias {generic!r} diverges from versioned "
+                f"renewable-union column {versioned!r}."
+            )
+
+
+def _ensure_versioned_union_compatibility_aliases(df: pd.DataFrame) -> None:
+    """Add generic aliases only when versioned provenance is already present."""
+
+    for versioned, generic in (
+        (
+            CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+            "renewable_union_availability",
+        ),
+        (CLASSWISE_NESTED_UNION_AREA_COLUMN, "renewable_union_area_km2"),
+    ):
+        if versioned in df.columns and generic not in df.columns:
+            df[generic] = df[versioned]
+
+
 def apply_land_competition_scenario(
     df: pd.DataFrame,
     land_competition_fraction: float,
     source_land_competition_fraction: float | None = None,
 ) -> pd.DataFrame:
     output = df.copy()
+    _ensure_versioned_union_compatibility_aliases(output)
+    _validate_versioned_union_aliases(output)
     current_fraction = _uniform_land_competition_fraction(
         output,
         source_land_competition_fraction=source_land_competition_fraction,
@@ -1188,6 +1439,23 @@ def apply_land_competition_scenario(
 
     if "solar_area_km2" not in output.columns and "solar_availability" in output.columns and "area" in output.columns:
         output["solar_area_km2"] = output["area"] * output["solar_availability"]
+
+    if (
+        "renewable_union_area_km2" not in output.columns
+        and "renewable_union_availability" in output.columns
+        and "area" in output.columns
+    ):
+        output["renewable_union_area_km2"] = (
+            output["area"] * output["renewable_union_availability"]
+        )
+    if (
+        CLASSWISE_NESTED_UNION_AREA_COLUMN not in output.columns
+        and CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN in output.columns
+        and "area" in output.columns
+    ):
+        output[CLASSWISE_NESTED_UNION_AREA_COLUMN] = (
+            output["area"] * output[CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN]
+        )
 
     required_wind_area_columns = {"wind_onshore_area_km2", "wind_offshore_area_km2"}
     missing_wind_area_columns = sorted(required_wind_area_columns - set(output.columns))
@@ -1229,6 +1497,22 @@ def apply_land_competition_scenario(
     base_wind_onshore_availability = output["wind_onshore_availability"] / current_fraction
     base_solar_area_km2 = output["solar_area_km2"] / current_fraction
     base_wind_onshore_area_km2 = wind_onshore_area_km2 / current_fraction
+    base_renewable_union_availability = {
+        column: output[column] / current_fraction
+        for column in (
+            CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+            "renewable_union_availability",
+        )
+        if column in output.columns
+    }
+    base_renewable_union_area_km2 = {
+        column: output[column] / current_fraction
+        for column in (
+            CLASSWISE_NESTED_UNION_AREA_COLUMN,
+            "renewable_union_area_km2",
+        )
+        if column in output.columns
+    }
 
     output["land_competition_fraction"] = target_fraction
     if base_land_exclusion_factor is not None:
@@ -1237,6 +1521,8 @@ def apply_land_competition_scenario(
         output["constrained_onshore_area_km2"] = (base_constrained_onshore_area * target_fraction).clip(lower=0.0)
     output["solar_availability"] = (base_solar_availability * target_fraction).clip(0.0, 1.0)
     output["wind_onshore_availability"] = (base_wind_onshore_availability * target_fraction).clip(0.0, 1.0)
+    for column, base_values in base_renewable_union_availability.items():
+        output[column] = (base_values * target_fraction).clip(0.0, 1.0)
     output["wind_offshore_availability"] = output["wind_offshore_availability"].clip(0.0, 1.0)
     output["wind_availability"] = (
         output["wind_onshore_availability"] + output["wind_offshore_availability"]
@@ -1246,6 +1532,8 @@ def apply_land_competition_scenario(
     output["wind_onshore_area_km2"] = (base_wind_onshore_area_km2 * target_fraction).clip(lower=0.0)
     output["wind_offshore_area_km2"] = output["wind_offshore_area_km2"].clip(lower=0.0)
     output["wind_area_km2"] = output["wind_onshore_area_km2"] + output["wind_offshore_area_km2"]
+    for column, base_values in base_renewable_union_area_km2.items():
+        output[column] = (base_values * target_fraction).clip(lower=0.0)
 
     output["max_power_solar_mw"] = (
         output["solar_area_km2"] * output["solar_density_mw_per_km2"]
@@ -1254,7 +1542,11 @@ def apply_land_competition_scenario(
         output["wind_area_km2"] * output["wind_density_mw_per_km2"]
     ).clip(lower=0.0)
     output["max_capacity_mw"] = output["max_power_solar_mw"] + output["max_power_wind_mw"]
-    output["availability"] = (output["max_capacity_mw"] > 0).astype(float)
+    # Keep the historical generic availability column fractional.  The
+    # versioned classwise union is a nested-overlap lower bound; its generic
+    # renewable_union_* aliases are retained only for compatibility.
+    output["availability"] = output[["wind_availability", "solar_availability"]].max(axis=1)
+    _validate_versioned_union_aliases(output)
     return output
 
 
@@ -1308,8 +1600,13 @@ def build_land_availability_table(config: LandAvailabilityConfig | None = None) 
                 availability = _aggregate_availability_from_hdf4(cfg)
             else:
                 raise
-    availability["area"] = _cell_area_km2(availability["latitude"], cfg.coarse_degree)
-    availability = _attach_bathymetry_depth(availability, cfg.bathymetry_path)
+    availability["cell_anchor"] = cfg.cell_anchor
+    availability["area"] = _cell_area_km2(
+        availability["latitude"], cfg.coarse_degree, cfg.cell_anchor
+    )
+    availability = _attach_bathymetry_depth(
+        availability, cfg.bathymetry_path, cfg.coarse_degree, cfg.cell_anchor
+    )
 
     availability["offshore_sea_pct"] = (100.0 - availability["onshore_land_pct"]).clip(lower=0.0, upper=100.0)
     availability["onshore_area_km2"] = availability["area"] * availability["onshore_land_pct"] / 100.0
@@ -1327,10 +1624,21 @@ def build_land_availability_table(config: LandAvailabilityConfig | None = None) 
     availability["wind_offshore_area_km2"] = (
         availability["area"] * availability["wind_offshore_availability"]
     )
+    availability[CLASSWISE_NESTED_UNION_AREA_COLUMN] = (
+        availability["area"]
+        * availability[CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN]
+    )
+    availability["renewable_union_area_km2"] = availability[
+        CLASSWISE_NESTED_UNION_AREA_COLUMN
+    ]
 
-    availability["solar_density_mw_per_km2"] = _solar_density(availability["latitude"], 1.0)
+    # Power densities are evaluated at the cell centre whatever the label convention.
+    centre_latitudes = _cell_centre_latitudes(
+        availability["latitude"], cfg.coarse_degree, cfg.cell_anchor
+    )
+    availability["solar_density_mw_per_km2"] = _solar_density(centre_latitudes, 1.0)
     availability["wind_density_mw_per_km2"] = _wind_density(
-        availability["latitude"], 1.0, WIND_LAND_USE_KM2_PER_GW
+        centre_latitudes, 1.0, WIND_LAND_USE_KM2_PER_GW
     )
 
     availability = apply_land_competition_scenario(availability, cfg.land_competition_fraction)
@@ -1345,7 +1653,9 @@ def build_land_availability_table(config: LandAvailabilityConfig | None = None) 
         availability["max_power_solar_mw"]
         + availability["max_power_wind_mw"]
     )
-    availability["availability"] = (availability["max_capacity_mw"] > 0).astype(float)
+    availability["availability"] = availability[
+        ["wind_availability", "solar_availability"]
+    ].max(axis=1)
 
     for column in FINAL_COLUMNS:
         if column not in availability.columns:
@@ -1471,6 +1781,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Keep all slopes in the land-availability build and do not apply a slope cutoff.",
     )
+    parser.add_argument(
+        "--cell-anchor",
+        type=str,
+        choices=list(CELL_ANCHORS),
+        default=DEFAULT_CELL_ANCHOR,
+        help=(
+            "Where the (latitude, longitude) label sits in its 1-degree cell: 'center' matches the "
+            "weather nodes and the legacy land step; 'southwest' labels the south-west corner."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1515,6 +1835,7 @@ def main() -> None:
         slope_exclusion_csv=_resolve_optional_path(args.slope_exclusion_csv),
         max_slope_degrees=args.max_slope_degrees,
         skip_slope_exclusion=args.skip_slope_exclusion,
+        cell_anchor=args.cell_anchor,
     )
     write_land_availability_table(config)
 
