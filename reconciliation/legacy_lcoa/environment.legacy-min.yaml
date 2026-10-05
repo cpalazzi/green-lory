@@ -1,0 +1,22 @@
+# Minimal environment for running the frozen legacy-lcoa (cd56c11) model.
+# Versions follow lcoa-opt/environment.yaml (12 March 2024 export): PyPSA 0.25.1 is the
+# last series with the Pyomo `lopf(pyomo=True)` path the frozen code relies on.
+name: legacy-lcoa-env
+channels:
+  - conda-forge
+  - gurobi
+dependencies:
+  - python=3.11
+  - pypsa=0.25.1
+  - pyomo=6.5.0   # pyomo >= 6.6 ignores the linear_vars/linear_coefs assignment PyPSA 0.25 uses -> constant-0 objective
+  - linopy=0.3.8
+  - pandas=2.2.1
+  - numpy=1.26.4
+  - xarray=2024.3.0
+  - netcdf4=1.6.5
+  - openpyxl
+  - glpk=5.0
+  - highspy
+  - gurobi=11.0.1
+  - geopandas=0.14.3
+  - shapely

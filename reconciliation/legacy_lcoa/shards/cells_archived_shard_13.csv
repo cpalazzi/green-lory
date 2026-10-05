@@ -1,0 +1,962 @@
+name,lat,lon,wacc,wacc_source,iso3,country
+cm53_m70,-53,-70,0.051,ameli_map,CHL,Chile
+cm51_m70,-51,-70,0.051,ameli_map,ARG,Argentina
+cm49_69,-49,69,0.04,ameli_map,ATF,French Southern Territories
+cm47_m69,-47,-69,0.051,ameli_map,ARG,Argentina
+cm45_m73,-45,-73,0.051,ameli_map,CHL,Chile
+cm44_m69,-44,-69,0.051,ameli_map,ARG,Argentina
+cm43_146,-43,146,0.051,ameli_map,AUS,Australia
+cm42_172,-42,172,0.051,ameli_map,NZL,New Zealand
+cm41_173,-41,173,0.051,ameli_map,NZL,New Zealand
+cm40_148,-40,148,0.051,ameli_map,AUS,Australia
+cm38_m73,-38,-73,0.051,ameli_map,CHL,Chile
+cm38_141,-38,141,0.051,ameli_map,AUS,Australia
+cm37_m67,-37,-67,0.051,ameli_map,ARG,Argentina
+cm37_145,-37,145,0.051,ameli_map,AUS,Australia
+cm36_m62,-36,-62,0.051,ameli_map,ARG,Argentina
+cm36_150,-36,150,0.051,ameli_map,AUS,Australia
+cm35_m58,-35,-58,0.051,ameli_map,ARG,Argentina
+cm34_m71,-34,-71,0.051,ameli_map,CHL,Chile
+cm34_m55,-34,-55,0.051,ameli_map,URY,Uruguay
+cm34_140,-34,140,0.051,ameli_map,AUS,Australia
+cm33_m67,-33,-67,0.051,ameli_map,ARG,Argentina
+cm33_19,-33,19,0.051,ameli_map,ZAF,South Africa
+cm33_123,-33,123,0.051,ameli_map,AUS,Australia
+cm33_149,-33,149,0.051,ameli_map,AUS,Australia
+cm32_m58,-32,-58,0.051,ameli_map,URY,Uruguay
+cm32_28,-32,28,0.051,ameli_map,ZAF,South Africa
+cm32_134,-32,134,0.051,ameli_map,AUS,Australia
+cm32_150,-32,150,0.051,ameli_map,AUS,Australia
+cm31_m58,-31,-58,0.051,ameli_map,ARG,Argentina
+cm31_27,-31,27,0.051,ameli_map,ZAF,South Africa
+cm31_128,-31,128,0.051,ameli_map,AUS,Australia
+cm31_144,-31,144,0.051,ameli_map,AUS,Australia
+cm30_m64,-30,-64,0.051,ameli_map,ARG,Argentina
+cm30_20,-30,20,0.051,ameli_map,ZAF,South Africa
+cm30_120,-30,120,0.051,ameli_map,AUS,Australia
+cm30_136,-30,136,0.051,ameli_map,AUS,Australia
+cm30_152,-30,152,0.051,ameli_map,AUS,Australia
+cm29_m57,-29,-57,0.051,ameli_map,ARG,Argentina
+cm29_25,-29,25,0.051,ameli_map,ZAF,South Africa
+cm29_124,-29,124,0.051,ameli_map,AUS,Australia
+cm29_141,-29,141,0.051,ameli_map,AUS,Australia
+cm28_m68,-28,-68,0.051,ameli_map,ARG,Argentina
+cm28_m52,-28,-52,0.051,ameli_map,BRA,Brazil
+cm28_28,-28,28,0.051,ameli_map,ZAF,South Africa
+cm28_126,-28,126,0.051,ameli_map,AUS,Australia
+cm28_143,-28,143,0.051,ameli_map,AUS,Australia
+cm27_m65,-27,-65,0.051,ameli_map,ARG,Argentina
+cm27_m49,-27,-49,0.051,ameli_map,BRA,Brazil
+cm27_31,-27,31,0.051,ameli_map,SWZ,Swaziland
+cm27_128,-27,128,0.051,ameli_map,AUS,Australia
+cm27_144,-27,144,0.051,ameli_map,AUS,Australia
+cm26_m64,-26,-64,0.051,ameli_map,ARG,Argentina
+cm26_15,-26,15,0.051,ameli_map,NAM,Namibia
+cm26_31,-26,31,0.051,ameli_map,ZAF,South Africa
+cm26_129,-26,129,0.051,ameli_map,AUS,Australia
+cm26_145,-26,145,0.051,ameli_map,AUS,Australia
+cm25_m63,-25,-63,0.051,ameli_map,ARG,Argentina
+cm25_15,-25,15,0.051,ameli_map,NAM,Namibia
+cm25_31,-25,31,0.051,ameli_map,ZAF,South Africa
+cm25_124,-25,124,0.051,ameli_map,AUS,Australia
+cm25_140,-25,140,0.051,ameli_map,AUS,Australia
+cm24_m67,-24,-67,0.051,ameli_map,ARG,Argentina
+cm24_m51,-24,-51,0.051,ameli_map,BRA,Brazil
+cm24_26,-24,26,0.051,ameli_map,BWA,Botswana
+cm24_116,-24,116,0.051,ameli_map,AUS,Australia
+cm24_132,-24,132,0.051,ameli_map,AUS,Australia
+cm24_148,-24,148,0.051,ameli_map,AUS,Australia
+cm23_m58,-23,-58,0.051,ameli_map,PRY,Paraguay
+cm23_16,-23,16,0.051,ameli_map,NAM,Namibia
+cm23_32,-23,32,0.051,ameli_map,MOZ,Mozambique
+cm23_122,-23,122,0.051,ameli_map,AUS,Australia
+cm23_138,-23,138,0.051,ameli_map,AUS,Australia
+cm22_m67,-22,-67,0.051,ameli_map,BOL,Bolivia
+cm22_m51,-22,-51,0.051,ameli_map,BRA,Brazil
+cm22_20,-22,20,0.051,ameli_map,NAM,Namibia
+cm22_44,-22,44,0.051,ameli_map,MDG,Madagascar
+cm22_125,-22,125,0.051,ameli_map,AUS,Australia
+cm22_141,-22,141,0.051,ameli_map,AUS,Australia
+cm21_m64,-21,-64,0.051,ameli_map,BOL,Bolivia
+cm21_m48,-21,-48,0.051,ameli_map,BRA,Brazil
+cm21_22,-21,22,0.051,ameli_map,BWA,Botswana
+cm21_46,-21,46,0.051,ameli_map,MDG,Madagascar
+cm21_130,-21,130,0.051,ameli_map,AUS,Australia
+cm21_146,-21,146,0.051,ameli_map,AUS,Australia
+cm20_m59,-20,-59,0.051,ameli_map,PRY,Paraguay
+cm20_m43,-20,-43,0.051,ameli_map,BRA,Brazil
+cm20_27,-20,27,0.051,ameli_map,ZWE,Zimbabwe
+cm20_124,-20,124,0.051,ameli_map,AUS,Australia
+cm20_140,-20,140,0.051,ameli_map,AUS,Australia
+cm19_m63,-19,-63,0.051,ameli_map,BOL,Bolivia
+cm19_m47,-19,-47,0.051,ameli_map,BRA,Brazil
+cm19_21,-19,21,0.051,ameli_map,BWA,Botswana
+cm19_46,-19,46,0.051,ameli_map,MDG,Madagascar
+cm19_134,-19,134,0.051,ameli_map,AUS,Australia
+cm18_m67,-18,-67,0.051,ameli_map,BOL,Bolivia
+cm18_m51,-18,-51,0.051,ameli_map,BRA,Brazil
+cm18_16,-18,16,0.051,ameli_map,NAM,Namibia
+cm18_32,-18,32,0.051,ameli_map,ZWE,Zimbabwe
+cm18_129,-18,129,0.051,ameli_map,AUS,Australia
+cm18_145,-18,145,0.051,ameli_map,AUS,Australia
+cm17_m59,-17,-59,0.051,ameli_map,BOL,Bolivia
+cm17_m43,-17,-43,0.051,ameli_map,BRA,Brazil
+cm17_24,-17,24,0.051,ameli_map,ZMB,Zambia
+cm17_45,-17,45,0.051,ameli_map,MDG,Madagascar
+cm17_134,-17,134,0.051,ameli_map,AUS,Australia
+cm16_m69,-16,-69,0.051,ameli_map,BOL,Bolivia
+cm16_m53,-16,-53,0.051,ameli_map,BRA,Brazil
+cm16_13,-16,13,0.051,ameli_map,AGO,Angola
+cm16_29,-16,29,0.051,ameli_map,ZWE,Zimbabwe
+cm16_125,-16,125,0.051,ameli_map,AUS,Australia
+cm16_145,-16,145,0.051,ameli_map,AUS,Australia
+cm15_m60,-15,-60,0.051,ameli_map,BRA,Brazil
+cm15_m44,-15,-44,0.051,ameli_map,BRA,Brazil
+cm15_23,-15,23,0.051,ameli_map,ZMB,Zambia
+cm15_39,-15,39,0.051,ameli_map,MOZ,Mozambique
+cm15_143,-15,143,0.051,ameli_map,AUS,Australia
+cm14_m64,-14,-64,0.051,ameli_map,BOL,Bolivia
+cm14_m48,-14,-48,0.051,ameli_map,BRA,Brazil
+cm14_19,-14,19,0.051,ameli_map,AGO,Angola
+cm14_35,-14,35,0.051,ameli_map,MWI,Malawi
+cm14_142,-14,142,0.051,ameli_map,AUS,Australia
+cm13_m62,-13,-62,0.051,ameli_map,BRA,Brazil
+cm13_m46,-13,-46,0.051,ameli_map,BRA,Brazil
+cm13_21,-13,21,0.051,ameli_map,AGO,Angola
+cm13_37,-13,37,0.051,ameli_map,MOZ,Mozambique
+cm12_m74,-12,-74,0.051,ameli_map,PER,Peru
+cm12_m58,-12,-58,0.051,ameli_map,BRA,Brazil
+cm12_m42,-12,-42,0.051,ameli_map,BRA,Brazil
+cm12_25,-12,25,0.051,ameli_map,ZMB,Zambia
+cm12_133,-12,133,0.051,ameli_map,AUS,Australia
+cm11_m65,-11,-65,0.051,ameli_map,BRA,Brazil
+cm11_m49,-11,-49,0.051,ameli_map,BRA,Brazil
+cm11_18,-11,18,0.051,ameli_map,AGO,Angola
+cm11_34,-11,34,0.051,ameli_map,MWI,Malawi
+cm10_m69,-10,-69,0.051,ameli_map,BRA,Brazil
+cm10_m53,-10,-53,0.051,ameli_map,BRA,Brazil
+cm10_m37,-10,-37,0.051,ameli_map,BRA,Brazil
+cm10_28,-10,28,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm10_151,-10,151,0.051,ameli_map,PNG,Papua New Guinea
+cm9_m63,-9,-63,0.051,ameli_map,BRA,Brazil
+cm9_m47,-9,-47,0.051,ameli_map,BRA,Brazil
+cm9_18,-9,18,0.051,ameli_map,AGO,Angola
+cm9_34,-9,34,0.051,ameli_map,TZA,Tanzania
+cm8_m78,-8,-78,0.051,ameli_map,PER,Peru
+cm8_m62,-8,-62,0.051,ameli_map,BRA,Brazil
+cm8_m46,-8,-46,0.051,ameli_map,BRA,Brazil
+cm8_18,-8,18,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm8_34,-8,34,0.051,ameli_map,TZA,Tanzania
+cm8_146,-8,146,0.051,ameli_map,PNG,Papua New Guinea
+cm7_m67,-7,-67,0.051,ameli_map,BRA,Brazil
+cm7_m51,-7,-51,0.051,ameli_map,BRA,Brazil
+cm7_m35,-7,-35,0.051,ameli_map,BRA,Brazil
+cm7_28,-7,28,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm7_111,-7,111,0.051,ameli_map,IDN,Indonesia
+cm6_m78,-6,-78,0.051,ameli_map,PER,Peru
+cm6_m62,-6,-62,0.051,ameli_map,BRA,Brazil
+cm6_m46,-6,-46,0.051,ameli_map,BRA,Brazil
+cm6_18,-6,18,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm6_34,-6,34,0.051,ameli_map,TZA,Tanzania
+cm6_150,-6,150,0.051,ameli_map,PNG,Papua New Guinea
+cm5_m68,-5,-68,0.051,ameli_map,BRA,Brazil
+cm5_m52,-5,-52,0.051,ameli_map,BRA,Brazil
+cm5_12,-5,12,0.051,ameli_map,COG,Republic of Congo
+cm5_28,-5,28,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm5_139,-5,139,0.051,ameli_map,IDN,Indonesia
+cm4_m71,-4,-71,0.051,ameli_map,PER,Peru
+cm4_m55,-4,-55,0.051,ameli_map,BRA,Brazil
+cm4_m39,-4,-39,0.051,ameli_map,BRA,Brazil
+cm4_27,-4,27,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm4_115,-4,115,0.051,ameli_map,IDN,Indonesia
+cm3_m77,-3,-77,0.051,ameli_map,PER,Peru
+cm3_m61,-3,-61,0.051,ameli_map,BRA,Brazil
+cm3_m45,-3,-45,0.051,ameli_map,BRA,Brazil
+cm3_21,-3,21,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm3_37,-3,37,0.051,ameli_map,TZA,Tanzania
+cm3_119,-3,119,0.051,ameli_map,IDN,Indonesia
+cm2_m78,-2,-78,0.051,ameli_map,ECU,Ecuador
+cm2_m62,-2,-62,0.051,ameli_map,BRA,Brazil
+cm2_m46,-2,-46,0.051,ameli_map,BRA,Brazil
+cm2_24,-2,24,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm2_40,-2,40,0.051,ameli_map,KEN,Kenya
+cm2_133,-2,133,0.051,ameli_map,IDN,Indonesia
+cm1_m69,-1,-69,0.051,ameli_map,BRA,Brazil
+cm1_m53,-1,-53,0.051,ameli_map,BRA,Brazil
+cm1_18,-1,18,0.051,ameli_map,COD,Democratic Republic of the Congo
+cm1_34,-1,34,0.051,ameli_map,KEN,Kenya
+cm1_113,-1,113,0.051,ameli_map,IDN,Indonesia
+c0_m76,0,-76,0.051,ameli_map,ECU,Ecuador
+c0_m60,0,-60,0.051,ameli_map,BRA,Brazil
+c0_16,0,16,0.051,ameli_map,COG,Republic of Congo
+c0_32,0,32,0.051,ameli_map,UGA,Uganda
+c0_111,0,111,0.051,ameli_map,IDN,Indonesia
+c1_m71,1,-71,0.051,ameli_map,COL,Colombia
+c1_m55,1,-55,0.051,ameli_map,BRA,Brazil
+c1_20,1,20,0.051,ameli_map,COD,Democratic Republic of the Congo
+c1_36,1,36,0.051,ameli_map,KEN,Kenya
+c1_112,1,112,0.051,ameli_map,IDN,Indonesia
+c2_m72,2,-72,0.051,ameli_map,COL,Colombia
+c2_m56,2,-56,0.051,ameli_map,SUR,Suriname
+c2_20,2,20,0.051,ameli_map,COD,Democratic Republic of the Congo
+c2_36,2,36,0.051,ameli_map,KEN,Kenya
+c2_113,2,113,0.051,ameli_map,MYS,Malaysia
+c3_m66,3,-66,0.051,ameli_map,VEN,Venezuela
+c3_10,3,10,0.051,ameli_map,CMR,Cameroon
+c3_26,3,26,0.051,ameli_map,COD,Democratic Republic of the Congo
+c3_42,3,42,0.051,ameli_map,SOM,Somalia
+c4_m75,4,-75,0.051,ameli_map,COL,Colombia
+c4_m59,4,-59,0.051,ameli_map,GUY,Guyana
+c4_18,4,18,0.051,ameli_map,CAF,Central African Republic
+c4_34,4,34,0.051,ameli_map,UGA,Uganda
+c4_101,4,101,0.051,ameli_map,MYS,Malaysia
+c5_m69,5,-69,0.051,ameli_map,COL,Colombia
+c5_m53,5,-53,0.04,ameli_map,GUF,French Guiana
+c5_16,5,16,0.051,ameli_map,CAF,Central African Republic
+c5_32,5,32,0.051,ameli_map,SSD,South Sudan
+c5_48,5,48,0.051,ameli_map,SOM,Somalia
+c6_m72,6,-72,0.051,ameli_map,COL,Colombia
+c6_m10,6,-10,0.051,ameli_map,LBR,Liberia
+c6_10,6,10,0.051,ameli_map,CMR,Cameroon
+c6_26,6,26,0.051,ameli_map,CAF,Central African Republic
+c6_42,6,42,0.051,ameli_map,ETH,Ethiopia
+c7_m74,7,-74,0.051,ameli_map,COL,Colombia
+c7_m11,7,-11,0.051,ameli_map,LBR,Liberia
+c7_5,7,5,0.051,ameli_map,NGA,Nigeria
+c7_21,7,21,0.051,ameli_map,CAF,Central African Republic
+c7_37,7,37,0.051,ameli_map,ETH,Ethiopia
+c7_100,7,100,0.051,ameli_map,THA,Thailand
+c8_m68,8,-68,0.051,ameli_map,VEN,Venezuela
+c8_m5,8,-5,0.051,ameli_map,CIV,Côte d'Ivoire
+c8_11,8,11,0.051,ameli_map,NGA,Nigeria
+c8_27,8,27,0.051,ameli_map,SSD,South Sudan
+c8_43,8,43,0.051,ameli_map,ETH,Ethiopia
+c9_m83,9,-83,0.051,ameli_map,CRI,Costa Rica
+c9_m64,9,-64,0.051,ameli_map,VEN,Venezuela
+c9_m1,9,-1,0.051,ameli_map,GHA,Ghana
+c9_15,9,15,0.051,ameli_map,TCD,Chad
+c9_31,9,31,0.051,ameli_map,SSD,South Sudan
+c9_47,9,47,0.051,ameli_map,SOM,Somalia
+c10_m70,10,-70,0.051,ameli_map,VEN,Venezuela
+c10_m6,10,-6,0.051,ameli_map,CIV,Côte d'Ivoire
+c10_10,10,10,0.051,ameli_map,NGA,Nigeria
+c10_26,10,26,0.051,ameli_map,SSD,South Sudan
+c10_42,10,42,0.051,ameli_map,ETH,Ethiopia
+c11_m85,11,-85,0.051,ameli_map,NIC,Nicaragua
+c11_m8,11,-8,0.051,ameli_map,MLI,Mali
+c11_8,11,8,0.051,ameli_map,NGA,Nigeria
+c11_24,11,24,0.051,ameli_map,SDN,Sudan
+c11_40,11,40,0.051,ameli_map,ETH,Ethiopia
+c11_107,11,107,0.051,ameli_map,VNM,Vietnam
+c12_m9,12,-9,0.051,ameli_map,GIN,Guinea
+c12_7,12,7,0.051,ameli_map,NGA,Nigeria
+c12_23,12,23,0.051,ameli_map,SDN,Sudan
+c12_39,12,39,0.051,ameli_map,ETH,Ethiopia
+c12_107,12,107,0.051,ameli_map,VNM,Vietnam
+c13_m10,13,-10,0.051,ameli_map,MLI,Mali
+c13_6,13,6,0.051,ameli_map,NGA,Nigeria
+c13_22,13,22,0.051,ameli_map,SDN,Sudan
+c13_38,13,38,0.051,ameli_map,ETH,Ethiopia
+c13_102,13,102,0.051,ameli_map,THA,Thailand
+c14_m85,14,-85,0.051,ameli_map,NIC,Nicaragua
+c14_m3,14,-3,0.051,ameli_map,MLI,Mali
+c14_13,14,13,0.051,ameli_map,NER,Niger
+c14_29,14,29,0.051,ameli_map,SDN,Sudan
+c14_47,14,47,0.051,ameli_map,YEM,Yemen
+c14_108,14,108,0.051,ameli_map,VNM,Vietnam
+c15_m14,15,-14,0.051,ameli_map,SEN,Senegal
+c15_2,15,2,0.051,ameli_map,NER,Niger
+c15_18,15,18,0.051,ameli_map,TCD,Chad
+c15_34,15,34,0.051,ameli_map,SDN,Sudan
+c15_76,15,76,0.051,ameli_map,IND,India
+c15_121,15,121,0.051,ameli_map,PHL,Philippines
+c16_m10,16,-10,0.051,ameli_map,MRT,Mauritania
+c16_6,16,6,0.051,ameli_map,NER,Niger
+c16_22,16,22,0.051,ameli_map,TCD,Chad
+c16_38,16,38,0.051,ameli_map,ERI,Eritrea
+c16_78,16,78,0.051,ameli_map,IND,India
+c16_120,16,120,0.051,ameli_map,PHL,Philippines
+c17_m14,17,-14,0.051,ameli_map,MRT,Mauritania
+c17_2,17,2,0.051,ameli_map,MLI,Mali
+c17_18,17,18,0.051,ameli_map,TCD,Chad
+c17_34,17,34,0.051,ameli_map,SDN,Sudan
+c17_53,17,53,0.051,ameli_map,OMN,Oman
+c17_101,17,101,0.051,ameli_map,THA,Thailand
+c18_m95,18,-95,0.051,ameli_map,MEX,Mexico
+c18_m10,18,-10,0.051,ameli_map,MRT,Mauritania
+c18_6,18,6,0.051,ameli_map,NER,Niger
+c18_22,18,22,0.051,ameli_map,TCD,Chad
+c18_38,18,38,0.051,ameli_map,SDN,Sudan
+c18_74,18,74,0.051,ameli_map,IND,India
+c18_101,18,101,0.051,ameli_map,THA,Thailand
+c19_m96,19,-96,0.051,ameli_map,MEX,Mexico
+c19_m8,19,-8,0.051,ameli_map,MRT,Mauritania
+c19_8,19,8,0.051,ameli_map,NER,Niger
+c19_24,19,24,0.051,ameli_map,TCD,Chad
+c19_44,19,44,0.051,ameli_map,SAU,Saudi Arabia
+c19_76,19,76,0.051,ameli_map,IND,India
+c19_102,19,102,0.051,ameli_map,LAO,Laos
+c20_m89,20,-89,0.051,ameli_map,MEX,Mexico
+c20_m5,20,-5,0.051,ameli_map,MLI,Mali
+c20_11,20,11,0.051,ameli_map,NER,Niger
+c20_27,20,27,0.051,ameli_map,SDN,Sudan
+c20_46,20,46,0.051,ameli_map,SAU,Saudi Arabia
+c20_77,20,77,0.051,ameli_map,IND,India
+c20_100,20,100,0.051,ameli_map,THA,Thailand
+c21_m89,21,-89,0.051,ameli_map,MEX,Mexico
+c21_m6,21,-6,0.051,ameli_map,MLI,Mali
+c21_10,21,10,0.051,ameli_map,NER,Niger
+c21_26,21,26,0.051,ameli_map,SDN,Sudan
+c21_44,21,44,0.051,ameli_map,SAU,Saudi Arabia
+c21_73,21,73,0.051,ameli_map,IND,India
+c21_95,21,95,0.051,ameli_map,MMR,Myanmar
+c22_m103,22,-103,0.051,ameli_map,MEX,Mexico
+c22_m9,22,-9,0.051,ameli_map,MRT,Mauritania
+c22_7,22,7,0.051,ameli_map,DZA,Algeria
+c22_23,22,23,0.051,ameli_map,LBY,Libya
+c22_42,22,42,0.051,ameli_map,SAU,Saudi Arabia
+c22_58,22,58,0.051,ameli_map,OMN,Oman
+c22_84,22,84,0.051,ameli_map,IND,India
+c22_101,22,101,0.051,ameli_map,CHN,China
+c23_m104,23,-104,0.051,ameli_map,MEX,Mexico
+c23_m10,23,-10,0.051,ameli_map,MRT,Mauritania
+c23_6,23,6,0.051,ameli_map,DZA,Algeria
+c23_22,23,22,0.051,ameli_map,LBY,Libya
+c23_41,23,41,0.051,ameli_map,SAU,Saudi Arabia
+c23_57,23,57,0.051,ameli_map,OMN,Oman
+c23_82,23,82,0.051,ameli_map,IND,India
+c23_98,23,98,0.051,ameli_map,MMR,Myanmar
+c23_114,23,114,0.051,ameli_map,CHN,China
+c24_m14,24,-14,0.051,ameli_map,ESH,Western Sahara
+c24_2,24,2,0.051,ameli_map,DZA,Algeria
+c24_18,24,18,0.051,ameli_map,LBY,Libya
+c24_34,24,34,0.051,ameli_map,EGY,Egypt
+c24_54,24,54,0.051,ameli_map,ARE,United Arab Emirates
+c24_81,24,81,0.051,ameli_map,IND,India
+c24_97,24,97,0.051,ameli_map,MMR,Myanmar
+c24_113,24,113,0.051,ameli_map,CHN,China
+c25_m100,25,-100,0.051,ameli_map,MEX,Mexico
+c25_m2,25,-2,0.051,ameli_map,DZA,Algeria
+c25_14,25,14,0.051,ameli_map,LBY,Libya
+c25_30,25,30,0.051,ameli_map,EGY,Egypt
+c25_49,25,49,0.051,ameli_map,SAU,Saudi Arabia
+c25_79,25,79,0.051,ameli_map,IND,India
+c25_95,25,95,0.051,ameli_map,MMR,Myanmar
+c25_111,25,111,0.051,ameli_map,CHN,China
+c26_m103,26,-103,0.051,ameli_map,MEX,Mexico
+c26_m5,26,-5,0.051,ameli_map,DZA,Algeria
+c26_11,26,11,0.051,ameli_map,LBY,Libya
+c26_27,26,27,0.051,ameli_map,EGY,Egypt
+c26_45,26,45,0.051,ameli_map,SAU,Saudi Arabia
+c26_68,26,68,0.051,ameli_map,PAK,Pakistan
+c26_84,26,84,0.051,ameli_map,IND,India
+c26_100,26,100,0.051,ameli_map,CHN,China
+c26_116,26,116,0.051,ameli_map,CHN,China
+c27_m99,27,-99,0.044,ameli_map,USA,United States
+c27_0,27,0,0.051,ameli_map,DZA,Algeria
+c27_16,27,16,0.051,ameli_map,LBY,Libya
+c27_32,27,32,0.051,ameli_map,EGY,Egypt
+c27_54,27,54,0.051,ameli_map,IRN,Iran
+c27_71,27,71,0.051,ameli_map,IND,India
+c27_87,27,87,0.051,ameli_map,NPL,Nepal
+c27_103,27,103,0.051,ameli_map,CHN,China
+c27_119,27,119,0.051,ameli_map,CHN,China
+c28_m99,28,-99,0.044,ameli_map,USA,United States
+c28_0,28,0,0.051,ameli_map,DZA,Algeria
+c28_16,28,16,0.051,ameli_map,LBY,Libya
+c28_32,28,32,0.051,ameli_map,EGY,Egypt
+c28_52,28,52,0.051,ameli_map,IRN,Iran
+c28_68,28,68,0.051,ameli_map,PAK,Pakistan
+c28_84,28,84,0.051,ameli_map,NPL,Nepal
+c28_100,28,100,0.051,ameli_map,CHN,China
+c28_116,28,116,0.051,ameli_map,CHN,China
+c29_m102,29,-102,0.051,ameli_map,MEX,Mexico
+c29_m3,29,-3,0.051,ameli_map,DZA,Algeria
+c29_13,29,13,0.051,ameli_map,LBY,Libya
+c29_30,29,30,0.051,ameli_map,EGY,Egypt
+c29_47,29,47,0.051,ameli_map,SAU,Saudi Arabia
+c29_65,29,65,0.051,ameli_map,PAK,Pakistan
+c29_81,29,81,0.051,ameli_map,NPL,Nepal
+c29_97,29,97,0.051,ameli_map,CHN,China
+c29_113,29,113,0.051,ameli_map,CHN,China
+c30_m106,30,-106,0.051,ameli_map,MEX,Mexico
+c30_m90,30,-90,0.044,ameli_map,USA,United States
+c30_3,30,3,0.051,ameli_map,DZA,Algeria
+c30_19,30,19,0.051,ameli_map,LBY,Libya
+c30_38,30,38,0.051,ameli_map,SAU,Saudi Arabia
+c30_57,30,57,0.051,ameli_map,IRN,Iran
+c30_73,30,73,0.051,ameli_map,PAK,Pakistan
+c30_89,30,89,0.051,ameli_map,CHN,China
+c30_105,30,105,0.051,ameli_map,CHN,China
+c30_121,30,121,0.051,ameli_map,CHN,China
+c31_m100,31,-100,0.044,ameli_map,USA,United States
+c31_m84,31,-84,0.044,ameli_map,USA,United States
+c31_4,31,4,0.051,ameli_map,DZA,Algeria
+c31_23,31,23,0.051,ameli_map,LBY,Libya
+c31_41,31,41,0.051,ameli_map,SAU,Saudi Arabia
+c31_57,31,57,0.051,ameli_map,IRN,Iran
+c31_73,31,73,0.051,ameli_map,PAK,Pakistan
+c31_89,31,89,0.051,ameli_map,CHN,China
+c31_105,31,105,0.051,ameli_map,CHN,China
+c31_121,31,121,0.051,ameli_map,CHN,China
+c32_m101,32,-101,0.044,ameli_map,USA,United States
+c32_m85,32,-85,0.044,ameli_map,USA,United States
+c32_3,32,3,0.051,ameli_map,DZA,Algeria
+c32_23,32,23,0.051,ameli_map,LBY,Libya
+c32_49,32,49,0.051,ameli_map,IRN,Iran
+c32_65,32,65,0.051,ameli_map,AFG,Afghanistan
+c32_81,32,81,0.051,ameli_map,CHN,China
+c32_97,32,97,0.051,ameli_map,CHN,China
+c32_113,32,113,0.051,ameli_map,CHN,China
+c33_m111,33,-111,0.044,ameli_map,USA,United States
+c33_m95,33,-95,0.044,ameli_map,USA,United States
+c33_m8,33,-8,0.051,ameli_map,MAR,Morocco
+c33_8,33,8,0.051,ameli_map,DZA,Algeria
+c33_48,33,48,0.051,ameli_map,IRN,Iran
+c33_64,33,64,0.051,ameli_map,AFG,Afghanistan
+c33_80,33,80,0.051,ameli_map,CHN,China
+c33_96,33,96,0.051,ameli_map,CHN,China
+c33_112,33,112,0.051,ameli_map,CHN,China
+c34_m114,34,-114,0.044,ameli_map,USA,United States
+c34_m98,34,-98,0.044,ameli_map,USA,United States
+c34_m82,34,-82,0.044,ameli_map,USA,United States
+c34_5,34,5,0.051,ameli_map,DZA,Algeria
+c34_49,34,49,0.051,ameli_map,IRN,Iran
+c34_65,34,65,0.051,ameli_map,AFG,Afghanistan
+c34_81,34,81,0.051,ameli_map,CHN,China
+c34_97,34,97,0.051,ameli_map,CHN,China
+c34_113,34,113,0.051,ameli_map,CHN,China
+c35_m116,35,-116,0.044,ameli_map,USA,United States
+c35_m100,35,-100,0.044,ameli_map,USA,United States
+c35_m84,35,-84,0.044,ameli_map,USA,United States
+c35_2,35,2,0.051,ameli_map,DZA,Algeria
+c35_40,35,40,0.051,ameli_map,SYR,Syria
+c35_56,35,56,0.051,ameli_map,IRN,Iran
+c35_72,35,72,0.051,ameli_map,PAK,Pakistan
+c35_88,35,88,0.051,ameli_map,CHN,China
+c35_104,35,104,0.051,ameli_map,CHN,China
+c35_127,35,127,0.051,ameli_map,KOR,South Korea
+c36_m114,36,-114,0.044,ameli_map,USA,United States
+c36_m98,36,-98,0.044,ameli_map,USA,United States
+c36_m82,36,-82,0.044,ameli_map,USA,United States
+c36_36,36,36,0.051,ameli_map,TUR,Turkey
+c36_52,36,52,0.051,ameli_map,IRN,Iran
+c36_68,36,68,0.051,ameli_map,AFG,Afghanistan
+c36_84,36,84,0.051,ameli_map,CHN,China
+c36_100,36,100,0.051,ameli_map,CHN,China
+c36_116,36,116,0.051,ameli_map,CHN,China
+c37_m119,37,-119,0.044,ameli_map,USA,United States
+c37_m103,37,-103,0.044,ameli_map,USA,United States
+c37_m87,37,-87,0.044,ameli_map,USA,United States
+c37_9,37,9,0.051,ameli_map,TUN,Tunisia
+c37_39,37,39,0.051,ameli_map,TUR,Turkey
+c37_59,37,59,0.051,ameli_map,IRN,Iran
+c37_75,37,75,0.051,ameli_map,CHN,China
+c37_91,37,91,0.051,ameli_map,CHN,China
+c37_107,37,107,0.051,ameli_map,CHN,China
+c37_127,37,127,0.051,ameli_map,KOR,South Korea
+c38_m114,38,-114,0.044,ameli_map,USA,United States
+c38_m98,38,-98,0.044,ameli_map,USA,United States
+c38_m82,38,-82,0.044,ameli_map,USA,United States
+c38_15,38,15,0.04,ameli_map,ITA,Italy
+c38_39,38,39,0.051,ameli_map,TUR,Turkey
+c38_61,38,61,0.051,ameli_map,TKM,Turkmenistan
+c38_77,38,77,0.051,ameli_map,CHN,China
+c38_93,38,93,0.051,ameli_map,CHN,China
+c38_109,38,109,0.051,ameli_map,CHN,China
+c39_m121,39,-121,0.044,ameli_map,USA,United States
+c39_m105,39,-105,0.044,ameli_map,USA,United States
+c39_m89,39,-89,0.044,ameli_map,USA,United States
+c39_m7,39,-7,0.04,ameli_map,PRT,Portugal
+c39_32,39,32,0.051,ameli_map,TUR,Turkey
+c39_48,39,48,0.051,ameli_map,IRN,Iran
+c39_70,39,70,0.051,ameli_map,TJK,Tajikistan
+c39_86,39,86,0.051,ameli_map,CHN,China
+c39_102,39,102,0.051,ameli_map,CHN,China
+c39_126,39,126,0.051,ameli_map,PRK,North Korea
+c40_m112,40,-112,0.044,ameli_map,USA,United States
+c40_m96,40,-96,0.044,ameli_map,USA,United States
+c40_m80,40,-80,0.044,ameli_map,USA,United States
+c40_9,40,9,0.04,ameli_map,ITA,Italy
+c40_38,40,38,0.051,ameli_map,TUR,Turkey
+c40_59,40,59,0.051,ameli_map,TKM,Turkmenistan
+c40_75,40,75,0.051,ameli_map,CHN,China
+c40_91,40,91,0.051,ameli_map,CHN,China
+c40_107,40,107,0.051,ameli_map,CHN,China
+c40_125,40,125,0.051,ameli_map,PRK,North Korea
+c41_m112,41,-112,0.044,ameli_map,USA,United States
+c41_m96,41,-96,0.044,ameli_map,USA,United States
+c41_m80,41,-80,0.044,ameli_map,USA,United States
+c41_9,41,9,0.04,ameli_map,ITA,Italy
+c41_34,41,34,0.051,ameli_map,TUR,Turkey
+c41_57,41,57,0.051,ameli_map,TKM,Turkmenistan
+c41_73,41,73,0.051,ameli_map,KGZ,Kyrgyzstan
+c41_89,41,89,0.051,ameli_map,CHN,China
+c41_105,41,105,0.051,ameli_map,CHN,China
+c41_121,41,121,0.051,ameli_map,CHN,China
+c42_m117,42,-117,0.044,ameli_map,USA,United States
+c42_m101,42,-101,0.044,ameli_map,USA,United States
+c42_m85,42,-85,0.044,ameli_map,USA,United States
+c42_m7,42,-7,0.04,ameli_map,ESP,Spain
+c42_20,42,20,0.051,ameli_map,ALB,Albania
+c42_48,42,48,0.051,ameli_map,RUS,Russia
+c42_69,42,69,0.051,ameli_map,KAZ,Kazakhstan
+c42_85,42,85,0.051,ameli_map,CHN,China
+c42_101,42,101,0.051,ameli_map,CHN,China
+c42_117,42,117,0.051,ameli_map,CHN,China
+c43_m122,43,-122,0.044,ameli_map,USA,United States
+c43_m106,43,-106,0.044,ameli_map,USA,United States
+c43_m90,43,-90,0.044,ameli_map,USA,United States
+c43_m74,43,-74,0.044,ameli_map,USA,United States
+c43_3,43,3,0.04,ameli_map,FRA,France
+c43_43,43,43,0.051,ameli_map,GEO,Georgia
+c43_63,43,63,0.051,ameli_map,UZB,Uzbekistan
+c43_79,43,79,0.051,ameli_map,KAZ,Kazakhstan
+c43_95,43,95,0.051,ameli_map,CHN,China
+c43_111,43,111,0.051,ameli_map,CHN,China
+c43_127,43,127,0.051,ameli_map,CHN,China
+c44_m120,44,-120,0.044,ameli_map,USA,United States
+c44_m104,44,-104,0.044,ameli_map,USA,United States
+c44_m88,44,-88,0.044,ameli_map,USA,United States
+c44_m72,44,-72,0.044,ameli_map,USA,United States
+c44_12,44,12,0.04,ameli_map,ITA,Italy
+c44_42,44,42,0.051,ameli_map,RUS,Russia
+c44_62,44,62,0.051,ameli_map,KAZ,Kazakhstan
+c44_78,44,78,0.051,ameli_map,KAZ,Kazakhstan
+c44_94,44,94,0.051,ameli_map,CHN,China
+c44_110,44,110,0.051,ameli_map,MNG,Mongolia
+c44_126,44,126,0.051,ameli_map,CHN,China
+c45_m122,45,-122,0.044,ameli_map,USA,United States
+c45_m106,45,-106,0.044,ameli_map,USA,United States
+c45_m90,45,-90,0.044,ameli_map,USA,United States
+c45_m74,45,-74,0.046,ameli_map,CAN,Canada
+c45_4,45,4,0.04,ameli_map,FRA,France
+c45_22,45,22,0.051,ameli_map,ROU,Romania
+c45_45,45,45,0.051,ameli_map,RUS,Russia
+c45_70,45,70,0.051,ameli_map,KAZ,Kazakhstan
+c45_86,45,86,0.051,ameli_map,CHN,China
+c45_102,45,102,0.051,ameli_map,MNG,Mongolia
+c45_118,45,118,0.051,ameli_map,CHN,China
+c45_134,45,134,0.051,ameli_map,RUS,Russia
+c46_m111,46,-111,0.044,ameli_map,USA,United States
+c46_m95,46,-95,0.044,ameli_map,USA,United States
+c46_m79,46,-79,0.046,ameli_map,CAN,Canada
+c46_m1,46,-1,0.04,ameli_map,FRA,France
+c46_15,46,15,0.051,ameli_map,SVN,Slovenia
+c46_34,46,34,0.051,ameli_map,UKR,Ukraine
+c46_64,46,64,0.051,ameli_map,KAZ,Kazakhstan
+c46_80,46,80,0.051,ameli_map,KAZ,Kazakhstan
+c46_96,46,96,0.051,ameli_map,MNG,Mongolia
+c46_112,46,112,0.051,ameli_map,MNG,Mongolia
+c46_128,46,128,0.051,ameli_map,CHN,China
+c47_m120,47,-120,0.044,ameli_map,USA,United States
+c47_m104,47,-104,0.044,ameli_map,USA,United States
+c47_m88,47,-88,0.044,ameli_map,USA,United States
+c47_m71,47,-71,0.046,ameli_map,CAN,Canada
+c47_5,47,5,0.04,ameli_map,FRA,France
+c47_21,47,21,0.051,ameli_map,HUN,Hungary
+c47_37,47,37,0.051,ameli_map,UKR,Ukraine
+c47_65,47,65,0.051,ameli_map,KAZ,Kazakhstan
+c47_81,47,81,0.051,ameli_map,KAZ,Kazakhstan
+c47_97,47,97,0.051,ameli_map,MNG,Mongolia
+c47_113,47,113,0.051,ameli_map,MNG,Mongolia
+c47_129,47,129,0.051,ameli_map,CHN,China
+c48_m119,48,-119,0.044,ameli_map,USA,United States
+c48_m103,48,-103,0.044,ameli_map,USA,United States
+c48_m85,48,-85,0.046,ameli_map,CAN,Canada
+c48_m69,48,-69,0.046,ameli_map,CAN,Canada
+c48_2,48,2,0.04,ameli_map,FRA,France
+c48_18,48,18,0.051,ameli_map,SVK,Slovakia
+c48_34,48,34,0.051,ameli_map,UKR,Ukraine
+c48_57,48,57,0.051,ameli_map,KAZ,Kazakhstan
+c48_73,48,73,0.051,ameli_map,KAZ,Kazakhstan
+c48_89,48,89,0.051,ameli_map,CHN,China
+c48_105,48,105,0.051,ameli_map,MNG,Mongolia
+c48_121,48,121,0.051,ameli_map,CHN,China
+c48_137,48,137,0.051,ameli_map,RUS,Russia
+c49_m110,49,-110,0.044,ameli_map,USA,United States
+c49_m94,49,-94,0.046,ameli_map,CAN,Canada
+c49_m78,49,-78,0.046,ameli_map,CAN,Canada
+c49_m55,49,-55,0.046,ameli_map,CAN,Canada
+c49_13,49,13,0.04,ameli_map,DEU,Germany
+c49_29,49,29,0.051,ameli_map,UKR,Ukraine
+c49_45,49,45,0.051,ameli_map,RUS,Russia
+c49_65,49,65,0.051,ameli_map,KAZ,Kazakhstan
+c49_81,49,81,0.051,ameli_map,KAZ,Kazakhstan
+c49_97,49,97,0.051,ameli_map,MNG,Mongolia
+c49_113,49,113,0.051,ameli_map,MNG,Mongolia
+c49_129,49,129,0.051,ameli_map,CHN,China
+c50_m122,50,-122,0.046,ameli_map,CAN,Canada
+c50_m106,50,-106,0.046,ameli_map,CAN,Canada
+c50_m90,50,-90,0.046,ameli_map,CAN,Canada
+c50_m74,50,-74,0.046,ameli_map,CAN,Canada
+c50_8,50,8,0.04,ameli_map,DEU,Germany
+c50_24,50,24,0.051,ameli_map,UKR,Ukraine
+c50_40,50,40,0.051,ameli_map,RUS,Russia
+c50_56,50,56,0.051,ameli_map,KAZ,Kazakhstan
+c50_72,50,72,0.051,ameli_map,KAZ,Kazakhstan
+c50_88,50,88,0.051,ameli_map,RUS,Russia
+c50_104,50,104,0.051,ameli_map,MNG,Mongolia
+c50_120,50,120,0.051,ameli_map,CHN,China
+c50_136,50,136,0.051,ameli_map,RUS,Russia
+c51_m117,51,-117,0.046,ameli_map,CAN,Canada
+c51_m101,51,-101,0.046,ameli_map,CAN,Canada
+c51_m85,51,-85,0.046,ameli_map,CAN,Canada
+c51_m69,51,-69,0.046,ameli_map,CAN,Canada
+c51_m1,51,-1,0.043,ameli_map,GBR,United Kingdom
+c51_17,51,17,0.051,ameli_map,POL,Poland
+c51_33,51,33,0.051,ameli_map,UKR,Ukraine
+c51_49,51,49,0.051,ameli_map,RUS,Russia
+c51_65,51,65,0.051,ameli_map,KAZ,Kazakhstan
+c51_81,51,81,0.051,ameli_map,KAZ,Kazakhstan
+c51_97,51,97,0.051,ameli_map,RUS,Russia
+c51_113,51,113,0.051,ameli_map,RUS,Russia
+c51_129,51,129,0.051,ameli_map,RUS,Russia
+c52_m126,52,-126,0.046,ameli_map,CAN,Canada
+c52_m110,52,-110,0.046,ameli_map,CAN,Canada
+c52_m94,52,-94,0.046,ameli_map,CAN,Canada
+c52_m76,52,-76,0.046,ameli_map,CAN,Canada
+c52_m60,52,-60,0.046,ameli_map,CAN,Canada
+c52_7,52,7,0.04,ameli_map,DEU,Germany
+c52_23,52,23,0.051,ameli_map,POL,Poland
+c52_39,52,39,0.051,ameli_map,RUS,Russia
+c52_55,52,55,0.051,ameli_map,RUS,Russia
+c52_71,52,71,0.051,ameli_map,KAZ,Kazakhstan
+c52_87,52,87,0.051,ameli_map,RUS,Russia
+c52_103,52,103,0.051,ameli_map,RUS,Russia
+c52_119,52,119,0.051,ameli_map,RUS,Russia
+c52_135,52,135,0.051,ameli_map,RUS,Russia
+c53_m125,53,-125,0.046,ameli_map,CAN,Canada
+c53_m109,53,-109,0.046,ameli_map,CAN,Canada
+c53_m93,53,-93,0.046,ameli_map,CAN,Canada
+c53_m75,53,-75,0.046,ameli_map,CAN,Canada
+c53_m59,53,-59,0.046,ameli_map,CAN,Canada
+c53_11,53,11,0.04,ameli_map,DEU,Germany
+c53_27,53,27,0.051,ameli_map,BLR,Belarus
+c53_43,53,43,0.051,ameli_map,RUS,Russia
+c53_59,53,59,0.051,ameli_map,RUS,Russia
+c53_75,53,75,0.051,ameli_map,KAZ,Kazakhstan
+c53_91,53,91,0.051,ameli_map,RUS,Russia
+c53_107,53,107,0.051,ameli_map,RUS,Russia
+c53_123,53,123,0.051,ameli_map,CHN,China
+c53_139,53,139,0.051,ameli_map,RUS,Russia
+c54_m122,54,-122,0.046,ameli_map,CAN,Canada
+c54_m106,54,-106,0.046,ameli_map,CAN,Canada
+c54_m90,54,-90,0.046,ameli_map,CAN,Canada
+c54_m70,54,-70,0.046,ameli_map,CAN,Canada
+c54_m7,54,-7,0.04,ameli_map,IRL,Ireland
+c54_25,54,25,0.051,ameli_map,BLR,Belarus
+c54_41,54,41,0.051,ameli_map,RUS,Russia
+c54_57,54,57,0.051,ameli_map,RUS,Russia
+c54_73,54,73,0.051,ameli_map,KAZ,Kazakhstan
+c54_89,54,89,0.051,ameli_map,RUS,Russia
+c54_105,54,105,0.051,ameli_map,RUS,Russia
+c54_121,54,121,0.051,ameli_map,RUS,Russia
+c54_139,54,139,0.051,ameli_map,RUS,Russia
+c55_m123,55,-123,0.046,ameli_map,CAN,Canada
+c55_m107,55,-107,0.046,ameli_map,CAN,Canada
+c55_m91,55,-91,0.046,ameli_map,CAN,Canada
+c55_m71,55,-71,0.046,ameli_map,CAN,Canada
+c55_m5,55,-5,0.043,ameli_map,GBR,United Kingdom
+c55_31,55,31,0.051,ameli_map,RUS,Russia
+c55_47,55,47,0.051,ameli_map,RUS,Russia
+c55_63,55,63,0.051,ameli_map,RUS,Russia
+c55_79,55,79,0.051,ameli_map,RUS,Russia
+c55_95,55,95,0.051,ameli_map,RUS,Russia
+c55_111,55,111,0.051,ameli_map,RUS,Russia
+c55_127,55,127,0.051,ameli_map,RUS,Russia
+c55_161,55,161,0.051,ameli_map,RUS,Russia
+c56_m121,56,-121,0.046,ameli_map,CAN,Canada
+c56_m105,56,-105,0.046,ameli_map,CAN,Canada
+c56_m89,56,-89,0.046,ameli_map,CAN,Canada
+c56_m63,56,-63,0.046,ameli_map,CAN,Canada
+c56_29,56,29,0.051,ameli_map,BLR,Belarus
+c56_45,56,45,0.051,ameli_map,RUS,Russia
+c56_61,56,61,0.051,ameli_map,RUS,Russia
+c56_77,56,77,0.051,ameli_map,RUS,Russia
+c56_93,56,93,0.051,ameli_map,RUS,Russia
+c56_109,56,109,0.051,ameli_map,RUS,Russia
+c56_125,56,125,0.051,ameli_map,RUS,Russia
+c56_159,56,159,0.051,ameli_map,RUS,Russia
+c57_m124,57,-124,0.046,ameli_map,CAN,Canada
+c57_m108,57,-108,0.046,ameli_map,CAN,Canada
+c57_m92,57,-92,0.046,ameli_map,CAN,Canada
+c57_m63,57,-63,0.046,ameli_map,CAN,Canada
+c57_28,57,28,0.051,ameli_map,RUS,Russia
+c57_44,57,44,0.051,ameli_map,RUS,Russia
+c57_60,57,60,0.051,ameli_map,RUS,Russia
+c57_76,57,76,0.051,ameli_map,RUS,Russia
+c57_92,57,92,0.051,ameli_map,RUS,Russia
+c57_108,57,108,0.051,ameli_map,RUS,Russia
+c57_124,57,124,0.051,ameli_map,RUS,Russia
+c57_158,57,158,0.051,ameli_map,RUS,Russia
+c58_m127,58,-127,0.046,ameli_map,CAN,Canada
+c58_m111,58,-111,0.046,ameli_map,CAN,Canada
+c58_m95,58,-95,0.046,ameli_map,CAN,Canada
+c58_m64,58,-64,0.046,ameli_map,CAN,Canada
+c58_30,58,30,0.051,ameli_map,RUS,Russia
+c58_46,58,46,0.051,ameli_map,RUS,Russia
+c58_62,58,62,0.051,ameli_map,RUS,Russia
+c58_78,58,78,0.051,ameli_map,RUS,Russia
+c58_94,58,94,0.051,ameli_map,RUS,Russia
+c58_110,58,110,0.051,ameli_map,RUS,Russia
+c58_126,58,126,0.051,ameli_map,RUS,Russia
+c58_160,58,160,0.051,ameli_map,RUS,Russia
+c59_m132,59,-132,0.046,ameli_map,CAN,Canada
+c59_m116,59,-116,0.046,ameli_map,CAN,Canada
+c59_m100,59,-100,0.046,ameli_map,CAN,Canada
+c59_m65,59,-65,0.046,ameli_map,CAN,Canada
+c59_26,59,26,0.051,ameli_map,EST,Estonia
+c59_42,59,42,0.051,ameli_map,RUS,Russia
+c59_58,59,58,0.051,ameli_map,RUS,Russia
+c59_74,59,74,0.051,ameli_map,RUS,Russia
+c59_90,59,90,0.051,ameli_map,RUS,Russia
+c59_106,59,106,0.051,ameli_map,RUS,Russia
+c59_122,59,122,0.051,ameli_map,RUS,Russia
+c59_138,59,138,0.051,ameli_map,RUS,Russia
+c60_m161,60,-161,0.044,ameli_map,USA,United States
+c60_m137,60,-137,0.046,ameli_map,CAN,Canada
+c60_m121,60,-121,0.046,ameli_map,CAN,Canada
+c60_m105,60,-105,0.046,ameli_map,CAN,Canada
+c60_m72,60,-72,0.046,ameli_map,CAN,Canada
+c60_18,60,18,0.04,ameli_map,SWE,Sweden
+c60_46,60,46,0.051,ameli_map,RUS,Russia
+c60_62,60,62,0.051,ameli_map,RUS,Russia
+c60_78,60,78,0.051,ameli_map,RUS,Russia
+c60_94,60,94,0.051,ameli_map,RUS,Russia
+c60_110,60,110,0.051,ameli_map,RUS,Russia
+c60_126,60,126,0.051,ameli_map,RUS,Russia
+c60_142,60,142,0.051,ameli_map,RUS,Russia
+c61_m165,61,-165,0.044,ameli_map,USA,United States
+c61_m145,61,-145,0.044,ameli_map,USA,United States
+c61_m129,61,-129,0.046,ameli_map,CAN,Canada
+c61_m113,61,-113,0.046,ameli_map,CAN,Canada
+c61_m97,61,-97,0.046,ameli_map,CAN,Canada
+c61_m43,61,-43,0.046,ameli_map,GRL,Greenland
+c61_24,61,24,0.04,ameli_map,FIN,Finland
+c61_40,61,40,0.051,ameli_map,RUS,Russia
+c61_56,61,56,0.051,ameli_map,RUS,Russia
+c61_72,61,72,0.051,ameli_map,RUS,Russia
+c61_88,61,88,0.051,ameli_map,RUS,Russia
+c61_104,61,104,0.051,ameli_map,RUS,Russia
+c61_120,61,120,0.051,ameli_map,RUS,Russia
+c61_136,61,136,0.051,ameli_map,RUS,Russia
+c61_152,61,152,0.051,ameli_map,RUS,Russia
+c62_m165,62,-165,0.044,ameli_map,USA,United States
+c62_m149,62,-149,0.044,ameli_map,USA,United States
+c62_m133,62,-133,0.046,ameli_map,CAN,Canada
+c62_m117,62,-117,0.046,ameli_map,CAN,Canada
+c62_m101,62,-101,0.046,ameli_map,CAN,Canada
+c62_m48,62,-48,0.046,ameli_map,GRL,Greenland
+c62_14,62,14,0.04,ameli_map,SWE,Sweden
+c62_34,62,34,0.051,ameli_map,RUS,Russia
+c62_50,62,50,0.051,ameli_map,RUS,Russia
+c62_66,62,66,0.051,ameli_map,RUS,Russia
+c62_82,62,82,0.051,ameli_map,RUS,Russia
+c62_98,62,98,0.051,ameli_map,RUS,Russia
+c62_114,62,114,0.051,ameli_map,RUS,Russia
+c62_130,62,130,0.051,ameli_map,RUS,Russia
+c62_146,62,146,0.051,ameli_map,RUS,Russia
+c62_162,62,162,0.051,ameli_map,RUS,Russia
+c63_m161,63,-161,0.044,ameli_map,USA,United States
+c63_m145,63,-145,0.044,ameli_map,USA,United States
+c63_m129,63,-129,0.046,ameli_map,CAN,Canada
+c63_m113,63,-113,0.046,ameli_map,CAN,Canada
+c63_m97,63,-97,0.046,ameli_map,CAN,Canada
+c63_m47,63,-47,0.046,ameli_map,GRL,Greenland
+c63_22,63,22,0.04,ameli_map,FIN,Finland
+c63_38,63,38,0.051,ameli_map,RUS,Russia
+c63_54,63,54,0.051,ameli_map,RUS,Russia
+c63_70,63,70,0.051,ameli_map,RUS,Russia
+c63_86,63,86,0.051,ameli_map,RUS,Russia
+c63_102,63,102,0.051,ameli_map,RUS,Russia
+c63_118,63,118,0.051,ameli_map,RUS,Russia
+c63_134,63,134,0.051,ameli_map,RUS,Russia
+c63_150,63,150,0.051,ameli_map,RUS,Russia
+c63_166,63,166,0.051,ameli_map,RUS,Russia
+c64_m158,64,-158,0.044,ameli_map,USA,United States
+c64_m142,64,-142,0.044,ameli_map,USA,United States
+c64_m126,64,-126,0.046,ameli_map,CAN,Canada
+c64_m110,64,-110,0.046,ameli_map,CAN,Canada
+c64_m94,64,-94,0.046,ameli_map,CAN,Canada
+c64_m67,64,-67,0.046,ameli_map,CAN,Canada
+c64_m20,64,-20,0.04,ameli_map,ISL,Iceland
+c64_26,64,26,0.04,ameli_map,FIN,Finland
+c64_44,64,44,0.051,ameli_map,RUS,Russia
+c64_60,64,60,0.051,ameli_map,RUS,Russia
+c64_76,64,76,0.051,ameli_map,RUS,Russia
+c64_92,64,92,0.051,ameli_map,RUS,Russia
+c64_108,64,108,0.051,ameli_map,RUS,Russia
+c64_124,64,124,0.051,ameli_map,RUS,Russia
+c64_140,64,140,0.051,ameli_map,RUS,Russia
+c64_156,64,156,0.051,ameli_map,RUS,Russia
+c64_172,64,172,0.051,ameli_map,RUS,Russia
+c65_m160,65,-160,0.044,ameli_map,USA,United States
+c65_m144,65,-144,0.044,ameli_map,USA,United States
+c65_m128,65,-128,0.046,ameli_map,CAN,Canada
+c65_m112,65,-112,0.046,ameli_map,CAN,Canada
+c65_m96,65,-96,0.046,ameli_map,CAN,Canada
+c65_m74,65,-74,0.046,ameli_map,CAN,Canada
+c65_m44,65,-44,0.046,ameli_map,GRL,Greenland
+c65_14,65,14,0.04,ameli_map,NOR,Norway
+c65_34,65,34,0.051,ameli_map,RUS,Russia
+c65_55,65,55,0.051,ameli_map,RUS,Russia
+c65_71,65,71,0.051,ameli_map,RUS,Russia
+c65_87,65,87,0.051,ameli_map,RUS,Russia
+c65_103,65,103,0.051,ameli_map,RUS,Russia
+c65_119,65,119,0.051,ameli_map,RUS,Russia
+c65_135,65,135,0.051,ameli_map,RUS,Russia
+c65_151,65,151,0.051,ameli_map,RUS,Russia
+c65_167,65,167,0.051,ameli_map,RUS,Russia
+c66_m176,66,-176,0.051,ameli_map,RUS,Russia
+c66_m156,66,-156,0.044,ameli_map,USA,United States
+c66_m140,66,-140,0.046,ameli_map,CAN,Canada
+c66_m124,66,-124,0.046,ameli_map,CAN,Canada
+c66_m108,66,-108,0.046,ameli_map,CAN,Canada
+c66_m92,66,-92,0.046,ameli_map,CAN,Canada
+c66_m63,66,-63,0.046,ameli_map,CAN,Canada
+c66_m39,66,-39,0.046,ameli_map,GRL,Greenland
+c66_17,66,17,0.04,ameli_map,SWE,Sweden
+c66_33,66,33,0.051,ameli_map,RUS,Russia
+c66_55,66,55,0.051,ameli_map,RUS,Russia
+c66_71,66,71,0.051,ameli_map,RUS,Russia
+c66_87,66,87,0.051,ameli_map,RUS,Russia
+c66_103,66,103,0.051,ameli_map,RUS,Russia
+c66_119,66,119,0.051,ameli_map,RUS,Russia
+c66_135,66,135,0.051,ameli_map,RUS,Russia
+c66_151,66,151,0.051,ameli_map,RUS,Russia
+c66_167,66,167,0.051,ameli_map,RUS,Russia
+c67_m177,67,-177,0.051,ameli_map,RUS,Russia
+c67_m150,67,-150,0.044,ameli_map,USA,United States
+c67_m134,67,-134,0.046,ameli_map,CAN,Canada
+c67_m118,67,-118,0.046,ameli_map,CAN,Canada
+c67_m101,67,-101,0.046,ameli_map,CAN,Canada
+c67_m85,67,-85,0.046,ameli_map,CAN,Canada
+c67_m50,67,-50,0.046,ameli_map,GRL,Greenland
+c67_m34,67,-34,0.046,ameli_map,GRL,Greenland
+c67_29,67,29,0.04,ameli_map,FIN,Finland
+c67_50,67,50,0.051,ameli_map,RUS,Russia
+c67_66,67,66,0.051,ameli_map,RUS,Russia
+c67_84,67,84,0.051,ameli_map,RUS,Russia
+c67_100,67,100,0.051,ameli_map,RUS,Russia
+c67_116,67,116,0.051,ameli_map,RUS,Russia
+c67_132,67,132,0.051,ameli_map,RUS,Russia
+c67_148,67,148,0.051,ameli_map,RUS,Russia
+c67_164,67,164,0.051,ameli_map,RUS,Russia
+c68_m180,68,-180,0.051,ameli_map,RUS,Russia
+c68_m153,68,-153,0.044,ameli_map,USA,United States
+c68_m137,68,-137,0.046,ameli_map,CAN,Canada
+c68_m121,68,-121,0.046,ameli_map,CAN,Canada
+c68_m92,68,-92,0.046,ameli_map,CAN,Canada
+c68_m66,68,-66,0.046,ameli_map,CAN,Canada
+c68_m39,68,-39,0.046,ameli_map,GRL,Greenland
+c68_24,68,24,0.04,ameli_map,FIN,Finland
+c68_45,68,45,0.051,ameli_map,RUS,Russia
+c68_64,68,64,0.051,ameli_map,RUS,Russia
+c68_81,68,81,0.051,ameli_map,RUS,Russia
+c68_97,68,97,0.051,ameli_map,RUS,Russia
+c68_113,68,113,0.051,ameli_map,RUS,Russia
+c68_129,68,129,0.051,ameli_map,RUS,Russia
+c68_145,68,145,0.051,ameli_map,RUS,Russia
+c68_161,68,161,0.051,ameli_map,RUS,Russia
+c68_177,68,177,0.051,ameli_map,RUS,Russia
+c69_m150,69,-150,0.044,ameli_map,USA,United States
+c69_m132,69,-132,0.046,ameli_map,CAN,Canada
+c69_m112,69,-112,0.046,ameli_map,CAN,Canada
+c69_m92,69,-92,0.046,ameli_map,CAN,Canada
+c69_m51,69,-51,0.046,ameli_map,GRL,Greenland
+c69_m35,69,-35,0.046,ameli_map,GRL,Greenland
+c69_24,69,24,0.04,ameli_map,NOR,Norway
+c69_63,69,63,0.051,ameli_map,RUS,Russia
+c69_85,69,85,0.051,ameli_map,RUS,Russia
+c69_101,69,101,0.051,ameli_map,RUS,Russia
+c69_117,69,117,0.051,ameli_map,RUS,Russia
+c69_133,69,133,0.051,ameli_map,RUS,Russia
+c69_149,69,149,0.051,ameli_map,RUS,Russia
+c69_165,69,165,0.051,ameli_map,RUS,Russia
+c70_m160,70,-160,0.044,ameli_map,USA,United States
+c70_m143,70,-143,0.044,ameli_map,USA,United States
+c70_m105,70,-105,0.046,ameli_map,CAN,Canada
+c70_m77,70,-77,0.046,ameli_map,CAN,Canada
+c70_m46,70,-46,0.046,ameli_map,GRL,Greenland
+c70_m30,70,-30,0.046,ameli_map,GRL,Greenland
+c70_29,70,29,0.04,ameli_map,NOR,Norway
+c70_82,70,82,0.051,ameli_map,RUS,Russia
+c70_98,70,98,0.051,ameli_map,RUS,Russia
+c70_114,70,114,0.051,ameli_map,RUS,Russia
+c70_130,70,130,0.051,ameli_map,RUS,Russia
+c70_146,70,146,0.051,ameli_map,RUS,Russia
+c71_m179,71,-179,0.051,ameli_map,RUS,Russia
+c71_m106,71,-106,0.046,ameli_map,CAN,Canada
+c71_m77,71,-77,0.046,ameli_map,CAN,Canada
+c71_m41,71,-41,0.046,ameli_map,GRL,Greenland
+c71_m24,71,-24,0.046,ameli_map,GRL,Greenland
+c71_72,71,72,0.051,ameli_map,RUS,Russia
+c71_91,71,91,0.051,ameli_map,RUS,Russia
+c71_107,71,107,0.051,ameli_map,RUS,Russia
+c71_123,71,123,0.051,ameli_map,RUS,Russia
+c71_140,71,140,0.051,ameli_map,RUS,Russia
+c71_158,71,158,0.051,ameli_map,RUS,Russia
+c72_m109,72,-109,0.046,ameli_map,CAN,Canada
+c72_m81,72,-81,0.046,ameli_map,CAN,Canada
+c72_m45,72,-45,0.046,ameli_map,GRL,Greenland
+c72_m29,72,-29,0.046,ameli_map,GRL,Greenland
+c72_77,72,77,0.051,ameli_map,RUS,Russia
+c72_96,72,96,0.051,ameli_map,RUS,Russia
+c72_112,72,112,0.051,ameli_map,RUS,Russia
+c72_128,72,128,0.051,ameli_map,RUS,Russia
+c73_m119,73,-119,0.046,ameli_map,CAN,Canada
+c73_m92,73,-92,0.046,ameli_map,CAN,Canada
+c73_m51,73,-51,0.046,ameli_map,GRL,Greenland
+c73_m35,73,-35,0.046,ameli_map,GRL,Greenland
+c73_81,73,81,0.051,ameli_map,RUS,Russia
+c73_97,73,97,0.051,ameli_map,RUS,Russia
+c73_114,73,114,0.051,ameli_map,RUS,Russia
+c74_m120,74,-120,0.046,ameli_map,CAN,Canada
+c74_m49,74,-49,0.046,ameli_map,GRL,Greenland
+c74_m33,74,-33,0.046,ameli_map,GRL,Greenland
+c74_87,74,87,0.051,ameli_map,RUS,Russia
+c74_103,74,103,0.051,ameli_map,RUS,Russia
+c75_m99,75,-99,0.046,ameli_map,CAN,Canada
+c75_m57,75,-57,0.046,ameli_map,GRL,Greenland
+c75_m41,75,-41,0.046,ameli_map,GRL,Greenland
+c75_m25,75,-25,0.046,ameli_map,GRL,Greenland
+c75_94,75,94,0.051,ameli_map,RUS,Russia
+c75_110,75,110,0.051,ameli_map,RUS,Russia
+c76_m113,76,-113,0.046,ameli_map,CAN,Canada
+c76_m57,76,-57,0.046,ameli_map,GRL,Greenland
+c76_m41,76,-41,0.046,ameli_map,GRL,Greenland
+c76_m25,76,-25,0.046,ameli_map,GRL,Greenland
+c76_98,76,98,0.051,ameli_map,RUS,Russia
+c76_138,76,138,0.051,ameli_map,RUS,Russia
+c77_m82,77,-82,0.046,ameli_map,CAN,Canada
+c77_m58,77,-58,0.046,ameli_map,GRL,Greenland
+c77_m42,77,-42,0.046,ameli_map,GRL,Greenland
+c77_m26,77,-26,0.046,ameli_map,GRL,Greenland
+c78_m112,78,-112,0.046,ameli_map,CAN,Canada
+c78_m72,78,-72,0.046,ameli_map,GRL,Greenland
+c78_m56,78,-56,0.046,ameli_map,GRL,Greenland
+c78_m40,78,-40,0.046,ameli_map,GRL,Greenland
+c78_m24,78,-24,0.046,ameli_map,GRL,Greenland
+c79_m92,79,-92,0.046,ameli_map,CAN,Canada
+c79_m66,79,-66,0.046,ameli_map,GRL,Greenland
+c79_m50,79,-50,0.046,ameli_map,GRL,Greenland
+c79_m34,79,-34,0.046,ameli_map,GRL,Greenland
+c79_13,79,13,0.04,ameli_map,NOR,Norway
+c80_m96,80,-96,0.046,ameli_map,CAN,Canada
+c80_m79,80,-79,0.046,ameli_map,CAN,Canada
+c80_m58,80,-58,0.046,ameli_map,GRL,Greenland
+c80_m42,80,-42,0.046,ameli_map,GRL,Greenland
+c80_m26,80,-26,0.046,ameli_map,GRL,Greenland
+c80_27,80,27,0.04,ameli_map,NOR,Norway
+c81_m85,81,-85,0.046,ameli_map,CAN,Canada
+c81_m68,81,-68,0.046,ameli_map,CAN,Canada
+c81_m50,81,-50,0.046,ameli_map,GRL,Greenland
+c81_m34,81,-34,0.046,ameli_map,GRL,Greenland
+c81_m18,81,-18,0.046,ameli_map,GRL,Greenland
+c82_m84,82,-84,0.046,ameli_map,CAN,Canada
+c82_m66,82,-66,0.046,ameli_map,CAN,Canada
+c82_m45,82,-45,0.046,ameli_map,GRL,Greenland
+c82_m27,82,-27,0.046,ameli_map,GRL,Greenland
+c83_m45,83,-45,0.046,ameli_map,GRL,Greenland
+c83_m28,83,-28,0.046,ameli_map,GRL,Greenland
