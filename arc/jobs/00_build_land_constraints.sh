@@ -60,18 +60,22 @@ if [[ ! -x "$ARC_PYTHON" ]]; then
 fi
 
 cd "$ARC_REPO_DIR"
-mkdir -p logs
 
 LAND_TAG="${ARC_LAND_TAG:-full_land_constraints}"
 LAND_COVER="${ARC_LAND_COVER:-data/MCD12C1.A2022001.061.2023244164746.hdf}"
 SLOPE_RASTER="${ARC_SLOPE_RASTER:-data/GEBCO_2025_sub_ice.nc}"
 OUTPUT_CSV="${ARC_LAND_OUTPUT_CSV:-data/max_capacities_${LAND_TAG}.csv}"
+LAND_LOG_DIR="${ARC_LAND_LOG_DIR:-logs}"
+ALLOW_OUTPUT_OVERWRITE="${ARC_ALLOW_LAND_OUTPUT_OVERWRITE:-0}"
 BASE_LAND_CSV="${ARC_BASE_LAND_CSV:-}"
 LAND_COMPETITION_FRACTION="${ARC_LAND_COMPETITION_FRACTION:-1.0}"
 SOURCE_LAND_COMPETITION_FRACTION="${ARC_SOURCE_LAND_COMPETITION_FRACTION:-}"
 MAX_SLOPE_DEGREES="${ARC_MAX_SLOPE_DEGREES:-15}"
 SKIP_SLOPE_EXCLUSION="${ARC_SKIP_SLOPE_EXCLUSION:-0}"
 INCLUDE_OFFSHORE_WIND="${ARC_INCLUDE_OFFSHORE_WIND:-1}"
+# center: the (lat, lon) label is the cell centre, matching the weather nodes and the legacy
+# land step; southwest: label = south-west corner (the pre-September-2026 convention).
+CELL_ANCHOR="${ARC_CELL_ANCHOR:-center}"
 PROTECTED_AREA_0="${ARC_PROTECTED_AREA_0:-data/WDPA_Feb2026_Public_shp_0/WDPA_Feb2026_Public_shp-polygons.shp}"
 PROTECTED_AREA_1="${ARC_PROTECTED_AREA_1:-data/WDPA_Feb2026_Public_shp_1/WDPA_Feb2026_Public_shp-polygons.shp}"
 PROTECTED_AREA_2="${ARC_PROTECTED_AREA_2:-data/WDPA_Feb2026_Public_shp_2/WDPA_Feb2026_Public_shp-polygons.shp}"
@@ -98,8 +102,14 @@ for path in "${required_paths[@]}"; do
   fi
 done
 
+if [[ -e "$OUTPUT_CSV" && "$ALLOW_OUTPUT_OVERWRITE" != "1" ]]; then
+  echo "ERROR: refusing to overwrite immutable land output: $OUTPUT_CSV" >&2
+  exit 2
+fi
+
 STAMP="$(date +%Y%m%d-%H%M%S)"
-LOGFILE="logs/arc-land-availability-${LAND_TAG}-${STAMP}.log"
+mkdir -p "$LAND_LOG_DIR"
+LOGFILE="${LAND_LOG_DIR}/arc-land-availability-${LAND_TAG}-${STAMP}.log"
 
 mkdir -p "$(dirname "$OUTPUT_CSV")"
 
@@ -112,6 +122,7 @@ echo "Source frac: ${SOURCE_LAND_COMPETITION_FRACTION:-<auto>}" | tee -a "$LOGFI
 echo "Slope skip:  $SKIP_SLOPE_EXCLUSION" | tee -a "$LOGFILE"
 echo "Max slope:   $MAX_SLOPE_DEGREES" | tee -a "$LOGFILE"
 echo "Offshore:    $INCLUDE_OFFSHORE_WIND" | tee -a "$LOGFILE"
+echo "Anchor:      $CELL_ANCHOR" | tee -a "$LOGFILE"
 if [[ -z "$BASE_LAND_CSV" ]]; then
   echo "Land cover:  $LAND_COVER" | tee -a "$LOGFILE"
   if [[ "$SKIP_SLOPE_EXCLUSION" != "1" ]]; then
@@ -142,6 +153,7 @@ if [[ -n "$BASE_LAND_CSV" ]]; then
 else
   cmd+=(
     --land-cover "$LAND_COVER"
+    --cell-anchor "$CELL_ANCHOR"
     --protected-area "$PROTECTED_AREA_0"
     --protected-area "$PROTECTED_AREA_1"
     --protected-area "$PROTECTED_AREA_2"

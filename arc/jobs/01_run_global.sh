@@ -85,7 +85,12 @@ if [[ ! -x "$ARC_PYTHON" ]]; then
 fi
 
 cd "$ARC_REPO_DIR"
-mkdir -p logs "results/${RUN_LABEL}"
+CAMPAIGN_RUN_DIR="${ARC_RUN_OUTPUT_DIR:-}"
+if [[ -n "$CAMPAIGN_RUN_DIR" ]]; then
+  mkdir -p "$CAMPAIGN_RUN_DIR/logs"
+else
+  mkdir -p logs "results/${RUN_LABEL}"
+fi
 
 if [[ -n "$LOCATIONS_ARG" ]]; then
   export ARC_LOCATIONS_CSV="$LOCATIONS_ARG"
@@ -98,6 +103,22 @@ export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
 
 bash arc/arc_check_run_inputs.sh "${ARC_LOCATIONS_CSV:-}" >/dev/null
 
+if [[ -n "$CAMPAIGN_RUN_DIR" ]]; then
+  if [[ -z "${ARC_RUN_MANIFEST:-}" || ! -f "$ARC_RUN_MANIFEST" ]]; then
+    echo "ERROR: campaign run requires an existing ARC_RUN_MANIFEST" >&2
+    exit 2
+  fi
+  "$ARC_PYTHON" arc/verify_campaign_manifest_inputs.py \
+    --manifest "$ARC_RUN_MANIFEST"
+  if [[ -z "${ARC_RELEASE_INVENTORY:-}" ]]; then
+    echo "ERROR: campaign run requires ARC_RELEASE_INVENTORY" >&2
+    exit 2
+  fi
+  "$ARC_PYTHON" arc/release_source_inventory.py verify \
+    --root "$ARC_REPO_DIR" \
+    --inventory "$ARC_RELEASE_INVENTORY"
+fi
+
 CPUS="${SLURM_CPUS_PER_TASK:-48}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
@@ -109,15 +130,34 @@ export ARC_THREADS_PER_WORKER="${ARC_THREADS_PER_WORKER:-4}"
 export ARC_NUM_WORKERS="${ARC_NUM_WORKERS:-$((CPUS / ARC_THREADS_PER_WORKER))}"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-export ARC_OUTPUT_CSV="${ARC_OUTPUT_CSV:-results/${RUN_LABEL}/run_global_${RUN_LABEL}_${STAMP}.csv}"
+if [[ -n "$CAMPAIGN_RUN_DIR" ]]; then
+  if [[ -z "${ARC_OUTPUT_CSV:-}" ]]; then
+    echo "ERROR: ARC_RUN_OUTPUT_DIR requires an explicit ARC_OUTPUT_CSV" >&2
+    exit 2
+  fi
+  export ARC_OUTPUT_CSV
+else
+  export ARC_OUTPUT_CSV="${ARC_OUTPUT_CSV:-results/${RUN_LABEL}/run_global_${RUN_LABEL}_${STAMP}.csv}"
+fi
 export ARC_QUIET="${ARC_QUIET:-1}"
 export ARC_LON_MIN="${ARC_LON_MIN:-}"
 export ARC_LON_MAX="${ARC_LON_MAX:-}"
 export ARC_TIME_STEP="${ARC_TIME_STEP:-1.0}"
 export ARC_FAIL_FAST="${ARC_FAIL_FAST:-1}"  # set to 0 to swallow per-location failures silently
 export ARC_ENSURE_FEASIBILITY="${ARC_ENSURE_FEASIBILITY:-1}"  # set to 0 to disable grid backstop (hard infeasibility)
+export ARC_LAND_CONSTRAINT="${ARC_LAND_CONSTRAINT:-after_solve}"
+export ARC_CAPACITY_RULE="${ARC_CAPACITY_RULE:-scaled_reference_design}"
+export ARC_LAND_ALLOCATION="${ARC_LAND_ALLOCATION:-colocated}"
+export ARC_ALLOW_CONSERVATIVE_UNION_FALLBACK="${ARC_ALLOW_CONSERVATIVE_UNION_FALLBACK:-1}"
+export ARC_TEMPORAL_ACCOUNTING_MODE="${ARC_TEMPORAL_ACCOUNTING_MODE:-snapshot_weighted}"
+export ARC_RAMP_LIMIT_BASIS="${ARC_RAMP_LIMIT_BASIS:-per_hour}"
+export ARC_INCLUDE_SITE_COSTS="${ARC_INCLUDE_SITE_COSTS:-1}"
 
-LOGFILE="logs/arc-${RUN_LABEL}-${STAMP}.log"
+if [[ -n "$CAMPAIGN_RUN_DIR" ]]; then
+  LOGFILE="$CAMPAIGN_RUN_DIR/logs/worker-${ARC_SHARD:-single}-${STAMP}.log"
+else
+  LOGFILE="logs/arc-${RUN_LABEL}-${STAMP}.log"
+fi
 echo "Run label: $RUN_LABEL"
 echo "Log file:  $LOGFILE"
 echo "Output:    $ARC_OUTPUT_CSV"
@@ -173,12 +213,26 @@ fail_fast_raw = os.environ.get("ARC_FAIL_FAST", "1").strip().lower()
 fail_fast = fail_fast_raw in {"1", "true", "yes"}
 ensure_feasibility_raw = os.environ.get("ARC_ENSURE_FEASIBILITY", "1").strip().lower()
 ensure_feasibility = ensure_feasibility_raw not in {"0", "false", "no"}
+land_constraint = os.environ.get("ARC_LAND_CONSTRAINT", "after_solve").strip()
+capacity_rule = os.environ.get("ARC_CAPACITY_RULE", "scaled_reference_design").strip()
+land_allocation = os.environ.get("ARC_LAND_ALLOCATION", "colocated").strip()
+union_fallback_raw = os.environ.get(
+    "ARC_ALLOW_CONSERVATIVE_UNION_FALLBACK", "1"
+).strip().lower()
+allow_conservative_union_fallback = union_fallback_raw not in {"0", "false", "no"}
+temporal_accounting_mode = os.environ.get(
+    "ARC_TEMPORAL_ACCOUNTING_MODE", "snapshot_weighted"
+).strip()
+ramp_limit_basis = os.environ.get("ARC_RAMP_LIMIT_BASIS", "per_hour").strip()
+include_site_costs_raw = os.environ.get("ARC_INCLUDE_SITE_COSTS", "1").strip().lower()
+include_site_costs = include_site_costs_raw not in {"0", "false", "no"}
 
 result_df = run_global(
     locations=locations,
     land_csv=os.environ.get("ARC_LAND_CSV"),
     override_csv=(os.environ.get("ARC_OVERRIDE_CSV") or "").strip() or None,
     tech_yaml=os.environ.get("ARC_TECH_YAML"),
+    plant_dir=os.environ.get("ARC_PLANT_DIR") or None,
     time_step=time_step,
     max_snapshots=max_snapshots,
     output_csv=os.environ.get("ARC_OUTPUT_CSV"),
@@ -190,6 +244,13 @@ result_df = run_global(
     weather_dir=os.environ.get("ARC_WEATHER_DIR") or None,
     fail_fast=fail_fast,
     ensure_feasibility=ensure_feasibility,
+    land_constraint=land_constraint,
+    capacity_rule=capacity_rule,
+    land_allocation=land_allocation,
+    allow_conservative_union_fallback=allow_conservative_union_fallback,
+    temporal_accounting_mode=temporal_accounting_mode,
+    ramp_limit_basis=ramp_limit_basis,
+    include_site_costs=include_site_costs,
 )
 
 print(f"Processed {len(result_df)} locations")

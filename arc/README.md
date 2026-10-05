@@ -15,9 +15,136 @@ This folder contains ARC (Oxford) helper scripts for running full global jobs fr
 - `arc/submit_global_run.sh`: convenience wrapper to run preflight + submit the SLURM job.
 - `arc/jobs/00_build_land_constraints.sh`: SLURM job script for either heavy 100pct land builds or cheap derived competition rescaling.
 - `arc/submit_land_constraints_matrix.sh`: ARC-side wrapper that submits the 100pct/derived max-capacity matrix.
+- `arc/submit_land_center_matrix.sh`: ARC-side wrapper for one 100pct build plus derived shares (default 2 % and 20 %) written to an immutable campaign directory; the heavy job goes to `--clusters=all` and the derived jobs follow it on the accepted cluster. Cells are anchored at their centre (`ARC_CELL_ANCHOR=center`, the default of the template since 23 Sep 2026; `southwest` reproduces the pre-September labelling convention only for audits).
 - `arc/stage_and_submit_land_constraints.sh`: local helper that stages the required data/code to ARC and then calls `arc/submit_land_constraints_matrix.sh` remotely.
 - `arc/submit_constrained_reruns.sh`: convenience wrapper for the canonical constrained DEA/Way rerun set; queues dependent merge jobs automatically.
+- `arc/submit_lory_sequence.sh`: immutable campaign wrapper for the Green Lory reconciliation sequence.
+- `arc/merge_and_qa_campaign.py`: merges an explicit shard list and enforces coordinate, uniqueness, currency, finance-override, manifest, and schema gates.
+- `arc/write_campaign_manifest.py`: records source and input identities for one immutable campaign run.
+- `arc/write_campaign_submission.py`: records job IDs separately so the manifest hash cannot race running shards.
 - `scripts/merge_global_results.py`: canonical quadrant merge helper used by ARC workflows.
+
+## Green Lory Reconciliation Campaign
+
+Use `submit_lory_sequence.sh` for the publication-replication and central-realism
+runs. It is intentionally additive: the older general-purpose wrappers remain
+available, while this path never reuses a mutable shard folder or discovers a
+result with a “latest file” glob.
+
+Supported scenarios:
+
+- `rep_way2050_flat_amelired_4h_tracking_nominal_h2`: four-hour historical replication with tracking PV, nominal compressor CAPEX, legacy bundled H2 storage, legacy-scaled temporal accounting and per-snapshot ramps. Land remains a post-processing capacity calculation using `scaled_reference_design` with the `exclusive` allocation (September name `paper_union`). The flat cost scope uses Ameli reduced WACC, unity build/remoteness multipliers, and uniform baseline water at 2 USD/m3; water is reported but excluded from the replication headline, and no land-rent input is available.
+- `central_way2050_flat_amelired_1h_fixed_explicit_compressor_dea_tank_colocated` (central case since 16 September 2026): hourly, fixed-tilt PV only (plant bundle without tracking), explicit compressor CAPEX, DEA 2050 tank-only H2 storage, snapshot-weighted accounting, and the `colocated` land allocation: wind and PV draw on the same suitable-land budget and only the exclusive fraction of the wind footprint (3 %, Denholm et al. 2009 direct-impact area) competes with PV. Tracking-only is the named sensitivity.
+- `central_way2050_flat_amelired_1h_tracking_explicit_compressor_dea_tank` (September 2026 definition, retained for reproducibility): hourly central case with tracking PV, explicit compressor CAPEX, DEA 2050 tank-only H2 storage, snapshot-weighted temporal accounting and per-hour ramps. Land remains a post-processing capacity calculation using `scaled_reference_design` with the `exclusive` allocation (September name `technology_shared`). The same flat cost scope uses Ameli reduced WACC, unity build/remoteness multipliers, and uniform baseline water at 2 USD/m3; baseline water is included in the headline, while land rent remains unmodelled and zero.
+
+The `flat_amelired` token is deliberate. These baselines do not use the spatial
+build, remoteness, or water-access columns in
+`inputs/spatial_cost_inputs_amelired_2050.csv`. That combined input belongs in a
+separately named `spatial_build_remote_water_amelired` sensitivity; its current
+land-rent column is also zero.
+
+Both scientific scenarios disable the feasibility grid backstop. Conservative
+or unversioned renewable-union inputs are allowed only for runtime smoke work.
+Full-year diagnostic and global submissions require the versioned
+`renewable_union_area_km2_classwise_nested_v1` column and fail in preflight if
+it is absent. This v1 estimate sums the larger wind/solar suitability fraction
+within each MODIS class. Because the underlying eligible footprints are not
+spatially resolved, it assumes perfect nested overlap and is a lower bound on
+the physical union, not an exact union. `renewable_union_area_km2` remains a
+numerically identical compatibility alias in newly generated tables.
+
+Start with a local or ARC-side dry run:
+
+```bash
+bash arc/submit_lory_sequence.sh \
+  --stage smoke \
+  --run-id review-only \
+  --dry-run
+```
+
+Local dry runs validate the tracked YAML, override, diagnostic-cell, and plant
+bundle inputs. Large `data/` inputs are ARC-only and are reported as notes.
+Non-dry submissions require the full ARC preflight to pass. Preflight also
+requires the interest-only override to cover every explicit diagnostic cell or
+every positive-capacity global land cell.
+
+The intended gated sequence is:
+
+```bash
+# Three cells over 168 simulated hours: operational check.
+bash arc/submit_lory_sequence.sh --stage smoke
+
+# Same three cells over the full weather year: scientific comparison. Point to
+# the immutable 2% table produced for this campaign.
+bash arc/submit_lory_sequence.sh \
+  --stage diagnostic \
+  --land-csv /data/<group>/<user>/green-lory-campaigns/<campaign>/land/paper_2pct_slope15.csv
+
+# Submit one global baseline only after reviewing its diagnostic result.
+bash arc/submit_lory_sequence.sh \
+  --stage global \
+  --land-csv /data/<group>/<user>/green-lory-campaigns/<campaign>/land/paper_2pct_slope15.csv \
+  --scenario rep_way2050_flat_amelired_4h_tracking_nominal_h2
+
+bash arc/submit_lory_sequence.sh \
+  --stage global \
+  --land-csv /data/<group>/<user>/green-lory-campaigns/<campaign>/land/paper_2pct_slope15.csv \
+  --scenario central_way2050_flat_amelired_1h_tracking_explicit_compressor_dea_tank
+```
+
+Every invocation receives a unique UTC/source run ID by default. Passing
+`--run-id` is supported, but the wrapper refuses an existing destination.
+For ARC reconciliation work, keep staged source and generated artifacts in
+separate roots:
+
+```text
+/data/<group>/<user>/green-lory-releases/<release-id>/
+/data/<group>/<user>/green-lory-campaigns/<campaign>/
+├── land/
+└── results/
+```
+
+The release may link to the existing read-only large `data/` payload; it must
+not reuse the legacy repository's mutable `results/` or `logs/` folders.
+Campaign results are stored under:
+
+```text
+results/campaigns/<campaign>/
+├── 00_smoke/<scenario>/runs/<run-id>/smoke/
+├── 10_replication/<scenario>/runs/<run-id>/<diagnostic-or-global>/
+└── 20_central/<scenario>/runs/<run-id>/<diagnostic-or-global>/
+```
+
+Each run contains a byte-immutable `manifest.json`, a separate `submission.json`
+for SLURM job IDs, exact `shards/`, the validated `merged/` CSV,
+`qa/validation.json`, and SLURM `logs/`. The manifest records the complete
+resolved technology-YAML inheritance chain, not only an overlay file. It also
+records the override CSV columns and a structured cost scope: Ameli reduced
+WACC, no spatial build/remoteness override, unity build multiplier, 2 USD/m3
+uniform YAML water, and no land-rent input. A
+merge/QA job runs only after all of that run's explicit shard job IDs finish
+successfully. It fails if rows are
+missing or duplicated, unexpected coordinates appear, currency or finance
+metadata disagree, required columns are absent, a result's build/water/land
+values contradict the manifest scope, or a failure-sidecar CSV exists.
+
+Useful controls:
+
+- `--campaign`, `--run-id`, and `--results-root` set immutable output identity.
+- `--land-csv` pins both scenarios to one versioned campaign land table; the
+  manifest hashes that exact file.
+- `--cluster` pins every shard and merge/QA job to one ARC cluster. Without it,
+  the first returned cluster is used for all remaining jobs in that scenario.
+- `--smoke-hours` changes the short-run simulated duration. The 168-hour
+  default becomes 168 snapshots in the hourly central case and 42 snapshots in
+  the four-hour replication case.
+- `--scenario` is repeatable; omitting it selects both baseline scenarios.
+- `ARC_CAMPAIGN_THREADS_PER_WORKER`, `ARC_CAMPAIGN_DIAGNOSTIC_WORKERS`, and
+  `ARC_CAMPAIGN_GLOBAL_WORKERS` control worker sizing.
+
+Do not promote or delete an older result merely because a replacement was
+submitted. Review the merged CSV and require `qa/validation.json` to report
+`"status": "passed"` first.
 
 ## Typical ARC Workflow
 
@@ -119,6 +246,24 @@ The ambiguous `way-2050-spatial-amelired` filter is intentionally unsupported in
 When `--land-tag` is omitted, the wrapper infers one from the land CSV name when it follows the `max_capacities_<tag>.csv` pattern. That tag is appended to the run label and merged results directory, so the land-cap choice stays visible in downstream ARC outputs.
 
 ### 4c. Submit the land-processing matrix
+
+For the reconciliation campaign, submit from the immutable source release and
+write every artifact below the campaign root. The matrix wrapper and each land
+job now refuse an existing output by default:
+
+```bash
+campaign_root=/data/<group>/<user>/green-lory-campaigns/lory_reconcile_20260722_v1
+ARC_PCT100_SLOPE15_CSV="$campaign_root/land/100pct_slope15.csv" \
+ARC_PCT100_ALLSLOPES_CSV="$campaign_root/land/100pct_allslopes.csv" \
+ARC_PAPER_2PCT_SLOPE15_CSV="$campaign_root/land/paper_2pct_slope15.csv" \
+ARC_HIGH_50PCT_SLOPE15_CSV="$campaign_root/land/high_50pct_slope15.csv" \
+ARC_LAND_LOG_DIR="$campaign_root/land/logs" \
+bash arc/submit_land_constraints_matrix.sh
+```
+
+The older local staging helper below targets the legacy repository and is kept
+only for historical/general-purpose maintenance; do not use it for the
+reconciliation campaign.
 
 From your local machine, stage the required data/code and submit the initial 100pct/derived matrix:
 

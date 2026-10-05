@@ -10,6 +10,7 @@ PCT100_SLOPE15_CSV="${ARC_PCT100_SLOPE15_CSV:-data/max_capacities_100pct_slope15
 PCT100_ALLSLOPES_CSV="${ARC_PCT100_ALLSLOPES_CSV:-data/max_capacities_100pct_allslopes.csv}"
 PAPER_2PCT_SLOPE15_CSV="${ARC_PAPER_2PCT_SLOPE15_CSV:-data/max_capacities_paper_2pct_slope15.csv}"
 HIGH_50PCT_SLOPE15_CSV="${ARC_HIGH_50PCT_SLOPE15_CSV:-data/max_capacities_high_50pct_slope15.csv}"
+LAND_LOG_DIR="${ARC_LAND_LOG_DIR:-logs}"
 
 cd "$ARC_REPO_DIR"
 
@@ -37,9 +38,20 @@ for path in "${required[@]}"; do
   fi
 done
 
+for output in \
+  "$PCT100_SLOPE15_CSV" \
+  "$PCT100_ALLSLOPES_CSV" \
+  "$PAPER_2PCT_SLOPE15_CSV" \
+  "$HIGH_50PCT_SLOPE15_CSV"; do
+  if [[ -e "$output" ]]; then
+    echo "ERROR: refusing to overwrite immutable land output: $output" >&2
+    exit 2
+  fi
+done
+
 bash -n arc/jobs/00_build_land_constraints.sh
 
-base_export="ALL,ARC_REPO_DIR=${ARC_REPO_DIR},ARC_INCLUDE_OFFSHORE_WIND=${ARC_INCLUDE_OFFSHORE_WIND}"
+base_export="ALL,ARC_REPO_DIR=${ARC_REPO_DIR},ARC_INCLUDE_OFFSHORE_WIND=${ARC_INCLUDE_OFFSHORE_WIND},ARC_LAND_LOG_DIR=${LAND_LOG_DIR},ARC_ALLOW_LAND_OUTPUT_OVERWRITE=0"
 
 pct100_slope15_job=$(submit_job \
   --job-name=green-lory-land-slope15 \
