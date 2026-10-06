@@ -1,0 +1,116 @@
+# Modelling choices of the improved green-lory model
+
+One list of the choices behind the improved runs: which are settled, and which are open. Once
+the open ones are settled, this file becomes the model specification and the repository
+reorganisation (README, "Planned layout") starts. Written 6 October 2026 from the decisions of
+16 September to 5 October; dates say when a choice was made. "Cost to change" says whether
+changing the choice needs only post-processing of the existing key surfaces or a new solve.
+
+## Settled
+
+| Choice | Decision | Since | Where it is set |
+|---|---|---|---|
+| Technology costs | DEA 2050; Way 2050 only for the reconciling run | 16 Sep | `tech_yaml` in `runs.yaml` |
+| Currency | EUR2020 for LCOA; supplier contracts in USD2018, the network model's currency | 23 Sep | result columns, contract export |
+| Finance | uniform 5 % WACC as the base; Ameli reduced WACC by country as a sensitivity (it moves the median LCOA by under 1 %) | 5 Oct | `finance_csv` |
+| Time resolution | hourly, one weather year (2019) | Sep | `time_step_h` |
+| PV | fixed tilt only; tracking-only is a named sensitivity; the optimiser does not choose between them | 16 Sep | `pv_policy`, plant bundle |
+| Tracking footprint | 1.458 x the fixed-tilt area (Bolinger and Bolinger 2022) | 16 Sep | `inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml` |
+| Wind/PV land sharing | co-located: only the wind direct-impact share (0.03 of the footprint, Denholm et al. 2009) excludes PV | 16 Sep | `land_allocation` |
+| Land table | centred 1-degree cells; MODIS MCD12C1 2022 with the Table-2 factors; WDPA and > 15 degree slope exclusions | 16 and 23 Sep | `land_center_20260923_v1` on ARC |
+| Land share | 20 % of suitable land as the base, 2 % as the sensitivity | 16 Sep | `land_share`, `land_table` |
+| Land and capacity | land applied after the solve; capacity = the 1 Mt/yr reference design scaled until it fills the land, stated as a conservative lower bound, with the three-cell finite-site curves quoted as its bias (at 2 %: Atacama 3.4 against 4.0 Mt/yr feasible, northwest Australia 1.17 against 1.75, central Australia 0.38 against 2.0; approximate, the two use different cost sets) | 5 Oct | `land_constraint`, `capacity_rule` |
+| Water | flat 2 EUR2020/m³ (1.5 m³/t) in the headline LCOA | 23 Sep | tech YAML, `site_costs_in_headline` |
+| Build cost, land rent | flat build cost (multiplier 1), no land rent | 23 Sep | `cost_scope` |
+| Cells | onshore cells with suitable land (16,509) | 23 Sep | `--global-locations` |
+| Grid | no grid backstop | Sep | wrapper |
+| Networks | 1 Mt/yr supplier cutoff; deposited equations; results accepted at the deposit's 1.5 % gap, each run's gap reported | 16 Sep, 5 Oct | `network_defaults` in `runs.yaml` |
+
+`reconciliation/DECISION_20260916.md` section 7.2 still names land-enforced finite-site solves as
+the capacity method; the 5 October choice above replaces it and the decision text is to be
+rewritten accordingly.
+
+## Open
+
+### 1. Fixed-PV power density (agreed 5 Oct to keep one rule; value open)
+
+Three latitude-packed rules are in use, which differ in their equator value:
+
+| Rule | At the equator | At 23° | Used by |
+|---|---|---|---|
+| run-time recomputation from the YAML (0.01 km²/MW) whenever a land table has no `solar_density_method` column | 100 MW/km² | 73.6 MW/km² | every `run_global` surface, including the key runs; pilot v6 |
+| land-table column (First Solar module packed after van de Ven 2021) | about 106 | about 78 | the legacy stated method (legacy key run) |
+| literal paper reading (9 km²/GW at the equator) | 111 | 83.45 | pilots v1 to v5 |
+
+Empirical check: Bolinger and Bolinger (2022) give a 2019 US median of 0.35 MWdc/acre for fixed
+tilt, 87 MWdc/km²: above all three rules even at 23°, although US latitudes need wider row
+spacing than 23°.
+
+Recommendation: keep the land-table column as the single rule (written once into the land table
+with `solar_density_method`, run-time recomputation removed). It is the paper's stated method,
+the legacy stated method uses it (so the legacy/green-lory comparison carries no density
+artefact), and the empirical median says it is not optimistic. Before comparing with Bolinger,
+settle whether the model's PV megawatts are AC or DC: the PV profiles exceed 1.0 at times and
+their normalisation basis is undocumented (`data/README.md`), and a DC/AC ratio of about 1.3
+would change the comparison more than the choice between these rules.
+
+Cost to change: post-processing. The key surfaces solved without land, so PV-limited capacities
+scale by the density ratio (+6 % for the recommended rule); new supplier contracts and four
+network jobs (about 2 h each).
+
+### 2. Weather data
+
+Every run, legacy and green-lory, uses the 2019 profile stack made for lcoa-opt (wind x 0.93
+wake factor, PV normalisation undocumented). The ERA5/atlite 2019 capacity factors on ARC give
+7 to 9 % lower fixed-PV and 26 to 38 % lower raw wind capacity factors at the focal cells, have
+no tracking field, and have never been run through a solve. The choice does not affect the
+legacy/green-lory comparison (both use the same stack), but it moves absolute LCOA more than any
+other open item.
+
+Recommendation: keep the legacy stack for the comparison notebook. For the improved model,
+decide whether the papers quote absolute LCOA; if they do, run the 563-cell legacy sample with
+both weather sources first (small runs) and adopt ERA5/atlite if the difference holds
+globally.
+
+Cost to change: a weather loader for the atlite tiles, then new global solves (about 3 h on four
+48-core jobs per surface, each submitted only with your confirmation).
+
+### 3. Which further surfaces the papers need
+
+The 16 September plan (`reconciliation/PLAN_GLOBAL_CAMPAIGN_20260916.md` section 4) proposed
+eight surfaces S1 to S8 (2030 and 2050; finance; spatial build and remoteness; spatial water; 2 %
+land). The three key surfaces cover S1, S3 and S8. Open: whether the sensitivity paper needs
+the spatial surfaces (S2, S4, S5) and the 2030 surfaces (S6, S7). The spatial ones wait for a
+review of their inputs: travel time to the nearest city is doubtful as remoteness for coastal
+greenfield ports, and the water-access costs are unreviewed.
+
+Recommendation: fix this list before the workflow is written, because each surface becomes a
+workflow target; keep offshore cells out until bathymetry exclusions and costs exist.
+
+### 4. Smaller open items
+
+- Co-location reference: the 0.03 wind direct-impact share rests on Denholm et al. (2009); a
+  better source is a to-do. Post-processing only.
+- Capacity range: the scaled design is a lower bound; a per-cell energy-ceiling upper bound is a
+  cheap addition if a reviewer asks for a range. Global finite-site curves are not proportionate.
+- The legacy key run's id says `way2050` although it reads the x_Cost sheet (`xcost45`). Keep
+  it (results are filed under it) or rename with the old id as an alias.
+
+## Structure to settle before the reorganisation
+
+Not modelling choices, but they decide what the reorganised code looks like.
+
+1. **One source for plant parameters.** The YAML holds the efficiencies, notebook 00 copies them
+   into the four plant bundles, and `run_global` reads them back from the bundle; costs, by
+   contrast, are applied from the YAML at run time. The bundles differ only in efficiencies,
+   load and the tracking switch (GLOSSARY, Plant bundles). Recommendation: apply efficiencies
+   and the load from the YAML at run time, take the tracking switch from `pv_policy`, and keep
+   one topology bundle in `model/`. Check that the key cells give identical results.
+2. **One capacity column family.** Drop the `max_*` columns, which are unused downstream, and
+   move the QA gate to the `scaled_design_*` columns.
+3. **Defaults that match the model of record.** The command line keeps the grid backstop and
+   defaults to the 10 Mt 2030 bundle. Recommendation: make the technology YAML and plant bundle
+   required (or take a run id), and default to no backstop.
+4. **Dead options.** Remove the `southwest` anchor (keep it in its test), the conservative union
+   fallback, the grid backstop, the `aggregation_count` plumbing and, once open item 1 is
+   settled, the run-time PV density recomputation (list in `reconciliation/CLEANUP_PLAN_20261005.md` 2e).

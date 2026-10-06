@@ -1,5 +1,13 @@
 # Reconciliation package: legacy-lcoa versus green-lory, and the Verschuur network
 
+> **6 October 2026.** The reconciliation is complete. Once the open modelling choices
+> (`../MODEL_CHOICES.md`) are settled, this directory will be replaced by one notebook comparing
+> the legacy and green-lory results and explaining each difference, and `legacy_lcoa/` will move
+> to the repository root; the dated reports remain in git history. Runs and networks are defined
+> in `../runs.yaml` and recorded in `run_store.csv`. The reports name networks by letter
+> ("network D"): `../GLOSSARY.md` maps each letter to its run, or run
+> `python arc/run_definitions.py show D` from the repository root.
+
 This directory is the entry point for the reconciliation of the old `lcoa-opt`
 plant model ("legacy-lcoa", Salmon 2023) with the current PyPSA implementation
 ("green-lory", `model/`), and of the green-porpoise shipping networks that each

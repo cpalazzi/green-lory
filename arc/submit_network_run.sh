@@ -13,9 +13,11 @@
 #       [--release 20260914-v3] [--clusters all] [--dry-run]
 #
 # Without --contract the archived supplier table (c_NH3_cost_4.5.csv in the
-# historical archive) is used. The five 14 September comparisons and run D used
-# 4 CPUs / 64 GB / 2 h with a 3600 s solver limit; an accepted 0.1 % gap needs
-# a longer allocation (e.g. --cpus 12 --mem 96G --hours 12 --solver-time 39600).
+# historical archive) is used. The September comparison networks (A to E in the
+# reports, see GLOSSARY.md) and the four key networks of 28 September used
+# 4 CPUs / 64 GB / 2 h with a 3600 s solver limit; a 0.1 % gap needs a longer
+# allocation (e.g. --cpus 12 --mem 96G --hours 12 --solver-time 39600), but results
+# are accepted at the deposit's 1.5 % gap.
 set -euo pipefail
 BASE=/data/engs-df-green-ammonia/engs2523
 CAMP=$BASE/green-lory-campaigns/verschuur_reconcile_20260907_v1

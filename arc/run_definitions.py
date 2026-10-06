@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Read the run definitions in runs.yaml.
 
-    python arc/run_definitions.py list           # run ids, runner and role
+    python arc/run_definitions.py list           # run and network ids, runner and role
+    python arc/run_definitions.py show <id>      # one entry; also accepts a report name such as D
     python arc/run_definitions.py table          # green-lory settings side by side (Markdown)
     python arc/run_definitions.py shell <run id> # shell assignments for arc/submit_lory_sequence.sh
 """
@@ -21,6 +22,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNS_FILE = REPO_ROOT / "runs.yaml"
 
 RUNNERS = ("green_lory", "derived", "legacy_lcoa", "supply_pilot")
+
+# supplier_run of a network that reads the published table rather than one of our runs
+ARCHIVED_SUPPLIER = "archived"
 
 # runs.yaml key -> variable set by configure_scenario in arc/submit_lory_sequence.sh
 WRAPPER_VARIABLES = {
@@ -77,10 +81,13 @@ class RunDefinitionError(ValueError):
     """Raised when runs.yaml is malformed or a run id is not usable."""
 
 
-def load_runs(path: str | Path = RUNS_FILE) -> dict[str, dict[str, Any]]:
+def _load_document(path: str | Path) -> dict[str, Any]:
     with Path(path).open(encoding="utf-8") as handle:
-        document = yaml.safe_load(handle)
-    runs = (document or {}).get("runs")
+        return yaml.safe_load(handle) or {}
+
+
+def load_runs(path: str | Path = RUNS_FILE) -> dict[str, dict[str, Any]]:
+    runs = _load_document(path).get("runs")
     if not isinstance(runs, dict) or not runs:
         raise RunDefinitionError(f"{path} has no 'runs' mapping")
     for run_id, run in runs.items():
@@ -90,7 +97,86 @@ def load_runs(path: str | Path = RUNS_FILE) -> dict[str, dict[str, Any]]:
             raise RunDefinitionError(f"Run {run_id}: runner must be one of {RUNNERS}")
         if run["runner"] == "green_lory":
             _validate_green_lory_run(run_id, run)
+        if run["runner"] == "derived" and run.get("derived_from") not in runs:
+            raise RunDefinitionError(f"Run {run_id}: derived_from must name another run in {path}")
+    for run_id in runs:
+        chain = [run_id]
+        while runs[chain[-1]]["runner"] == "derived":
+            parent = runs[chain[-1]]["derived_from"]
+            if parent in chain:
+                raise RunDefinitionError(f"Run {run_id}: derived_from forms a cycle ({' <- '.join(chain + [parent])})")
+            chain.append(parent)
     return runs
+
+
+def load_networks(path: str | Path = RUNS_FILE) -> dict[str, dict[str, Any]]:
+    """Network entries with network_defaults filled in, checked against the runs they read."""
+    document = _load_document(path)
+    runs = load_runs(path)
+    defaults = document.get("network_defaults") or {}
+    networks = document.get("networks") or {}
+    if not isinstance(defaults, dict) or not isinstance(networks, dict):
+        raise RunDefinitionError(f"{path}: network_defaults and networks must be mappings")
+    clashes = sorted(set(runs) & set(networks))
+    if clashes:
+        raise RunDefinitionError(f"{path}: ids used for both a run and a network: {', '.join(clashes)}")
+    resolved, report_names = {}, {}
+    for network_id, network in networks.items():
+        if not isinstance(network, dict):
+            raise RunDefinitionError(f"Network {network_id} is not a mapping")
+        supplier = network.get("supplier_run")
+        if supplier != ARCHIVED_SUPPLIER and supplier not in runs:
+            raise RunDefinitionError(
+                f"Network {network_id}: supplier_run {supplier!r} is neither {ARCHIVED_SUPPLIER!r} nor a run in {path}"
+            )
+        name = network.get("report_name")
+        if name is not None:
+            if str(name).casefold() in report_names:
+                raise RunDefinitionError(f"{path}: report_name {name!r} is used twice")
+            report_names[str(name).casefold()] = network_id
+        # the entry's own keys first, then the defaults it does not override
+        resolved[network_id] = {**network, **{key: value for key, value in defaults.items() if key not in network}}
+    return resolved
+
+
+def find_entry(
+    key: str,
+    runs: Mapping[str, Mapping[str, Any]],
+    networks: Mapping[str, Mapping[str, Any]],
+) -> tuple[str, Mapping[str, Any]]:
+    """Look an entry up by run id, network id or report name ("D", "A2", "archival replay")."""
+    if key in runs:
+        return key, runs[key]
+    if key in networks:
+        return key, networks[key]
+    for network_id, network in networks.items():
+        if str(network.get("report_name", "")).casefold() == key.casefold():
+            return network_id, network
+    raise RunDefinitionError(f"{key!r} is not a run id, network id or report name in runs.yaml")
+
+
+def _lineage(run_id: str, runs: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    chain = [run_id]
+    while run_id in runs and runs[run_id].get("runner") == "derived":
+        run_id = runs[run_id]["derived_from"]
+        chain.append(run_id)
+    return chain
+
+
+def describe_entry(
+    key: str,
+    runs: Mapping[str, Mapping[str, Any]],
+    networks: Mapping[str, Mapping[str, Any]],
+) -> str:
+    entry_id, entry = find_entry(key, runs, networks)
+    text = yaml.safe_dump({entry_id: dict(entry)}, sort_keys=False, width=100, allow_unicode=True).rstrip()
+    if entry_id in networks:
+        chain = _lineage(entry["supplier_run"], runs)
+        steps = [f"{step} ({runs[step].get('role', '')})" if step in runs else step for step in chain]
+        text += "\n\n# supplier table: " + "\n#   derived from ".join(steps)
+    elif entry.get("runner") == "derived":
+        text += "\n\n# derived from: " + " <- ".join(_lineage(entry_id, runs)[1:])
+    return text
 
 
 def _validate_green_lory_run(run_id: str, run: Mapping[str, Any]) -> None:
@@ -136,8 +222,12 @@ def shell_assignments(run_id: str, runs: Mapping[str, Mapping[str, Any]] | None 
     return "\n".join(lines)
 
 
-def markdown_table(runs: Mapping[str, Mapping[str, Any]] | None = None) -> str:
+def markdown_table(
+    runs: Mapping[str, Mapping[str, Any]] | None = None,
+    networks: Mapping[str, Mapping[str, Any]] | None = None,
+) -> str:
     runs = load_runs() if runs is None else runs
+    networks = {} if networks is None else networks
     ids = [run_id for run_id, run in runs.items() if run["runner"] == "green_lory"]
     lines = ["| setting | " + " | ".join(f"`{run_id}`" for run_id in ids) + " |"]
     lines.append("|---|" + "---|" * len(ids))
@@ -148,7 +238,19 @@ def markdown_table(runs: Mapping[str, Mapping[str, Any]] | None = None) -> str:
     if others:
         lines.append("")
         lines.extend(f"- `{run_id}` ({run['runner']}): {run.get('role', '')}" for run_id, run in others)
+    if networks:
+        lines.append("")
+        lines.extend(
+            f"- `{network_id}` (network{_report_suffix(network)}): {network.get('role', '')}; "
+            f"supplier table `{network['supplier_run']}`"
+            for network_id, network in networks.items()
+        )
     return "\n".join(lines)
+
+
+def _report_suffix(network: Mapping[str, Any]) -> str:
+    name = network.get("report_name")
+    return f', "{name}" in the September reports' if name else ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -156,17 +258,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs", type=Path, default=RUNS_FILE, help="run-definition file (default: runs.yaml)")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list")
+    show = commands.add_parser("show")
+    show.add_argument("id", help="run id, network id or report name (for example D or A2)")
     commands.add_parser("table")
     shell = commands.add_parser("shell")
     shell.add_argument("run_id")
     args = parser.parse_args(argv)
     try:
         runs = load_runs(args.runs)
+        networks = load_networks(args.runs)
         if args.command == "list":
             for run_id, run in runs.items():
                 print(f"{run_id}\t{run['runner']}\t{run.get('role', '')}")
+            for network_id, network in networks.items():
+                print(f"{network_id}\tnetwork{_report_suffix(network)}\t{network.get('role', '')}")
+        elif args.command == "show":
+            print(describe_entry(args.id, runs, networks))
         elif args.command == "table":
-            print(markdown_table(runs))
+            print(markdown_table(runs, networks))
         else:
             print(shell_assignments(args.run_id, runs))
     except (RunDefinitionError, OSError, yaml.YAMLError) as exc:

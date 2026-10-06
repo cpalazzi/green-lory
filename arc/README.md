@@ -43,7 +43,9 @@ Green-lory runs defined today:
 - `rep_way2050_flat_amelired_4h_tracking_nominal_h2` (reconciling): green-lory
   configured like the legacy plant (Way 2050 costs, 4-hour step with legacy
   store and ramp accounting, nominal compressor, bundled H2 storage, water
-  outside the headline). Its September surface stands; network D used it.
+  outside the headline). Its September surface stands; with the legacy
+  capacity rule it is the supplier table of the reconciling network
+  ("network D" in the September reports; `python3 arc/run_definitions.py show D`).
 - `gl_dea2050_wacc5_bflat_wflat_land20c_fixed` (improved, base): DEA 2050
   costs, uniform 5 % WACC, hourly, fixed-tilt PV, co-located land at a 20 %
   share, water in the headline.

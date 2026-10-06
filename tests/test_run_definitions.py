@@ -1,3 +1,4 @@
+import csv
 import shlex
 import tempfile
 import unittest
@@ -9,6 +10,8 @@ from arc.run_definitions import (
     RUNS_FILE,
     WRAPPER_VARIABLES,
     RunDefinitionError,
+    describe_entry,
+    load_networks,
     load_runs,
     markdown_table,
     shell_assignments,
@@ -75,6 +78,52 @@ class RunDefinitionsTest(unittest.TestCase):
             path.write_text(yaml.safe_dump({"runs": {"bad": incomplete}}))
             with self.assertRaisesRegex(RunDefinitionError, "missing tech_yaml"):
                 load_runs(path)
+
+    def test_networks_name_their_supplier_tables_and_september_letters(self):
+        runs = load_runs(RUNS_FILE)
+        networks = load_networks(RUNS_FILE)
+        for network in networks.values():
+            self.assertTrue(network["supplier_run"] == "archived" or network["supplier_run"] in runs)
+        letters = {network.get("report_name"): network_id for network_id, network in networks.items()}
+        self.assertEqual(letters["A2"], "gpo_archived_iso1000_1mt")
+        self.assertEqual(letters["E"], "gpo_ll_xcost45_ameli_bflat_wnone_landarch_track_4h_iso1000_1mt")
+        network_d = networks[letters["D"]]
+        self.assertEqual(network_d["supplier_run"], "rep_way2050_flat_amelired_4h_tracking_nominal_h2_legacyrule")
+        self.assertEqual(network_d["routes"], "iso1000")  # filled in from network_defaults
+        self.assertEqual(networks["gpo_archived_replay"]["routes"], "archived pipelines")  # overrides the default
+        text = describe_entry("d", runs, networks)
+        self.assertIn("derived from rep_way2050_flat_amelired_4h_tracking_nominal_h2 (reconciling)", text)
+        with self.assertRaisesRegex(RunDefinitionError, "not a run id, network id or report name"):
+            describe_entry("Z", runs, networks)
+
+    def test_every_defined_run_and_network_has_an_execution_record(self):
+        # a new definition gets a run_store.csv row (status planned) before it is submitted
+        with (RUNS_FILE.parent / "reconciliation" / "run_store.csv").open(newline="") as handle:
+            recorded = {row["run_id"] for row in csv.DictReader(handle)}
+        defined = set(load_runs(RUNS_FILE)) | set(load_networks(RUNS_FILE))
+        self.assertEqual(sorted(defined - recorded), [])
+
+    def test_inconsistent_network_and_derived_definitions_are_rejected(self):
+        run = load_runs(RUNS_FILE)["gl_dea2050_wacc5_bflat_wflat_land20c_fixed"]
+        derived = {"runner": "derived", "role": "sensitivity", "derived_from": "base"}
+        for document, pattern in (
+            ({"runs": {"base": run, "d": {**derived, "derived_from": "missing"}}}, "derived_from"),
+            ({"runs": {"base": run, "d": {**derived, "derived_from": "d"}}}, "forms a cycle"),
+            ({"runs": {"base": run}, "networks": {"n": {"supplier_run": "missing"}}}, "supplier_run 'missing'"),
+            ({"runs": {"base": run}, "networks": {"base": {"supplier_run": "archived"}}}, "both a run and a network"),
+            (
+                {"runs": {"base": run, "d": derived}, "networks": {
+                    "n1": {"supplier_run": "base", "report_name": "D"},
+                    "n2": {"supplier_run": "d", "report_name": "d"},
+                }},
+                "used twice",
+            ),
+        ):
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "runs.yaml"
+                path.write_text(yaml.safe_dump(document))
+                with self.assertRaisesRegex(RunDefinitionError, pattern):
+                    load_networks(path)
 
 
 if __name__ == "__main__":

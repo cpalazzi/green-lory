@@ -1,8 +1,73 @@
 # Next steps and cleanup plan (5 October 2026)
 
-Working checklist for review. Nothing in it has been executed. Delete this file once
-the cleanup has landed. Verified against the files, ARC and the code on 5 Oct; ARC had
-no queued jobs; the test suite passed (184 tests).
+Working checklist for review. Delete this file once the cleanup has landed. Verified against
+the files, ARC and the code on 5 Oct; ARC had no queued jobs; the test suite passed (184 tests).
+
+## Update, 6 October 2026 (replaces the target layout of §3)
+
+**Done.** Networks are entries in `runs.yaml` (`networks`, with `report_name` for the
+September letters) and rows in `run_store.csv`, as are the reconciling surface and its
+legacy-rule supplier table; `python arc/run_definitions.py show D` resolves a letter.
+`GLOSSARY.md` covers runners, roles, network letters, every `runs.yaml` key, plant bundles
+and source terms. `README.md` rewritten as the entry point; `model/README.md` added (module
+map, spatial cost inputs moved there); `MODEL_CHOICES.md` lists the settled and open modelling
+choices. Record corrections of §0.5 applied in `run_store.csv` (legacy array release v2; the
+September central row's release, PV and jobs). RUN_STORE.md kept as the id grammar.
+
+**Not done (needs your go-ahead).** The file moves and deletions below were blocked by the
+session's permission check:
+
+- `reconciliation/legacy_lcoa/` to `legacy_lcoa/` at the root, with `reconciliation/land/core.py`
+  as `legacy_lcoa/land_core.py`. Paths to update: `.gitignore` (xlsx rule), `arc/jobs/08` and
+  `09`, `arc/postprocess_keyruns_20260924.sh`, `runs.yaml`, `tests/test_legacy_surface_tools.py`,
+  `run_legacy_cells.py` (`parents[2]` becomes `parents[1]`), `legacy_land_areas.py`, the six
+  `reconciliation/land/` modules and three tests that import the land core, the docs.
+- `basic_ammonia_plant*/` to `model/plants/`. Paths to update: the defaults in `model/main.py` and
+  `model/run_global.py`, `runs.yaml`, four tests, the run and stage scripts in
+  `reconciliation/land/` (the audit and certify scripts read old releases and need a fallback to
+  the old path), notebook 00, and outside this repository `lcoa_validation`
+  (`data/greenlory_way_bundle` symlink and `WAY_BUNDLE` in `harness/gl_driver.py`).
+- Delete `notebooks/02_single_site_run.ipynb` and `notebooks/03_global_run.ipynb` (duplicates of
+  `03_single_site_run` and `04_global_run`).
+
+Old ARC releases keep their own layout and job scripts, so the moves change only new releases.
+
+**Target layout.**
+
+```
+model/          green-lory as an installable package (pyproject.toml, pip install -e .),
+                one plant bundle in model/plants/ once efficiencies come from the YAML
+legacy_lcoa/    self-contained legacy package: frozen source, harness, land step, capacity
+                rule, supplier table, environment, README with commands and expected values
+workflow/       Snakefile and rules; profiles for a laptop and for ARC
+runs.yaml       the workflow's configuration: what each run and network is
+notebooks/      readers only; each opens with the workflow targets it reads
+                legacy_vs_green_lory.ipynb replaces reconciliation/
+arc/            job templates, release staging and QA tools the workflow calls
+data/ inputs/ tests/
+results/surfaces/<run id>/, results/networks/<network id>/   stable index for the papers (§4.6)
+```
+
+**Workflow (Snakemake).** Rules: land table, finance overrides, surface shard, surface (merge and
+QA), derived surface, supplier contract, network, comparison. Targets are named by run id, so
+"run X" is `snakemake results/surfaces/X/surface.csv`. To keep the rules of this project:
+outputs carry a version in the path and are `protected()`; reruns are triggered by input changes
+only (`--rerun-triggers mtime`), never by a code edit alone; global surfaces need an explicit
+`--config allow_global=true` after a dry run (`-n`). On ARC the SLURM executor plugin with an
+`arc` profile; check first that `--clusters=all` works with its job-status polling (otherwise
+pin one cluster per rule), and run the controller in `tmux` on a login node or as a small job on
+`long`. Legacy rules use the legacy environment.
+
+**Comparison notebook (replaces `reconciliation/`).** (1) Legacy reproduced: replicated network
+against the archived control (E against A2). (2) Same assumptions, same answer: green-lory
+configured like the legacy plant, with the legacy capacity rule, against the legacy networks
+(D against E and A2): the capacity rule, not the plant cost, separates the September networks.
+(3) What the improved model changes, one step at a time, with the evidence for each: land
+geometry (centred cells, exclusions, PV density, co-location) and plant physics (hourly
+dispatch, explicit compressor and DEA tank without double counting), using the three-cell
+decomposition of §6. (4) What is a data choice rather than a correction, stated as such: DEA
+against Way costs (+36 to +40 % at the focal cells), finance, land share. (5) Limits: weather,
+the capacity lower bound.
 
 ## 0. Corrections to the record (verified 5 Oct)
 

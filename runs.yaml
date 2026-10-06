@@ -1,10 +1,19 @@
-# Run definitions: every setting of the runs we keep, one entry per run id.
+# Run definitions: every setting of the runs we keep, one entry per id.
 #
-# - runner: green_lory entries are read by arc/submit_lory_sequence.sh --scenario <id>; the run
-#   manifest records the resolved values. `python arc/run_definitions.py table` prints them side
-#   by side.
-# - reconciliation/run_store.csv records each execution (jobs, release, status, outputs) under
-#   the same id; this file says what a run is, the run store says when and where it ran.
+# How to read this file
+# - `runs` are plant-model surfaces and supplier tables; `networks` are green-porpoise shipping
+#   networks, each built on one supplier table from `runs` (or on the archived table).
+# - Every key, role and id token is explained in GLOSSARY.md. To look an entry up from the
+#   command line, by id or by the letter the September reports used ("network D"):
+#       python arc/run_definitions.py list           # every run and network, one line each
+#       python arc/run_definitions.py show D         # one entry, network defaults filled in
+#       python arc/run_definitions.py table          # green-lory settings side by side
+# - This file says what a run is. reconciliation/run_store.csv says when and where it ran (jobs,
+#   release, status, output directory, headline results), under the same id.
+#
+# Conventions
+# - green_lory entries are read by arc/submit_lory_sequence.sh --scenario <id>; the run manifest
+#   records the resolved values.
 # - Paths are relative to the repository root. The land table is passed with --land-csv because
 #   its location differs between ARC and a laptop; land_table_sha256 pins which table it must be.
 # - Ids follow the grammar in reconciliation/RUN_STORE.md, except the reconciling run, which keeps
@@ -45,8 +54,24 @@ runs:
       store and ramp accounting, nominal compressor, bundled hydrogen storage. The September
       surface (run global-20260907-v1, release 20260907-v1-c570c5153d04) solved costs and
       designs without land, so they stand; its capacity columns came from the mislabelled land
-      table and are superseded. Network D combined this surface with the legacy capacity rule.
-      A rerun or a capacity re-export uses the centred 2 % table pinned here.
+      table and are superseded. Its costs and designs with the legacy capacity rule form the
+      derived supplier table rep_way2050_flat_amelired_4h_tracking_nominal_h2_legacyrule, which
+      network gpo_rep_way2050_flat_amelired_4h_tracking_nominal_h2_legacyrule_iso1000_1mt
+      ("network D" in the September reports) used. A rerun or a capacity re-export uses the
+      centred 2 % table pinned here.
+
+  rep_way2050_flat_amelired_4h_tracking_nominal_h2_legacyrule:
+    role: reconciling, legacy capacity rule
+    runner: derived
+    derived_from: rep_way2050_flat_amelired_4h_tracking_nominal_h2
+    capacity_rule: >-
+      recovered legacy rule (the capacity_rule of ll_xcost45_ameli_bflat_wnone_landarch_track_4h)
+      applied to the green-lory designs on the legacy land areas, by
+      reconciliation/legacy_lcoa/legacy_capacity.py apply-lory
+    notes: >-
+      No new solve: LCOA and designs are the parent's, only the capacity of each cell is
+      replaced. Built to test whether the capacity rule, rather than the plant cost, separates
+      the archived and the green-lory networks.
 
   gl_dea2050_wacc5_bflat_wflat_land20c_fixed:
     role: improved
@@ -135,7 +160,9 @@ runs:
       exclusions (reconciliation/legacy_lcoa/legacy_capacity.py)
     water: none
     release: 20260915-legacy-v2
-    notes: Reproduces the archived supplier table; network E.
+    notes: >-
+      Reproduces the archived supplier table. Its network is
+      gpo_ll_xcost45_ameli_bflat_wnone_landarch_track_4h_iso1000_1mt ("network E").
 
   ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity:
     role: legacy key run
@@ -157,8 +184,10 @@ runs:
     water_usd2018_per_t: 3.3245  # 1.5 m3/t x 2 EUR2020/m3, added after the solve
     release: 20260924-legacy-v4
     notes: >-
-      The id says way2050, but the CAPEX is the x_Cost RCP4.5 sheet (token xcost45); kept
-      unchanged because the results and network are filed under this id.
+      The cost token says way2050, but the harness reads the x_Cost RCP4.5 sheet
+      (--capex-source xcost45: the Way 2050 CAPEX as tabulated in the legacy workbook), for which
+      the id grammar reserves xcost45. Kept unchanged because the results and network are filed
+      under this id.
 
   gl_way2050_ameli_bflat_wnone_land2c_fixed_pilot3cells:
     role: finite-site supply curves at the three focal cells, fixed-tilt PV
@@ -175,3 +204,83 @@ runs:
     pv_policy: tracking-only
     land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
     land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
+
+
+# Green-porpoise shipping networks. Each one takes the supplier table of one entry above
+# (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and
+# finds the cheapest way to supply the 2050 ammonia bunker demand from it. Every network uses
+# `network_defaults` unless its entry says otherwise. Submitted with arc/submit_network_run.sh
+# (job template arc/jobs/03_replay_historical_network.sh, model reconciliation/run_historical_network.py).
+# `report_name` is the letter the September 2026 reports used (DECISION_20260916.md section 4);
+# GLOSSARY.md lists every letter, including the runs that were not kept.
+
+network_defaults:
+  equations: deposited  # public deposit of Verschuur et al. (2024), checksum-verified
+  demand: MOD-AMB, RCP4.5, 70 % ammonia adoption, no efficiency gain, no subsidies (unprefixed demand file)
+  supplier_cutoff_mt_per_year: 1.0  # suppliers below 1 Mt/yr of capacity are dropped
+  routes: iso1000  # pipelines regenerated: same country or within 1,000 km, length x 1.1
+  maritime_costs: archived tensor
+  solver_time_limit_s: 3600
+  solver_gap_target: 0.001  # requested of the solver; the deposited formulation stops at 0.5-0.9 % within the hour
+  accepted_gap: 0.015  # the deposit's own tolerance, adopted 5 Oct 2026; each run reports its gap
+
+networks:
+
+  gpo_archived_replay:
+    report_name: archival replay
+    role: reproduction of the published network
+    supplier_run: archived
+    equations: 2023 project code (pinned), not the deposit
+    routes: archived pipelines
+    description: >-
+      The 2023 green-porpoise project code and its inputs replayed unchanged. The reference point
+      for all other networks.
+
+  gpo_archived_iso1000_1mt:
+    report_name: A2
+    role: control
+    supplier_run: archived
+    description: >-
+      The published supplier table under the same equations, demand and regenerated routes as
+      every comparison network below, so that a difference from this run comes from the supplier
+      table alone.
+
+  gpo_ll_xcost45_ameli_bflat_wnone_landarch_track_4h_iso1000_1mt:
+    report_name: E
+    role: legacy replication
+    supplier_run: ll_xcost45_ameli_bflat_wnone_landarch_track_4h
+    description: >-
+      The supplier table regenerated end to end with the frozen legacy-lcoa model: legacy costs,
+      legacy designs and the recovered capacity rule. Tests whether the published network can be
+      reproduced from the replicated model.
+
+  gpo_rep_way2050_flat_amelired_4h_tracking_nominal_h2_legacyrule_iso1000_1mt:
+    report_name: D
+    role: reconciling
+    supplier_run: rep_way2050_flat_amelired_4h_tracking_nominal_h2_legacyrule
+    description: >-
+      Green-lory costs and designs (reconciling configuration) with the legacy capacity rule.
+      Against the control, isolates the capacity rule as the cause of the legacy/green-lory
+      network divergence.
+
+  gpo_gl_dea2050_wacc5_bflat_wflat_land20c_fixed_iso1000_1mt:
+    role: improved
+    supplier_run: gl_dea2050_wacc5_bflat_wflat_land20c_fixed
+    description: The improved green-lory base run.
+
+  gpo_gl_dea2050_ameli_bflat_wflat_land20c_fixed_iso1000_1mt:
+    role: improved, finance sensitivity
+    supplier_run: gl_dea2050_ameli_bflat_wflat_land20c_fixed
+    description: The improved run with Ameli reduced WACC by country.
+
+  gpo_gl_dea2050_wacc5_bflat_wflat_land2c_fixed_iso1000_1mt:
+    role: improved, land-share sensitivity
+    supplier_run: gl_dea2050_wacc5_bflat_wflat_land2c_fixed
+    description: The improved base run with 2 % instead of 20 % of suitable land.
+
+  gpo_ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity_iso1000_1mt:
+    role: legacy key run
+    supplier_run: ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity
+    description: >-
+      The legacy plant with green-lory's annuity convention and the stated land method on the
+      centred 2 % table: the legacy model as close to the improved stack as it goes.
