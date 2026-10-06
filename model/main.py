@@ -31,6 +31,8 @@ except ImportError:  # pragma: no cover - fallback for direct execution
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Plant bundle of the improved runs (DEA 2050 efficiencies, 1 Mt/yr, fixed-tilt PV only)
+DEFAULT_PLANT_DIR = REPO_ROOT / "model" / "plants" / "basic_ammonia_plant_2050"
 
 
 class OptimizationFailure(RuntimeError):
@@ -341,7 +343,7 @@ def main(
     if n is None:
         n = generate_network(
             len(weather_data),
-            "basic_ammonia_plant",
+            DEFAULT_PLANT_DIR,
             aggregation_count=aggregation_count,
             time_step=time_step,
         )

@@ -9,7 +9,7 @@ from model.main import generate_network
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PLANT_DIR = REPO_ROOT / "basic_ammonia_plant_2050_way_tracking"
+PLANT_DIR = REPO_ROOT / "model" / "plants" / "basic_ammonia_plant_2050_way_tracking"
 
 
 class TemporalAccountingTest(unittest.TestCase):

@@ -49,14 +49,12 @@ DEFAULT_WEATHER_DIR = data_paths.WEATHER_DATA_DIR
 # Land tables must come from a centred build (23 Sep 2026 or later); earlier tables label
 # each 1-degree cell by the MODIS band one degree south of it.
 REQUIRED_CELL_ANCHOR = "center"
-DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2030_dea.yaml"
+# Defaults are the improved runs' YAML and plant bundle (plant_main.DEFAULT_PLANT_DIR)
+DEFAULT_TECH_YAML = REPO_ROOT / "inputs" / "tech_config_ammonia_plant_2050_dea_colocated.yaml"
 RENEWABLES = ["wind", "solar", "solar_tracking"]
-_LAT_LON_TOLERANCE = 0.125  # match within 1/8th degree
 # Techno-economic inputs are now expected to be pre-processed into the CSV bundle.
 # Interest-rate defaults are therefore not sourced from a runtime YAML file.
 DEFAULT_INTEREST_RATES: Dict[str, float] = {}
-
-WIND_GENERATORS = ["wind"]
 
 # Module-level state populated by _worker_init() in each pool worker process.
 _WORKER_STATE: Dict[str, Any] = {}
@@ -1044,53 +1042,6 @@ def _interest_overrides_fast(
     return result if result else None
 
 
-def _interest_overrides(interest_df: pd.DataFrame, lat: float, lon: float) -> Dict[str, Dict[str, float]] | None:
-    """Load interest_rate, build_cost_multiplier, and spatial cost parameters from overrides CSV.
-    
-    Returns dict with structure:
-    {
-        'solar': {'interest_rate': 0.058, 'build_cost_multiplier': 1.2, ...},
-        ...
-    }
-    Location-level params (water_cost_usd_per_m3, land_cost_usd_per_km2_year) are 
-    stored once per location and shared across all techs.
-    """
-    if interest_df.empty:
-        return None
-    mask = (interest_df["lat"] - lat).abs() <= _LAT_LON_TOLERANCE
-    mask &= (interest_df["lon"] - lon).abs() <= _LAT_LON_TOLERANCE
-    subset = interest_df.loc[mask]
-    if subset.empty:
-        return None
-    
-    overrides: Dict[str, Dict[str, float]] = {}
-    location_params: Dict[str, float] = {}
-    
-    for _, row in subset.iterrows():
-        tech = row["tech"]
-        overrides.setdefault(tech, {})
-        
-        # Tech-specific parameters
-        if "interest_rate" in row and pd.notna(row["interest_rate"]):
-            overrides[tech]["interest_rate"] = float(row["interest_rate"])
-        
-        if "build_cost_multiplier" in row and pd.notna(row["build_cost_multiplier"]):
-            overrides[tech]["build_cost_multiplier"] = float(row["build_cost_multiplier"])
-        
-        # Location-level parameters (store once, will be reused for all techs at this location)
-        if "land_cost_usd_per_km2_year" in row and pd.notna(row["land_cost_usd_per_km2_year"]):
-            location_params["land_cost_usd_per_km2_year"] = float(row["land_cost_usd_per_km2_year"])
-        
-        if "water_cost_usd_per_m3" in row and pd.notna(row["water_cost_usd_per_m3"]):
-            location_params["water_cost_usd_per_m3"] = float(row["water_cost_usd_per_m3"])
-    
-    # Store location params in a special key that won't conflict with tech names
-    if location_params:
-        overrides["__location__"] = location_params
-    
-    return overrides or None
-
-
 def _build_land_lookup(land_df: pd.DataFrame | None) -> Dict[Tuple[float, float], pd.Series]:
     """Pre-index the max-capacities DataFrame into ``{(lat, lon): row}`` for O(1) lookup."""
     if land_df is None:
@@ -1111,16 +1062,6 @@ def _match_land_row_fast(
     key = (round(float(lat), 4), round(float(lon), 4))
     return lookup.get(key)
 
-
-def _match_land_row(land_df: pd.DataFrame, lat: float, lon: float) -> pd.Series | None:
-    if land_df is None:
-        return None
-    mask = (land_df["latitude"] - lat).abs() <= _LAT_LON_TOLERANCE
-    mask &= (land_df["longitude"] - lon).abs() <= _LAT_LON_TOLERANCE
-    subset = land_df.loc[mask]
-    if subset.empty:
-        return None
-    return subset.iloc[0]
 
 def _set_component_cap(network, tech_name: str, cap_value: float) -> float:
     if cap_value is None or not np.isfinite(float(cap_value)):
@@ -1146,76 +1087,6 @@ def _set_component_cap(network, tech_name: str, cap_value: float) -> float:
         return cap
 
     return 0.0
-
-
-def _extract_capacity_caps_from_row(row: pd.Series) -> Tuple[Dict[str, float], Dict[str, float]]:
-    power_caps: Dict[str, float] = {}
-    energy_caps: Dict[str, float] = {}
-
-    for column in row.index:
-        value = row.get(column)
-        if pd.isna(value):
-            continue
-        key = str(column).strip().lower()
-        if key.startswith("max_power_") and key.endswith("_mw"):
-            tech = key[len("max_power_") : -len("_mw")]
-            if tech:
-                power_caps[tech] = max(0.0, float(value))
-            continue
-        if key.startswith("max_energy_") and key.endswith("_mwh"):
-            tech = key[len("max_energy_") : -len("_mwh")]
-            if tech:
-                energy_caps[tech] = max(0.0, float(value))
-
-    return power_caps, energy_caps
-
-
-def _apply_component_caps(
-    network,
-    power_caps: Dict[str, float],
-    energy_caps: Dict[str, float],
-) -> float:
-    setattr(network, "_shared_solar_cap_mw", None)
-    setattr(network, "_shared_wind_cap_mw", None)
-    total_cap = 0.0
-
-    solar_cap = power_caps.get("solar")
-    solar_tracking_cap = power_caps.get("solar_tracking")
-    shared_wind_cap = power_caps.get("wind")
-
-    if shared_wind_cap is not None:
-        setattr(network, "_shared_wind_cap_mw", max(0.0, float(shared_wind_cap)))
-
-    if solar_cap is not None and solar_tracking_cap is None:
-        _set_component_cap(network, "solar", solar_cap)
-        _set_component_cap(network, "solar_tracking", solar_cap)
-        setattr(network, "_shared_solar_cap_mw", float(solar_cap))
-    elif solar_tracking_cap is not None and solar_cap is None:
-        _set_component_cap(network, "solar", solar_tracking_cap)
-        _set_component_cap(network, "solar_tracking", solar_tracking_cap)
-        setattr(network, "_shared_solar_cap_mw", float(solar_tracking_cap))
-    else:
-        if solar_cap is not None:
-            _set_component_cap(network, "solar", solar_cap)
-        if solar_tracking_cap is not None:
-            _set_component_cap(network, "solar_tracking", solar_tracking_cap)
-        if (
-            solar_cap is not None
-            and solar_tracking_cap is not None
-            and abs(float(solar_cap) - float(solar_tracking_cap)) < 1e-9
-        ):
-            setattr(network, "_shared_solar_cap_mw", float(solar_cap))
-
-    for tech, cap in power_caps.items():
-        if tech in {"solar", "solar_tracking", "wind"}:
-            continue
-        _set_component_cap(network, tech, cap)
-
-    for tech, cap in energy_caps.items():
-        _set_component_cap(network, tech, cap)
-
-    total_cap += sum(cap for tech, cap in power_caps.items() if tech != "wind")
-    return total_cap
 
 
 def _apply_renewable_land_budget(
@@ -1251,60 +1122,6 @@ def _apply_renewable_land_budget(
         cap_mw = max(0.0, float(area_km2)) * max(0.0, float(density_mw_per_km2))
         total_cap += _set_component_cap(network, component, cap_mw)
     return total_cap
-
-
-def _apply_land_caps(
-    network, land_df: pd.DataFrame | None, lat: float, lon: float
-) -> Tuple[float | None, pd.Series | None]:
-    row = _match_land_row(land_df, lat, lon) if land_df is not None else None
-    if row is None:
-        return None, None
-
-    power_caps, energy_caps = _extract_capacity_caps_from_row(row)
-    has_explicit_power_caps = any(
-        str(col).lower().startswith("max_power_") and str(col).lower().endswith("_mw")
-        for col in row.index
-    )
-    if has_explicit_power_caps:
-        for tech in WIND_GENERATORS + ["solar"]:
-            power_caps.setdefault(tech, 0.0)
-
-    if power_caps or energy_caps:
-        total_cap = _apply_component_caps(network, power_caps, energy_caps)
-        return (total_cap if total_cap > 0 else None), row
-
-    raise ValueError(
-        f"Land CSV row at ({lat}, {lon}) must include explicit max_power_*_mw or max_energy_*_mwh columns."
-    )
-
-
-def _apply_land_caps_fast(
-    network,
-    land_lookup: Dict[Tuple[float, float], pd.Series],
-    lat: float,
-    lon: float,
-) -> Tuple[float | None, pd.Series | None]:
-    """Same as ``_apply_land_caps`` but uses the pre-indexed lookup dict."""
-    row = _match_land_row_fast(land_lookup, lat, lon)
-    if row is None:
-        return None, None
-
-    power_caps, energy_caps = _extract_capacity_caps_from_row(row)
-    has_explicit_power_caps = any(
-        str(col).lower().startswith("max_power_") and str(col).lower().endswith("_mw")
-        for col in row.index
-    )
-    if has_explicit_power_caps:
-        for tech in WIND_GENERATORS + ["solar"]:
-            power_caps.setdefault(tech, 0.0)
-
-    if power_caps or energy_caps:
-        total_cap = _apply_component_caps(network, power_caps, energy_caps)
-        return (total_cap if total_cap > 0 else None), row
-
-    raise ValueError(
-        f"Land CSV row at ({lat}, {lon}) must include explicit max_power_*_mw or max_energy_*_mwh columns."
-    )
 
 
 def _land_metadata_from_row(row: pd.Series | None) -> Dict[str, float]:
@@ -1688,37 +1505,6 @@ def _default_locations(land_df: pd.DataFrame | None) -> List[Tuple[float, float]
         filtered = land_df
 
     return list(zip(filtered["latitude"].astype(float), filtered["longitude"].astype(float)))
-
-
-def _estimate_land_used_km2(
-    network,
-    land_row: pd.Series | None,
-    tech_inputs: Dict[str, dict],
-) -> float | None:
-    if not tech_inputs or land_row is None:
-        return None
-    budget = land_capacity.build_renewable_land_budget(
-        land_row,
-        tech_inputs,
-        onshore=True,
-        allow_conservative_union_fallback=True,
-    )
-    capacities = {
-        name: (
-            max(0.0, float(network.generators.at[name, "p_nom_opt"]))
-            if name in network.generators.index
-            and pd.notna(network.generators.at[name, "p_nom_opt"])
-            else 0.0
-        )
-        for name in ("wind", "solar", "solar_tracking")
-    }
-    used = land_capacity.renewable_land_use_from_capacities(
-        wind_mw=capacities["wind"],
-        solar_mw=capacities["solar"],
-        solar_tracking_mw=capacities["solar_tracking"],
-        budget=budget,
-    )
-    return used.total_km2
 
 
 def _run_single_location(
@@ -2197,7 +1983,7 @@ def run_global(
         override_csv_path = _resolve_path(override_csv) if override_csv is not None else None
         tech_yaml_path = _resolve_path(tech_yaml or DEFAULT_TECH_YAML)
         plant_dir_path = _resolve_path(
-            plant_dir or os.environ.get("ARC_PLANT_DIR", "basic_ammonia_plant")
+            plant_dir or os.environ.get("ARC_PLANT_DIR") or plant_main.DEFAULT_PLANT_DIR
         )
         if plant_dir_path is None or not plant_dir_path.is_dir():
             raise FileNotFoundError(f"Plant directory not found: {plant_dir_path}")

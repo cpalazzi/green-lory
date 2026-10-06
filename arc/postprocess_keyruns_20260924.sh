@@ -56,8 +56,8 @@ LTAB=$EXPORTS/ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity
 if [[ -f "$LTAB/gpo_export/contract.json" ]]; then echo "  legacy table exists, skipping"; else
 test "$(find $LOUT -name summary.json | wc -l)" -ge 15377 || { echo "legacy array incomplete: $(find $LOUT -name summary.json | wc -l) summaries" >&2; exit 3; }
 cd $LEG
-$PY reconciliation/legacy_lcoa/build_legacy_supplier_table.py --run "$LOUT" --land "$LANDC/max_capacities_center_2pct_slope15.csv" --rule stated_method \
-   --archived "$VER/historical/git-0a63616/data/c_NH3_cost_4.5.csv" --cells reconciliation/legacy_lcoa/cells_archived_all_v1.csv --anchor center \
+$PY legacy_lcoa/build_legacy_supplier_table.py --run "$LOUT" --land "$LANDC/max_capacities_center_2pct_slope15.csv" --rule stated_method \
+   --archived "$VER/historical/git-0a63616/data/c_NH3_cost_4.5.csv" --cells legacy_lcoa/cells_archived_all_v1.csv --anchor center \
    --water-cost-usd2018-per-t 3.3245 --scenario-id ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity --output "$LTAB" | tail -12
 cd $R
 fi

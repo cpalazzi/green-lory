@@ -3,7 +3,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import pyomo.environ as pm
 
 from .constants import HYDROGEN_HHV_MWH_PER_T, AMMONIA_HHV_MWH_PER_T
 
@@ -328,24 +327,6 @@ def check_CAPEX(file_name=None):
         return None
 
 
-def get_solving_info(file_name=None):
-    """Prompts the user for information about the solver and the problem formulation.
-    If no file_name is provided then the model will autoselect gurobi and pyomo."""
-    if file_name is None:
-        solver = input('What solver would you like to use? '
-                       'If you leave this blank, the glpk default will be used >> ')
-        if solver == '':
-            solver = 'glpk'
-
-        formulator = 'p'
-        print('In this code, the only option for solving is to use pyomo,'
-              ' because additional constraints have been turned on. ')
-    else:
-        solver = 'gurobi'
-        formulator = 'p'
-    return solver, formulator
-
-
 def get_scale(n, file_name=None):
     """Gives the user some information about the solution, and asks if they'd like it to be scaled.
     If the file_name is prespecified the scale is automatically 1 (i.e. no scaling)"""
@@ -638,120 +619,6 @@ def get_results_dict_for_multi_site(
     return dct
 
 
-def extra_functionalities(n, snapshots):
-    """Could be added later if you wanted to convert the pyomo constraints to linopt, but this is a pain."""
-    pass
-
-
-def _nh3_ramp_down(model, t):
-    """Places a cap on how quickly the ammonia plant can ramp down"""
-    if t == 0:
-        old_rate = model.link_p['ammonia_synthesis', model.t.at(-1)]
-    else:
-        old_rate = model.link_p['ammonia_synthesis', t - 1]
-
-    return old_rate - model.link_p['ammonia_synthesis', t] <= \
-        model.link_p_nom['ammonia_synthesis'] * model.ammonia_synthesis_max_ramp_down
-    # Note 20 is the UB of the size of the ammonia plant; essentially if x = 0 then the constraint is not active
-
-
-def _nh3_ramp_up(model, t):
-    """Places a cap on how quickly the ammonia plant can ramp down"""
-    if t == 0:
-        old_rate = model.link_p['ammonia_synthesis', model.t.at(-1)]
-    else:
-        old_rate = model.link_p['ammonia_synthesis', t - 1]
-
-    return model.link_p['ammonia_synthesis', t] - old_rate <= \
-        model.link_p_nom['ammonia_synthesis'] * model.ammonia_synthesis_max_ramp_up
-
-
-def _nh3_ramp_down_operating(model, t):
-    """Places a cap on how quickly the ammonia plant can ramp down"""
-    if t == 0:
-        old_rate = model.link_p['ammonia_synthesis', model.t.at(-1)]
-    else:
-        old_rate = model.link_p['ammonia_synthesis', t - 1]
-
-    return old_rate - model.link_p['ammonia_synthesis', t] <= \
-        model.ammonia_synthesis_capacity * model.ammonia_synthesis_max_ramp_down
-    # Note 20 is the UB of the size of the ammonia plant; essentially if x = 0 then the constraint is not active
-
-
-def _nh3_ramp_up_operating(model, t):
-    """Places a cap on how quickly the ammonia plant can ramp down"""
-    if t == 0:
-        old_rate = model.link_p['ammonia_synthesis', model.t.at(-1)]
-    else:
-        old_rate = model.link_p['ammonia_synthesis', t - 1]
-
-    return model.link_p['ammonia_synthesis', t] - old_rate <= \
-        model.ammonia_synthesis_capacity * model.ammonia_synthesis_max_ramp_up
-
-
-
-def _penalise_ramp_down(model, t):
-    """Places a cap on how quickly the ammonia plant can ramp down"""
-    if t == 0:
-        old_rate = model.link_p['ammonia_synthesis', model.t.at(-1)]
-    else:
-        old_rate = model.link_p['ammonia_synthesis', t - 1]
-
-    return model.link_p['penalty_link', t] >= (old_rate - model.link_p['ammonia_synthesis', t])
-
-
-def _penalise_ramp_up(model, t):
-    """Places a cap on how quickly the ammonia plant can ramp down"""
-    if t == 0:
-        old_rate = model.link_p['ammonia_synthesis', model.t.at(-1)]
-    else:
-        old_rate = model.link_p['ammonia_synthesis', t - 1]
-
-    return model.link_p['penalty_link', t] >= (model.link_p['ammonia_synthesis', t] - old_rate)
-
-
-def pyomo_constraints(network, snapshots):
-    """Includes a series of additional constraints which make the ammonia plant work as needed:
-    i) Battery sizing
-    ii) Ramp hard constraints down (Cannot be violated)
-    iii) Ramp hard constraints up (Cannot be violated)
-    iv) Ramp soft constraints down
-    v) Ramp soft constraints up
-    (iv) and (v) just softly suppress ramping so that the model doesn't 'zig-zag', which looks a bit odd on operation.
-    Makes very little difference on LCOA. """
-
-    # The battery constraint is built here - it doesn't need a special function because it doesn't depend on time
-    network.model.battery_interface = pm.Constraint(
-        rule=lambda model: network.model.link_p_nom['battery_pcs_charge'] ==
-                           network.model.link_p_nom['battery_pcs_discharge'] /
-                           network.links.efficiency["battery_pcs_discharge"])
-
-    # The ammonia synthesis ramp constraints are functions of time, so we need to create some pyomo sets/parameters to represent them.
-    network.model.t = pm.Set(initialize=network.snapshots)
-    network.model.ammonia_synthesis_max_ramp_down = pm.Param(initialize=network.links.loc['ammonia_synthesis'].ramp_limit_down)
-    network.model.ammonia_synthesis_max_ramp_up = pm.Param(initialize=network.links.loc['ammonia_synthesis'].ramp_limit_up)
-
-    # Using those sets/parameters, we can now implement the constraints...
-    logging.warning('Pypsa has been overridden - Ramp rates on NH3 plant are included')
-    network.model.NH3_pyomo_overwrite_ramp_down = pm.Constraint(network.model.t, rule=_nh3_ramp_down)
-    network.model.NH3_pyomo_overwrite_ramp_up = pm.Constraint(network.model.t, rule=_nh3_ramp_up)
-    # network.model.NH3_pyomo_penalise_ramp_down = pm.Constraint(network.model.t, rule=_penalise_ramp_down)
-    # network.model.NH3_pyomo_penalise_ramp_up = pm.Constraint(network.model.t, rule=_penalise_ramp_up)
-
-def pyomo_operating_constraints(network, snapshots):
-    """Exactly as per the other constraints, but excludes any constraints which only apply during design"""
-    # The ammonia synthesis ramp constraints are functions of time, so we need to create some pyomo sets/parameters to represent them.
-    network.model.t = pm.Set(initialize=network.snapshots)
-    network.model.ammonia_synthesis_max_ramp_down = pm.Param(initialize=network.links.loc['ammonia_synthesis'].ramp_limit_down)
-    network.model.ammonia_synthesis_max_ramp_up = pm.Param(initialize=network.links.loc['ammonia_synthesis'].ramp_limit_up)
-    network.model.ammonia_synthesis_capacity = pm.Param(initialize=network.links.loc['ammonia_synthesis'].p_nom_opt)
-
-    # Using those sets/parameters, we can now implement the constraints...
-    logging.warning('Pypsa has been overridden - Ramp rates on NH3 plant are included')
-    network.model.NH3_pyomo_overwrite_ramp_down = pm.Constraint(network.model.t, rule=_nh3_ramp_down_operating)
-    network.model.NH3_pyomo_overwrite_ramp_up = pm.Constraint(network.model.t, rule=_nh3_ramp_up_operating)
-
-
 def _prepare_linopy_context(network, snapshots):
     """Return the Linopy model and snapshot index, ensuring the model exists."""
     if getattr(network, "model", None) is None:
@@ -968,87 +835,3 @@ def linopy_constraints(network, snapshots):
             )
 
 
-def linopy_operating_constraints(network, snapshots):
-    """Operational counterpart for fixed-capacity reruns using Linopy."""
-    model, sns = _prepare_linopy_context(network, snapshots)
-
-    try:
-        ammonia_synthesis_dispatch = model["Link-p"].sel(name="ammonia_synthesis", snapshot=sns)
-    except KeyError:
-        return
-
-    if "ammonia_synthesis" not in network.links.index:
-        return
-
-    ammonia_synthesis_prev = ammonia_synthesis_dispatch.roll(snapshot=1, roll_coords=False)
-    ammonia_synthesis_capacity = network.links.loc["ammonia_synthesis", "p_nom"]
-    ramp_down = _ammonia_ramp_limit_per_snapshot(network, "down")
-    ramp_up = _ammonia_ramp_limit_per_snapshot(network, "up")
-
-    if pd.notna(ramp_down):
-        model.add_constraints(
-            ammonia_synthesis_prev - ammonia_synthesis_dispatch
-            <= ramp_down * ammonia_synthesis_capacity,
-            name="ammonia_synthesis_operating_ramp_down",
-        )
-
-    if pd.notna(ramp_up):
-        model.add_constraints(
-            ammonia_synthesis_dispatch - ammonia_synthesis_prev
-            <= ramp_up * ammonia_synthesis_capacity,
-            name="ammonia_synthesis_operating_ramp_up",
-        )
-
-
-def convert_network_to_operating(n, ammonia_cost_per_ton=500, aggregation_count=1, file_name="", multi_site=False,
-                                 time_step=1.0):
-    """Takes a designed network built with the designer and fixes the parameters as needs be
-    ammonia_cost_per_ton = the cost at which ammonia will be sold; this gives the model a reason to make ammonia"""
-
-    # Sets the expandable parameters to false:
-    n.links.p_nom_extendable = [False for _ in range(len(n.links))]
-    n.stores.e_nom_extendable = [False for _ in range(len(n.stores))]
-    n.generators.p_nom_extendable = [False for _ in range(len(n.generators))]
-
-    # Sets the basic equipment size to its optimum size from the last run...
-    n.links.p_nom = n.links.p_nom_opt
-    n.stores.e_nom = n.stores.e_nom_opt
-    n.generators.p_nom = n.generators.p_nom_opt
-
-    # Sets the ammonia storage to be very cheap and expandable - it's just a measure of production
-    n.stores.loc['ammonia', 'capital_cost'] = 0.001
-    n.stores.loc['ammonia', 'e_nom_extendable'] = True
-    n.stores.loc['ammonia', 'e_nom_max'] = 1E9
-    n.stores.loc['ammonia', 'e_cyclic'] = False
-    n.stores.loc['ammonia', 'e_initial'] = 0
-
-
-    # Sets the marginal cost of ammonia production to be negative so the system makes a profit...
-    n.links.loc['ammonia_synthesis', 'marginal_cost'] = (
-        -ammonia_cost_per_ton / AMMONIA_HHV_MWH_PER_T * time_step * aggregation_count / 10
-    )  # 10 is no. of years in dataset
-
-    # Turns the ammonia load off:
-    n.loads.loc['ammonia', 'p_set'] = 0
-
-    # Adjust the maximum allowable operating rate of the ammonia plant...
-    n.links_t.p_max_pu = aggregate_data(
-        pd.read_csv('ammonia_synthesis_p_max_pu.csv').set_index('snapshot').rename(columns={'ammonia_synthesis_max': 'ammonia_synthesis'}), aggregation_count)
-
-    # Re-solves model:
-    prepare_ammonia_ramp_constraints(n)
-    status, condition = n.optimize(
-        solver_name='gurobi',
-        extra_functionality=linopy_operating_constraints,
-    )
-    if status != 'ok':
-        raise RuntimeError(f"Operating optimisation failed with status {status} ({condition}).")
-
-    if not multi_site:
-        detailed_results = get_results_dict_for_excel(n, 1, aggregation_count, operating=True, time_step=time_step)
-        write_results_to_excel(detailed_results, file_name=file_name, extension="_operating")
-        results = get_results_dict_for_multi_site(n, aggregation_count, operating=True, time_step=time_step)
-    else:
-        results = get_results_dict_for_multi_site(n, aggregation_count, operating=True, time_step=time_step)
-
-    return results

@@ -1,6 +1,0 @@
-name,bus,control,p_nom_extendable,p_nom,capital_cost,marginal_cost
-Wind,Power,Slack,TRUE,0,1,0
-Solar,Power,PQ,TRUE,0,1,0
-SolarTracking,Power,PQ,FALSE,0,1.00E+09,0
-Grid,Power,PQ,FALSE,0,1.00E+09,0
-RampDummy,RampPenalty,Slack,TRUE,1.00E+04,0.00E+00,1.00E+00

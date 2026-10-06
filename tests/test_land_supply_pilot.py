@@ -12,8 +12,8 @@ from model.land_capacity import RenewableLandBudget, report_land_feasible_quanti
 from model.main import OptimizationFailure, generate_network, require_optimal_termination
 from model import main as plant_main
 from model.run_global import _apply_renewable_land_budget, run_global
-from reconciliation.land.run_supply_pilot import is_proven_infeasible, set_quantity
-from reconciliation.land import run_supply_pilot
+from reconciliation.supply_pilot.run_supply_pilot import is_proven_infeasible, set_quantity
+from reconciliation.supply_pilot import run_supply_pilot
 
 
 def test_bathymetry_dependency_is_pinned_before_preflight(tmp_path):
@@ -133,7 +133,7 @@ def test_retry_accepts_only_an_optimum_and_is_bounded(monkeypatch, retry_conditi
 
 def test_quantity_changes_only_ammonia_load():
     root = Path(__file__).resolve().parents[1]
-    network = generate_network(4, root / "basic_ammonia_plant_2050_way_tracking",
+    network = generate_network(4, root / "model" / "plants" / "basic_ammonia_plant_2050_way_tracking",
                                time_step=1., temporal_accounting_mode="snapshot_weighted")
     original = copy.deepcopy(network)
     altered = set_quantity(network, .5)
@@ -190,7 +190,7 @@ def test_actual_linopy_shared_land_constraint(demand, expected):
 
 def test_fixed_only_policy_disables_tracking_without_changing_other_generators():
     from types import SimpleNamespace
-    from reconciliation.land.run_supply_pilot import apply_pv_policy
+    from reconciliation.supply_pilot.run_supply_pilot import apply_pv_policy
     import pandas as pd
     import pytest
     network = SimpleNamespace(generators=pd.DataFrame({

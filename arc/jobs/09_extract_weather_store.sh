@@ -24,6 +24,6 @@ FILES=(Solar.nc Solar1.nc Solar2.nc SolarTracking.nc SolarTracking1.nc SolarTrac
 FILE="${FILES[$SLURM_ARRAY_TASK_ID]}"
 cd "$LEGACY_RELEASE"
 date -u; hostname
-"$PY" reconciliation/legacy_lcoa/extract_weather_store.py --weather-dir "$WEATHER" --cells "$LEGACY_CELLS" \
+"$PY" legacy_lcoa/extract_weather_store.py --weather-dir "$WEATHER" --cells "$LEGACY_CELLS" \
   --output "$LEGACY_STORE" --file "$FILE"
 date -u

@@ -15,7 +15,7 @@ set -euo pipefail
 : "${SUPPLY_LAND:?Centred land CSV (cell_anchor=center) required}"
 : "${SUPPLY_WEATHER_RUN:?Completed fixed-PV run containing hashed weather required}"
 : "${SUPPLY_OUTPUT:?New output directory required}"
-: "${SUPPLY_CONFIG:?Experiment config required, e.g. reconciliation/land/supply_curve/config_v3_center.json}"
+: "${SUPPLY_CONFIG:?Experiment config required, e.g. reconciliation/supply_pilot/config_v3_center.json}"
 : "${SUPPLY_PV_POLICY:?PV policy required (fixed-only, tracking-only or both)}"
 cd "$SUPPLY_RELEASE"
 scontrol show job "$SLURM_JOB_ID"
@@ -23,7 +23,7 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 export GREEN_LORY_SOLVER_THREADS=4 GREEN_LORY_SOLVER_LOG=0 PYTHONUNBUFFERED=1
 export GRB_LICENSE_FILE=/apps/system/easybuild/software/Gurobi/10.0.3-GCCcore-12.2.0/gurobi.lic
 /data/engs-df-green-ammonia/engs2523/envs/green-lory-env/bin/python \
-  reconciliation/land/run_supply_pilot.py --land "$SUPPLY_LAND" \
+  reconciliation/supply_pilot/run_supply_pilot.py --land "$SUPPLY_LAND" \
   --weather-run "$SUPPLY_WEATHER_RUN" --output "$SUPPLY_OUTPUT" \
   --pv-policy "$SUPPLY_PV_POLICY" \
   --experiment-config "$SUPPLY_CONFIG"

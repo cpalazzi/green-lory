@@ -1,5 +1,0 @@
-name,bus,carrier,e_nom,e_nom_extendable,e_nom_max,e_cyclic,e_initial,capital_cost
-Ammonia,Ammonia,AC,0.00E+00,TRUE,1.00E+07,TRUE,0.05,3.60E+01
-CompressedH2Store,HydrogenStorage,AC,0,TRUE,1.00E+07,TRUE,0.05,3.62E+03
-Battery,PowerStorage,AC,0,TRUE,1.00E+07,TRUE,0.05,0
-AccumulatedPenalty,RampPenaltyDest,AC,0,TRUE,1.00E+07,FALSE,0,0

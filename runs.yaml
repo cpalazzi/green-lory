@@ -16,7 +16,7 @@
 #   records the resolved values.
 # - Paths are relative to the repository root. The land table is passed with --land-csv because
 #   its location differs between ARC and a laptop; land_table_sha256 pins which table it must be.
-# - Ids follow the grammar in reconciliation/RUN_STORE.md, except the reconciling run, which keeps
+# - Ids follow the grammar in GLOSSARY.md (Run identifiers), except the reconciling run, which keeps
 #   its September id so that its results directory stays findable.
 # - Settings that do not differ between runs (no grid backstop, no land rent, full-year global
 #   stage, solver retry chain) live in the wrapper and the model, not here.
@@ -33,7 +33,7 @@ runs:
     results_class: 10_replication
     job_token: rep-nomh2
     tech_yaml: inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml
-    plant_dir: basic_ammonia_plant_2050_way_tracking
+    plant_dir: model/plants/basic_ammonia_plant_2050_way_tracking
     pv_policy: both
     finance_csv: inputs/amelired_interest_inputs_2050.csv
     finance_csv_sha256: b6cb3600a9a0a2a7d5a0c0fef016304d62b049ea308512224ba30e0bfb020ba8
@@ -67,7 +67,7 @@ runs:
     capacity_rule: >-
       recovered legacy rule (the capacity_rule of ll_xcost45_ameli_bflat_wnone_landarch_track_4h)
       applied to the green-lory designs on the legacy land areas, by
-      reconciliation/legacy_lcoa/legacy_capacity.py apply-lory
+      legacy_lcoa/legacy_capacity.py apply-lory
     notes: >-
       No new solve: LCOA and designs are the parent's, only the capacity of each cell is
       replaced. Built to test whether the capacity rule, rather than the plant cost, separates
@@ -84,7 +84,7 @@ runs:
     results_class: 30_keyruns
     job_token: key-dea50-wacc5
     tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
-    plant_dir: basic_ammonia_plant_2050
+    plant_dir: model/plants/basic_ammonia_plant_2050
     pv_policy: fixed
     finance_csv: inputs/uniform_interest_inputs_0p05_2050.csv  # generated: arc/build_finance_overrides.py
     finance_csv_sha256: d29259c8e4d094a3a56f2007e61a48b56e6e6fc7bbbe62b7f9ad0a2caea08a3d
@@ -117,7 +117,7 @@ runs:
     results_class: 30_keyruns
     job_token: key-dea50-ameli
     tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
-    plant_dir: basic_ammonia_plant_2050
+    plant_dir: model/plants/basic_ammonia_plant_2050
     pv_policy: fixed
     finance_csv: inputs/amelired_interest_inputs_2050_center.csv  # generated: arc/build_finance_overrides.py
     finance_csv_sha256: bddbc6dbd47a2c0b5eb0db3300d2c07dd10ec9bad8baec14e4515667fcf68333
@@ -147,17 +147,17 @@ runs:
   ll_xcost45_ameli_bflat_wnone_landarch_track_4h:
     role: legacy replication (accepted baseline)
     runner: legacy_lcoa
-    source: reconciliation/legacy_lcoa/source/94de8ce  # lcoa-opt at 94de8ce, 3 May 2023
+    source: legacy_lcoa/source/94de8ce  # lcoa-opt at 94de8ce, 3 May 2023
     harness: >-
-      reconciliation/legacy_lcoa/run_legacy_cells.py --era may2023 --variants stated_4h_mean
+      legacy_lcoa/run_legacy_cells.py --era may2023 --variants stated_4h_mean
       --enable-tracking 1.0587 --capex-source xcost45 (one array task per shard,
       arc/jobs/08_legacy_global.sh)
-    cells: reconciliation/legacy_lcoa/shards/cells_archived_shard_*.csv  # 15,377 archived cells, Ameli WACC per cell
+    cells: legacy_lcoa/shards/cells_archived_shard_*.csv  # 15,377 archived cells, Ameli WACC per cell
     annuity: workbook factor 0.1143 (8 %, 20 years, 2 % O&M), rescaled to the cell WACC
     capacity_rule: >-
       recovered rule, Q = 1 Mt x min(A_solar x 140 / P_pv, A_wind x 7.3 / P_wind) with
       A = 2 % of the Table-2 suitable area (legacy_land_areas.py), complete overlap, no
-      exclusions (reconciliation/legacy_lcoa/legacy_capacity.py)
+      exclusions (legacy_lcoa/legacy_capacity.py)
     water: none
     release: 20260915-legacy-v2
     notes: >-
@@ -167,12 +167,12 @@ runs:
   ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity:
     role: legacy key run
     runner: legacy_lcoa
-    source: reconciliation/legacy_lcoa/source/94de8ce
+    source: legacy_lcoa/source/94de8ce
     harness: >-
-      reconciliation/legacy_lcoa/run_legacy_cells.py --era may2023 --variants stated_4h_mean
+      legacy_lcoa/run_legacy_cells.py --era may2023 --variants stated_4h_mean
       --enable-tracking 1.0587 --capex-source xcost45 --annuity green_lory
       (arc/jobs/08_legacy_global.sh with LEGACY_EXTRA_ARGS)
-    cells: reconciliation/legacy_lcoa/shards/cells_archived_shard_*.csv
+    cells: legacy_lcoa/shards/cells_archived_shard_*.csv
     annuity: >-
       green-lory convention: lifetimes and O&M from
       inputs/tech_config_ammonia_plant_2050_way_eur.yaml
@@ -192,7 +192,7 @@ runs:
   gl_way2050_ameli_bflat_wnone_land2c_fixed_pilot3cells:
     role: finite-site supply curves at the three focal cells, fixed-tilt PV
     runner: supply_pilot
-    config: reconciliation/land/supply_curve/config_v3_center.json
+    config: reconciliation/supply_pilot/config_v3_center.json
     pv_policy: fixed-only
     land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
     land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
@@ -200,7 +200,7 @@ runs:
   gl_way2050_ameli_bflat_wnone_land2c_track_pilot3cells:
     role: finite-site supply curves at the three focal cells, tracking PV
     runner: supply_pilot
-    config: reconciliation/land/supply_curve/config_v3_center_tracking.json
+    config: reconciliation/supply_pilot/config_v3_center_tracking.json
     pv_policy: tracking-only
     land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
     land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
@@ -211,7 +211,7 @@ runs:
 # finds the cheapest way to supply the 2050 ammonia bunker demand from it. Every network uses
 # `network_defaults` unless its entry says otherwise. Submitted with arc/submit_network_run.sh
 # (job template arc/jobs/03_replay_historical_network.sh, model reconciliation/run_historical_network.py).
-# `report_name` is the letter the September 2026 reports used (DECISION_20260916.md section 4);
+# `report_name` is the letter the September 2026 reports used (reconciliation/DECISION.md section 4);
 # GLOSSARY.md lists every letter, including the runs that were not kept.
 
 network_defaults:

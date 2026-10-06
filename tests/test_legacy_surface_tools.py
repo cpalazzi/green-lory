@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS = ROOT / "reconciliation" / "legacy_lcoa"
+TOOLS = ROOT / "legacy_lcoa"
 
 
 def _summary(name, lat, lon, lcoa, wind, tracking, wacc=0.051):

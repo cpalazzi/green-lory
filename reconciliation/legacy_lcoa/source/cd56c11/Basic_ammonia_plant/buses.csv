@@ -1,8 +1,0 @@
-name,control,generator,carrier
-Power,Slack,Wind,AC
-Ammonia,Slack,,Ammonia
-PowerStorage,Slack,,AC
-Hydrogen,Slack,,Hydrogen
-HydrogenStorage,Slack,,Hydrogen
-RampPenalty,Slack,RampDummy,AC
-RampPenaltyDest,Slack,,AC

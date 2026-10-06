@@ -18,9 +18,10 @@
 !*.txt
 !*.yaml
 !*.yml
+!pytest.ini
 
 # Reconciliation package: frozen legacy cost workbooks and small experiment configs
-!/reconciliation/legacy_lcoa/source/**/*.xlsx
+!/legacy_lcoa/source/**/*.xlsx
 !/reconciliation/**/*.json
 
 # Never commit virtualenvs or Python caches
@@ -51,7 +52,6 @@ references/
 !/scripts/**/.gitkeep
 !/scripts/fetch_travel_time.py
 !/scripts/build_ameli_wacc_inputs.py
-!/scripts/merge_global_results.py
 
 # Claude session ARC file-queue bridge (local operational scratch)
 arc_exchange/
