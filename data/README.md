@@ -11,7 +11,7 @@ Nine NetCDF-3 files produced for the original lcoa-opt model: hourly 2019,
 1-degree cells, three longitude bands per technology (unsuffixed = 180 W to
 61 W, `1` = 60 W to 59 E, `2` = 60 E to 179 E; the suffix is a longitude
 partition, not a year). Each file is 1.51 GB. Used unchanged by the frozen
-legacy model (`reconciliation/legacy_lcoa/`) and by the green-lory campaigns.
+legacy model (`legacy_lcoa/`) and by the green-lory campaigns.
 
 | File | SHA-256 |
 |---|---|
@@ -40,18 +40,27 @@ tracking 1.12); the AC/DC normalisation basis is undocumented.
 
 | File | Purpose | SHA-256 |
 |---|---|---|
-| `MCD12C1.A2022001.061.2023244164746.hdf` | MODIS land cover, Collection 6.1, year 2022, 0.05-degree class fractions, global (3600 x 7200 x 17). Used by the legacy land step (`reconciliation/legacy_lcoa/legacy_land_areas.py`) and by the green-lory land build (`model/land_processing.py`). Sufficient for the global legacy reproduction; the historical vintage is unknown | `5b12c573975da5cb1b119973411e119e6b749b88a0056c68668b9a261b3e56cc` |
+| `MCD12C1.A2022001.061.2023244164746.hdf` | MODIS land cover, Collection 6.1, year 2022, 0.05-degree class fractions, global (3600 x 7200 x 17). Used by the legacy land step (`legacy_lcoa/legacy_land_areas.py`) and by the green-lory land build (`model/land_processing.py`). Sufficient for the global legacy reproduction; the historical vintage is unknown | `5b12c573975da5cb1b119973411e119e6b749b88a0056c68668b9a261b3e56cc` |
 | `land/GEBCO_2025_sub_ice.nc` | GEBCO 2025 sub-ice bathymetry/topography, 7.5 GB (moved here from the pypsa-earth clone's `data/gebco/` on 16 September 2026; a symlink was left there). Slope (> 15 degree) exclusions in the green-lory land build; bathymetry and depth-based costs for the offshore implementation (open) | `40080250dd9932367461f0294195ef01b8ab78163c9f93d3b60a4f751ca3aa75` |
 | `model_bathymetry.nc` | Coarse bathymetry used by the legacy model and the green-lory preflight (0.5 MB) | `6600d5980390d3fb623c2fd4dca2c131ac69df507b151b7420ec63cef9eaf697` |
 | `land/WDPA_Feb2026_Public_shp_{0,1,2}/` | World Database on Protected Areas, February 2026 shapefiles (1.9 + 2.6 + 1.9 GB); protected-area exclusions in the green-lory land build. Copied from `green-lory/data/` on ARC on 16 September 2026 (rsync, sizes verified) |
-| `countries.geojson` | Country boundaries for cell attribution and maps. ARC copy at `green-lory/data/`; a local copy is in `results/campaigns/verschuur_reconcile_20260907_v1/arc_received_20260914/` |
+| `countries.geojson` | Country boundaries for cell attribution and maps (`model/run_global.py`). ARC copy at `green-lory/data/`; copied here on 6 October 2026 from `results/campaigns/verschuur_reconcile_20260907_v1/arc_received_20260914/` | `86057d2fad98ac537a66df1da995d2f7904c2c215457077853087d13fa412487` |
 | Native MODIS MCD12Q1 500 m tiles (2022, C6.1) | Resolution checks only; three tiles at `results/campaigns/land_reconcile_20260914_v1/sources/native-modis-c61-2022/`, twelve more listed in the download plan there. Not needed for the global reproduction |
 
-Generated land tables (`max_capacities_*.csv`) are campaign outputs, not
-inputs: the reconciliation uses
-`/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/lory_reconcile_20260722_v1/land/paper_2pct_slope15.csv`
-(SHA-256 `4d0753f77f3574c1616159997481c090c68e383ac02e6b25284561fb0ab1b38f`), a
-local copy of which is in `arc_received_20260914/` of the network campaign.
+Generated land tables (`max_capacities_*.csv`) are campaign outputs, not inputs. The
+accepted ones are the centred build of 23 September 2026 on ARC,
+`/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/land_center_20260923_v1/`, with local
+copies in `results/campaigns/land_center_20260923_v1/`:
+
+| File | SHA-256 |
+|---|---|
+| `max_capacities_center_100pct_slope15.csv` | `93a4777634b3504bfa9a012cf7cdc2b66b8bad16c65b70a00f1267563a0abf83` |
+| `max_capacities_center_20pct_slope15.csv` | `12277da14986a8ba9af481505d70072dd20846e2fe975903713ac9384bea8c21` |
+| `max_capacities_center_2pct_slope15.csv` | `89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753` |
+| `locations_onshore_suitable_center_20260923.csv` (the 16,509 cells of the key runs) | `792a3e41d68c983b3e9462650b73ac5d481f629d8f1449aa00aa484a9b460bf4` |
+
+Earlier tables (`lory_reconcile_20260722_v1/land/*.csv`, `data/max_capacities_*` of May) give
+each cell the suitability of the cell one degree south and are refused by the model.
 
 ## ERA5 / atlite stack
 

@@ -26,9 +26,8 @@ changing the choice needs only post-processing of the existing key surfaces or a
 | Grid | no grid backstop | Sep | wrapper |
 | Networks | 1 Mt/yr supplier cutoff; deposited equations; results accepted at the deposit's 1.5 % gap, each run's gap reported | 16 Sep, 5 Oct | `network_defaults` in `runs.yaml` |
 
-`reconciliation/DECISION_20260916.md` section 7.2 still names land-enforced finite-site solves as
-the capacity method; the 5 October choice above replaces it and the decision text is to be
-rewritten accordingly.
+The capacity choice above replaces section 7.2 of the archived 16 September decision, which
+named land-enforced finite-site solves; `reconciliation/DECISION.md` states it.
 
 ## Open
 
@@ -77,15 +76,16 @@ Cost to change: a weather loader for the atlite tiles, then new global solves (a
 
 ### 3. Which further surfaces the papers need
 
-The 16 September plan (`reconciliation/PLAN_GLOBAL_CAMPAIGN_20260916.md` section 4) proposed
-eight surfaces S1 to S8 (2030 and 2050; finance; spatial build and remoteness; spatial water; 2 %
-land). The three key surfaces cover S1, S3 and S8. Open: whether the sensitivity paper needs
-the spatial surfaces (S2, S4, S5) and the 2030 surfaces (S6, S7). The spatial ones wait for a
-review of their inputs: travel time to the nearest city is doubtful as remoteness for coastal
-greenfield ports, and the water-access costs are unreviewed.
+The 16 September plan (`reconciliation/archive/2026-09/PLAN_GLOBAL_CAMPAIGN_20260916.md`
+section 4) proposed eight surfaces S1 to S8 (2030 and 2050; finance; spatial build and
+remoteness; spatial water; 2 % land). The three key surfaces cover S1, S3 and S8. Open: whether
+the sensitivity paper needs the spatial surfaces (S2, S4, S5) and the 2030 surfaces (S6, S7).
+The spatial ones wait for a review of their inputs: travel time to the nearest city is doubtful
+as remoteness for coastal greenfield ports, and the water-access costs are unreviewed.
 
 Recommendation: fix this list before the workflow is written, because each surface becomes a
-workflow target; keep offshore cells out until bathymetry exclusions and costs exist.
+run id; keep offshore cells out until bathymetry exclusions and costs exist. See the next
+section for the sensitivity paper.
 
 ### 4. Smaller open items
 
@@ -96,21 +96,54 @@ workflow target; keep offshore cells out until bathymetry exclusions and costs e
 - The legacy key run's id says `way2050` although it reads the x_Cost sheet (`xcost45`). Keep
   it (results are filed under it) or rename with the old id as an alias.
 
-## Structure to settle before the reorganisation
+## Next step: the global LCOA heatmap sensitivity paper
+
+With land applied after the solve, LCOA does not depend on the land table, the land share or
+the PV density: those change capacity only. The heatmaps of a cost-sensitivity paper therefore
+depend on the weather (open item 2), the technology costs and the cost mechanisms (finance,
+build and remoteness, water), not on the land choices still open. In order:
+
+1. **Weather basis.** Run the 563-cell legacy sample (`legacy_lcoa/cells_sample_v1.csv`) with the
+   improved settings on the legacy stack and on the ERA5/atlite capacity factors (small runs).
+   If the difference holds, the paper's surfaces should use ERA5/atlite, and they need a
+   tracking field for the tracking sensitivity.
+2. **Review the spatial inputs** before any spatial surface: remoteness for coastal cells
+   (distance to a port instead of travel time to a city) and water access (desalination plus
+   pipeline from the coast).
+3. **One-at-a-time surfaces against S1** (`gl_dea2050_wacc5_bflat_wflat_land20c_fixed`), each a
+   new run id in `runs.yaml` with a run-store row: build and remoteness alone (S4), water alone
+   (S5), all spatial mechanisms (S2), and DEA 2030 (S6). For finance, Ameli's reduced WACC is
+   5.1 % almost everywhere, so it moves the median LCOA by under 1 % against uniform 5 %; a
+   borrowing-cost sensitivity needs Ameli's low-carbon (current) WACC series (8 to 12 % in the
+   regions that matter; `scripts/build_ameli_wacc_inputs.py --scenario` selects the series) or a
+   uniform 10 %. A tracking-only twin of S1 is worth adding: tracking changes the ranking of
+   PV-only regions (Chile) against wind–PV hybrids (`reconciliation/DECISION.md` section 3).
+4. **Figures**: LCOA maps and maps of the change against S1 for each mechanism, the mechanism
+   that dominates each cell, and cost-quantity supply curves by region at 2 % and 20 %.
+
+Each hourly 16,509-cell surface is a global submission (confirm each); about 580 CPU-hours in
+September for 52,702 cells, so fewer for the onshore subset.
+
+## Structure
 
 Not modelling choices, but they decide what the reorganised code looks like.
 
+Done on 6 October: the plant bundles live in `model/plants/`; the defaults of `model/main.py`
+and `model/run_global.py` are the improved runs' YAML and bundle (the 10 Mt 2030 bundle is no
+longer used); the dead functions and the unused Pyomo import are gone from `model/`.
+
+Remaining:
+
 1. **One source for plant parameters.** The YAML holds the efficiencies, notebook 00 copies them
-   into the four plant bundles, and `run_global` reads them back from the bundle; costs, by
-   contrast, are applied from the YAML at run time. The bundles differ only in efficiencies,
-   load and the tracking switch (GLOSSARY, Plant bundles). Recommendation: apply efficiencies
-   and the load from the YAML at run time, take the tracking switch from `pv_policy`, and keep
-   one topology bundle in `model/`. Check that the key cells give identical results.
+   into the plant bundles, and `run_global` reads them back from the bundle; costs, by contrast,
+   are applied from the YAML at run time. The bundles differ only in efficiencies, load and the
+   tracking switch (GLOSSARY, Plant bundles). Recommendation: apply efficiencies and the load
+   from the YAML at run time, take the tracking switch from `pv_policy`, and keep one topology
+   bundle in `model/plants/`. Check that the key cells give identical results.
 2. **One capacity column family.** Drop the `max_*` columns, which are unused downstream, and
    move the QA gate to the `scaled_design_*` columns.
-3. **Defaults that match the model of record.** The command line keeps the grid backstop and
-   defaults to the 10 Mt 2030 bundle. Recommendation: make the technology YAML and plant bundle
-   required (or take a run id), and default to no backstop.
+3. **Grid backstop default.** The command line and the job template keep the backstop on by
+   default while every campaign removes it. Recommendation: default to off.
 4. **Dead options.** Remove the `southwest` anchor (keep it in its test), the conservative union
    fallback, the grid backstop, the `aggregation_count` plumbing and, once open item 1 is
-   settled, the run-time PV density recomputation (list in `reconciliation/CLEANUP_PLAN_20261005.md` 2e).
+   settled, the run-time PV density recomputation.

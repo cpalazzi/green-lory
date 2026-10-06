@@ -1,347 +1,78 @@
-# ARC Cluster Scripts
+# arc/: running on Oxford ARC
 
-This folder contains ARC (Oxford) helper scripts for running full global jobs from this repository.
+Everything that runs on ARC runs from an **immutable source release** and writes to a **new
+campaign directory**; nothing is overwritten, and only a passed QA record makes a result
+accepted. Run definitions are in `../runs.yaml` (`python3 arc/run_definitions.py list`).
 
-- Local development: prefer `.venv`.
-- ARC cluster runs: use conda environment under `/data/<group>/<user>/envs/green-lory-env`.
-- ARC login account for this project: `engs2523`.
+| Location on ARC | Contents |
+|---|---|
+| `/data/engs-df-green-ammonia/engs2523/green-lory-releases/<id>/` | read-only source releases with `source_inventory.json` and `RELEASE_NOTES.md` |
+| `/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/<campaign>/` | outputs: land tables, surfaces, contracts, networks |
+| `/data/engs-df-green-ammonia/engs2523/green-lory/data/` | shared inputs linked into every release (weather stack, MODIS, GEBCO, WDPA, bathymetry, countries) |
+| `/data/engs-df-green-ammonia/engs2523/envs/` | `green-lory-env` and `legacy-lcoa-env` |
+
+Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and query with
+`squeue -M all` / `sacct -M all`. Partitions: `devel` (10 min), `short` (12 h), `medium` (48 h),
+`long`. Never submit a global surface without the user's confirmation.
+
+## Workflow
+
+1. **Stage a release** from a committed checkout on the Mac, with the ARC SSH socket open:
+   `bash arc/stage_release.sh 20261006-keyruns-v1`. It copies the Git-visible source and the
+   generated finance overrides that `runs.yaml` pins (hash-checked), links the shared data,
+   verifies the inventory on ARC and makes the release read-only.
+2. **Land tables** (rarely): `submit_land_center_matrix.sh` runs `jobs/00_build_land_constraints.sh`
+   for the centred 100 % build and derives the 2 % and 20 % tables
+   (`green-lory-campaigns/land_center_20260923_v1/` is the accepted build).
+3. **Plant surfaces**: from the release directory,
+   ```bash
+   ARC_RELEASE_INVENTORY=$PWD/source_inventory.json bash arc/submit_lory_sequence.sh \
+     --stage smoke --campaign <campaign> --scenario <run id> \
+     --land-csv <centred table> --results-root /data/.../green-lory-campaigns/<campaign>
+   ```
+   then `--stage diagnostic` (the same three cells, full year) and, after review and
+   confirmation, `--stage global` (four longitude shards, `--global-locations` to restrict the
+   cells). Each stage writes `manifest.json`, `submission.json`, `shards/`, `merged/`,
+   `qa/validation.json` and `logs/`; a merge/QA job runs after the shards and fails on missing
+   or duplicated rows, unexpected coordinates, currency, finance or cost-scope mismatches.
+   `--dry-run` validates inputs and prints the commands.
+4. **Post-processing**: derived land shares (`../reconciliation/derive_land_share_surface.py`)
+   and supplier contracts (`../reconciliation/export_lory_surface.py`);
+   `postprocess_keyruns_20260924.sh` is the sequence used for the key runs.
+5. **Networks**: `submit_network_run.sh --name <id> --contract <contract.json>` runs
+   `jobs/03_replay_historical_network.sh` (4 CPUs, 64 GB, 2 h, one-hour solver limit by default).
+6. **Legacy model**: `jobs/07_build_legacy_env.sh` (environment, once),
+   `jobs/09_extract_weather_store.sh` (weather store, once), `jobs/08_legacy_global.sh`
+   (16-shard array; `LEGACY_EXTRA_ARGS` adds harness options such as `--annuity green_lory`).
+7. **Supply pilots**: `jobs/06_land_supply_pilot.sh` (see `../reconciliation/supply_pilot/`).
 
 ## Files
-- `arc/arc_initial_setup.sh`: one-time setup on ARC login node (clone/update repo, directories, optional env-build submission).
-- `arc/build-green-lory-env.sh`: SLURM job script that creates/refreshes the conda env and installs dependencies.
-- `arc/load_green_lory_env.sh`: shell helper to load modules + activate the conda env for interactive ARC sessions.
-- `arc/arc_check_run_inputs.sh`: preflight checker for required inputs before submitting a global run.
-- `arc/jobs/01_run_global.sh`: SLURM job script that executes `model.run_global` end-to-end.
-- `arc/submit_global_run.sh`: convenience wrapper to run preflight + submit the SLURM job.
-- `arc/jobs/00_build_land_constraints.sh`: SLURM job script for either heavy 100pct land builds or cheap derived competition rescaling.
-- `arc/submit_land_constraints_matrix.sh`: ARC-side wrapper that submits the 100pct/derived max-capacity matrix.
-- `arc/submit_land_center_matrix.sh`: ARC-side wrapper for one 100pct build plus derived shares (default 2 % and 20 %) written to an immutable campaign directory; the heavy job goes to `--clusters=all` and the derived jobs follow it on the accepted cluster. Cells are anchored at their centre (`ARC_CELL_ANCHOR=center`, the default of the template since 23 Sep 2026; `southwest` reproduces the pre-September labelling convention only for audits).
-- `arc/stage_and_submit_land_constraints.sh`: local helper that stages the required data/code to ARC and then calls `arc/submit_land_constraints_matrix.sh` remotely.
-- `arc/submit_constrained_reruns.sh`: convenience wrapper for the canonical constrained DEA/Way rerun set; queues dependent merge jobs automatically.
-- `arc/submit_lory_sequence.sh`: immutable campaign wrapper for the Green Lory reconciliation sequence.
-- `arc/merge_and_qa_campaign.py`: merges an explicit shard list and enforces coordinate, uniqueness, currency, finance-override, manifest, and schema gates.
-- `arc/write_campaign_manifest.py`: records source and input identities for one immutable campaign run.
-- `arc/write_campaign_submission.py`: records job IDs separately so the manifest hash cannot race running shards.
-- `scripts/merge_global_results.py`: canonical quadrant merge helper used by ARC workflows.
 
-## Green Lory campaign runs
-
-Every green-lory surface is defined in `runs.yaml` at the repository root: one
-entry per run id holding every setting (technology YAML, plant bundle, PV
-policy, finance CSV, time step, temporal accounting, ramp basis, site costs,
-water, land share and table, land constraint, capacity rule, allocation).
-`submit_lory_sequence.sh` takes a run id and reads its entry; no run is
-hard-coded in the wrapper. List or compare the runs with
-
-```bash
-python3 arc/run_definitions.py list
-python3 arc/run_definitions.py table
-```
-
-Green-lory runs defined today:
-
-- `rep_way2050_flat_amelired_4h_tracking_nominal_h2` (reconciling): green-lory
-  configured like the legacy plant (Way 2050 costs, 4-hour step with legacy
-  store and ramp accounting, nominal compressor, bundled H2 storage, water
-  outside the headline). Its September surface stands; with the legacy
-  capacity rule it is the supplier table of the reconciling network
-  ("network D" in the September reports; `python3 arc/run_definitions.py show D`).
-- `gl_dea2050_wacc5_bflat_wflat_land20c_fixed` (improved, base): DEA 2050
-  costs, uniform 5 % WACC, hourly, fixed-tilt PV, co-located land at a 20 %
-  share, water in the headline.
-- `gl_dea2050_ameli_bflat_wflat_land20c_fixed` (improved, finance
-  sensitivity): as the base with Ameli reduced WACC.
-
-`runs.yaml` pins the sha256 of each run's land table and finance CSV; the
-wrapper refuses a `--land-csv` or finance file with another hash, and the land
-gate refuses any table that is not a centred build (`cell_anchor=center`).
-
-The `flat` cost scopes are deliberate. These runs do not use the spatial build,
-remoteness or water-access columns in `inputs/spatial_cost_inputs_amelired_2050.csv`;
-those belong in separately defined spatial runs.
-
-All runs disable the feasibility grid backstop. Conservative
-or unversioned renewable-union inputs are allowed only for runtime smoke work.
-Full-year diagnostic and global submissions require the versioned
-`renewable_union_area_km2_classwise_nested_v1` column and fail in preflight if
-it is absent. This v1 estimate sums the larger wind/solar suitability fraction
-within each MODIS class. Because the underlying eligible footprints are not
-spatially resolved, it assumes perfect nested overlap and is a lower bound on
-the physical union, not an exact union. `renewable_union_area_km2` remains a
-numerically identical compatibility alias in newly generated tables.
-
-Start with a dry run (local or on ARC):
-
-```bash
-bash arc/submit_lory_sequence.sh --dry-run --stage smoke \
-  --campaign <campaign> \
-  --scenario gl_dea2050_wacc5_bflat_wflat_land20c_fixed \
-  --land-csv /data/<group>/<user>/green-lory-campaigns/land_center_20260923_v1/max_capacities_center_20pct_slope15.csv
-```
-
-Local dry runs validate the tracked YAML, override, diagnostic-cell, and plant
-bundle inputs. Large `data/` inputs are ARC-only and are reported as notes.
-Non-dry submissions require the full ARC preflight to pass. Preflight also
-requires the interest-only override to cover every explicit diagnostic cell or
-every positive-capacity global land cell.
-
-The intended gated sequence is smoke (three cells, 168 simulated hours), then
-diagnostic (the same cells over the full year), then global, each with the same
-`--campaign`, `--scenario` and `--land-csv`; the global stage of the key runs
-also took `--global-locations` with the 16,509 onshore cells that have suitable
-land (`land_center_20260923_v1/locations_onshore_suitable_center_20260923.csv`).
-Submit a global stage only after reviewing its diagnostic result.
-
-Every invocation receives a unique UTC/source run ID by default. Passing
-`--run-id` is supported, but the wrapper refuses an existing destination.
-For ARC reconciliation work, keep staged source and generated artifacts in
-separate roots:
-
-```text
-/data/<group>/<user>/green-lory-releases/<release-id>/
-/data/<group>/<user>/green-lory-campaigns/<campaign>/
-├── land/
-└── results/
-```
-
-The release may link to the existing read-only large `data/` payload; it must
-not reuse the legacy repository's mutable `results/` or `logs/` folders.
-Campaign results are stored under:
-
-```text
-results/campaigns/<campaign>/
-├── 00_smoke/<scenario>/runs/<run-id>/smoke/
-├── 10_replication/<run id>/runs/<run-id>/<diagnostic-or-global>/
-└── 30_keyruns/<run id>/runs/<run-id>/<diagnostic-or-global>/
-
-(The class directory is the run's `results_class` in `runs.yaml`.)
-```
-
-Each run contains a byte-immutable `manifest.json`, a separate `submission.json`
-for SLURM job IDs, exact `shards/`, the validated `merged/` CSV,
-`qa/validation.json`, and SLURM `logs/`. The manifest records the complete
-resolved technology-YAML inheritance chain, not only an overlay file. It also
-records the override CSV columns and a structured cost scope: Ameli reduced
-WACC, no spatial build/remoteness override, unity build multiplier, 2 USD/m3
-uniform YAML water, and no land-rent input. A
-merge/QA job runs only after all of that run's explicit shard job IDs finish
-successfully. It fails if rows are
-missing or duplicated, unexpected coordinates appear, currency or finance
-metadata disagree, required columns are absent, a result's build/water/land
-values contradict the manifest scope, or a failure-sidecar CSV exists.
-
-Useful controls:
-
-- `--campaign`, `--run-id`, and `--results-root` set immutable output identity.
-- `--land-csv` names the centred land table; it must match the
-  `land_table_sha256` of every requested run, and the manifest hashes it.
-- `--cluster` pins every shard and merge/QA job to one ARC cluster. Without it,
-  the first returned cluster is used for all remaining jobs in that scenario.
-- `--smoke-hours` changes the short-run simulated duration. The 168-hour
-  default becomes 168 snapshots in the hourly central case and 42 snapshots in
-  the four-hour replication case.
-- `--scenario` takes a run id from `runs.yaml` and is repeatable; `--campaign`,
-  `--scenario` and `--land-csv` are required.
-- `ARC_CAMPAIGN_THREADS_PER_WORKER`, `ARC_CAMPAIGN_DIAGNOSTIC_WORKERS`, and
-  `ARC_CAMPAIGN_GLOBAL_WORKERS` control worker sizing.
-
-Do not promote or delete an older result merely because a replacement was
-submitted. Review the merged CSV and require `qa/validation.json` to report
-`"status": "passed"` first.
-
-## Typical ARC Workflow
-
-### 1. One-time setup on ARC login node
-```bash
-ssh engs2523@arc-login.arc.ox.ac.uk
-cd /data/engs-df-green-ammonia/engs2523
-bash green-lory/arc/arc_initial_setup.sh
-```
-
-### 2. Build/refresh environment
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-sbatch arc/build-green-lory-env.sh
-```
-
-### 3. Optional interactive check with conda env loaded
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-source arc/load_green_lory_env.sh
-bash arc/arc_check_run_inputs.sh
-```
-
-### 4. Submit full global run
-
-Single job (all longitudes):
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_global_run.sh full-global-2030
-```
-
-**Recommended: 4 parallel quadrant jobs** (splits by longitude so each shard fits the short partition):
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_global_run.sh full-global-2030 --quadrants
-```
-
-This submits 4 SLURM jobs with longitude bounds:
-- `west2`: [-180, -90)
-- `west1`: [-90, 0)
-- `east1`: [0, 90)
-- `east2`: [90, 180)
-
-After all quadrant jobs complete, merge them with the canonical merge helper:
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-python scripts/merge_global_results.py full-global-2030 \
-	--output results/full_global_2030/global_run_results.csv
-```
-
-The notebook combiner cell is still fine for inspection, but `scripts/merge_global_results.py`
-is the supported merge path because it deduplicates and validates required columns.
-
-Or submit directly:
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-sbatch arc/jobs/01_run_global.sh full-global-2030
-```
-
-### 4b. Submit the canonical constrained reruns
-
-This wrapper submits the standard 2050 `flat` and explicit spatial-mechanism cost runs for Way and DEA, plus the Salmon/Verschuur WAY 2050 Amelired replication cases at 4h resolution. It can also include DEA 2030. Each scenario is submitted as 4 quadrant jobs and followed by a dependent merge job.
-
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_constrained_reruns.sh --land-csv data/max_capacities_paper_2pct_slope15.csv --include-2030
-```
-
-To limit submission to one or more scenarios:
-
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_constrained_reruns.sh \
-	--land-csv data/max_capacities_high_50pct_slope15.csv \
-	--scenario way-2050-spatial-build-remote-water \
-	--scenario dea-2050-spatial-build-remote-water
-```
-
-For the closest Salmon/Verschuur replication target, use the WACC-only 4h scenario. This keeps build/remoteness/water/land flat and only applies Ameli reduced WACC:
-
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_constrained_reruns.sh \
-	--land-csv data/max_capacities_paper_2pct_slope15.csv \
-	--scenario way-2050-flat-amelired-4h
-```
-
-For the spatial-sensitivity comparison, use the explicit spatial build/remoteness/water 4h scenario:
-
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_constrained_reruns.sh \
-	--land-csv data/max_capacities_paper_2pct_slope15.csv \
-	--scenario way-2050-spatial-build-remote-water-amelired-4h
-```
-
-The ambiguous `way-2050-spatial-amelired` filter is intentionally unsupported in this wrapper. One-hour Amelired reruns should use a separately named scenario when they are added. The current combined Ameli file has active build/remoteness/water mechanisms and zero land cost, so the canonical spatial-sensitivity label is `spatial-build-remote-water-amelired`, not plain `spatial-amelired`.
-
-When `--land-tag` is omitted, the wrapper infers one from the land CSV name when it follows the `max_capacities_<tag>.csv` pattern. That tag is appended to the run label and merged results directory, so the land-cap choice stays visible in downstream ARC outputs.
-
-### 4c. Submit the land-processing matrix
-
-For the reconciliation campaign, submit from the immutable source release and
-write every artifact below the campaign root. The matrix wrapper and each land
-job now refuse an existing output by default:
-
-```bash
-campaign_root=/data/<group>/<user>/green-lory-campaigns/lory_reconcile_20260722_v1
-ARC_PCT100_SLOPE15_CSV="$campaign_root/land/100pct_slope15.csv" \
-ARC_PCT100_ALLSLOPES_CSV="$campaign_root/land/100pct_allslopes.csv" \
-ARC_PAPER_2PCT_SLOPE15_CSV="$campaign_root/land/paper_2pct_slope15.csv" \
-ARC_HIGH_50PCT_SLOPE15_CSV="$campaign_root/land/high_50pct_slope15.csv" \
-ARC_LAND_LOG_DIR="$campaign_root/land/logs" \
-bash arc/submit_land_constraints_matrix.sh
-```
-
-The older local staging helper below targets the legacy repository and is kept
-only for historical/general-purpose maintenance; do not use it for the
-reconciliation campaign.
-
-From your local machine, stage the required data/code and submit the initial 100pct/derived matrix:
-
-```bash
-cd /Users/carlopalazzi/programming/pypsa_models/green-lory
-bash arc/stage_and_submit_land_constraints.sh
-```
-
-This submits four outputs:
-- `data/max_capacities_100pct_slope15.csv`
-- `data/max_capacities_100pct_allslopes.csv`
-- `data/max_capacities_paper_2pct_slope15.csv`
-- `data/max_capacities_high_50pct_slope15.csv`
-
-`100pct_slope15` and `100pct_allslopes` are the heavy ARC builds. The `paper_2pct_slope15` and `high_50pct_slope15` files are submitted as dependent rescaling jobs from `100pct_slope15`, so they do not rerun the full geospatial overlay.
-
-### 5. Select override inputs at submission time
-
-The generic `submit_global_run.sh` flag is `--override-mode` because the CSV can
-carry more than finance. The flag selects the override file; the run label should
-name the active mechanisms. In current Green Lory inputs, the spatial base file
-has active build multipliers, active remoteness, active water costs, and zero
-land cost, so use labels such as `way-2050-spatial-build-remote-water` rather
-than plain `way-2050-spatial` for new runs.
-
-Default (no overrides CSV, use tech-config interest values everywhere):
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_global_run.sh full-global-2030
-```
-
-Spatial override CSV:
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_global_run.sh full-global-2030 --override-mode spatial
-```
-
-Custom override CSV:
-```bash
-cd /data/engs-df-green-ammonia/engs2523/green-lory
-bash arc/submit_global_run.sh full-global-2030 --override-mode custom --override-csv inputs/my_overrides.csv
-```
-
-## Password-based interactive usage (VS Code agent friendly)
-If you are entering password for each SSH command, use single-command SSH invocations from your local terminal and provide password when prompted:
-
-```bash
-ssh engs2523@arc-login.arc.ox.ac.uk 'cd /data/engs-df-green-ammonia/engs2523/green-lory && bash arc/submit_global_run.sh full-global-2030'
-```
-
-Repeat per command as needed:
-```bash
-ssh engs2523@arc-login.arc.ox.ac.uk 'squeue -u engs2523'
-ssh engs2523@arc-login.arc.ox.ac.uk 'tail -n 80 /data/engs-df-green-ammonia/engs2523/green-lory/logs/arc-full-global-2030-*.log'
-```
-
-## Environment variables (optional)
-You can override defaults without editing scripts:
-- `ARC_GROUP` (default: `engs-df-green-ammonia`)
-- `ARC_WORK_BASE` (default: `/data/$ARC_GROUP/$USER`)
-- `ARC_REPO_DIR` (default: `$ARC_WORK_BASE/green-lory`)
-- `ARC_ENV_PREFIX` (default: `$ARC_WORK_BASE/envs/green-lory-env`)
-- `ARC_ANACONDA_MODULE` (default: `Anaconda3/2024.06-1`)
-- `ARC_TECH_YAML` (required: the technology YAML of the run)
-- `ARC_OVERRIDE_CSV` (default: unset / no overrides)
-- `ARC_OVERRIDE_MODE` (default: `none`; alternatives: `spatial`, `custom`)
-- `ARC_LAND_CSV` (required: a centred land table, `cell_anchor=center`)
-- `ARC_LOCATIONS_CSV` (optional location subset)
-- `ARC_MAX_SNAPSHOTS` (optional smoke-test cap)
-- `ARC_TIME_STEP` (default: `1.0`; set by constrained scenarios, `4.0` for Salmon/Verschuur Amelired replication)
-- `ARC_LIMIT` (optional location cap)
-- `ARC_OUTPUT_CSV` (optional explicit output path)
-- `ARC_QUIET` (default: `1`)
-- `ARC_THREADS_PER_WORKER` (default: all available CPUs)
-- `ARC_LON_MIN` / `ARC_LON_MAX` (optional longitude bounds for segmented runs)
+| File | Role |
+|---|---|
+| `stage_release.sh` | Stage, verify and lock a source release (run on the Mac) |
+| `run_definitions.py` | Read `runs.yaml`: `list`, `show <id or letter>`, `table`, `shell <run id>` |
+| `submit_lory_sequence.sh` | Plant-surface campaigns by run id, in smoke, diagnostic and global stages |
+| `submit_land_center_matrix.sh` | Centred land build and derived shares |
+| `submit_network_run.sh` | One green-porpoise network from a supplier contract |
+| `postprocess_keyruns_20260924.sh` | Derived 2 % surface, contracts and legacy key table of the 28 September key runs |
+| `build_finance_overrides.py` | Per-cell interest-only override CSVs (uniform 5 %, Ameli by country) |
+| `write_campaign_manifest.py`, `write_campaign_submission.py` | Run manifest (source, inputs, resolved settings, hashes) and job ids |
+| `merge_and_qa_campaign.py` | Merge an explicit shard list and run the QA gates |
+| `release_source_inventory.py`, `verify_campaign_manifest_inputs.py`, `validate_land_campaign_input.py`, `arc_check_run_inputs.sh` | Inventory and input checks (centred land tables only) |
+| `build-green-lory-env.sh`, `load_green_lory_env.sh` | Build the green-lory environment; load it in an interactive session |
+| `jobs/` | Slurm templates: `00` land build, `01` surface shard, `03` network, `06` supply pilot, `07` legacy environment, `08` legacy surface, `09` legacy weather store |
 
 ## Notes
-- `arc/jobs/01_run_global.sh` writes outputs under `results/<run-label>/` by default.
+
+- All surfaces disable the grid backstop. Full-year runs require the versioned
+  `renewable_union_area_km2_classwise_nested_v1` column of the land table (a lower bound on the
+  physical wind/PV union).
+- `--smoke-hours` (default 168) sets the simulated duration of the smoke stage;
+  `ARC_CAMPAIGN_THREADS_PER_WORKER`, `ARC_CAMPAIGN_DIAGNOSTIC_WORKERS` and
+  `ARC_CAMPAIGN_GLOBAL_WORKERS` size the workers. An hourly 52,702-cell surface took about
+  3 hours on four 48-core jobs in September 2026.
+- Campaign-wide solver options go in `GREEN_LORY_SOLVER_OPTIONS_JSON`, exported in the shell,
+  never through `sbatch --export` (the commas break it). Surfaces retry suboptimal cells with
+  barrier plus crossover, then dual simplex.
+- The Gurobi licence path is set in the job templates; do not print the licence file.

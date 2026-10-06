@@ -1,83 +1,39 @@
-# Reconciliation package: legacy-lcoa versus green-lory, and the Verschuur network
+# reconciliation/: legacy-lcoa versus green-lory, and the shipping networks
 
-> **6 October 2026.** The reconciliation is complete. Once the open modelling choices
-> (`../MODEL_CHOICES.md`) are settled, this directory will be replaced by one notebook comparing
-> the legacy and green-lory results and explaining each difference, and `legacy_lcoa/` will move
-> to the repository root; the dated reports remain in git history. Runs and networks are defined
-> in `../runs.yaml` and recorded in `run_store.csv`. The reports name networks by letter
-> ("network D"): `../GLOSSARY.md` maps each letter to its run, or run
-> `python arc/run_definitions.py show D` from the repository root.
+The reconciliation of the old `lcoa-opt` plant model ("legacy-lcoa", Salmon 2023) with
+green-lory, and of the green-porpoise networks each produces, is complete. Start with
+[DECISION.md](DECISION.md): the answer, what changed in green-lory, the three focal cells and
+the networks. Once the open modelling choices (`../MODEL_CHOICES.md`) are settled, this
+directory will be replaced by one notebook comparing the legacy and green-lory results; git
+history keeps everything.
 
-This directory is the entry point for the reconciliation of the old `lcoa-opt`
-plant model ("legacy-lcoa", Salmon 2023) with the current PyPSA implementation
-("green-lory", `model/`), and of the green-porpoise shipping networks that each
-produces. The decision and the consolidated comparison are in
-[DECISION_20260916.md](DECISION_20260916.md).
+## Contents
 
-## Endpoints
-
-1. Paper-method reproduction: Verschuur et al. (2024) MOD-AMB, RCP4.5, 70 %
-   ammonia adoption, Way 2050 costs, no subsidies. The user confirmed this as the
-   primary endpoint on 7 September 2026. The archived RCP4.5/90 % project
-   network is replayed separately; it is not a published scenario.
-2. Revised estimate: a newly generated green-lory surface and green-porpoise
-   network, with controlled comparisons that explain the effects of plant
-   physics, land capacity, supplier selection and transport assumptions.
-
-A matching map alone is not a replication test. Delivered cost, production
-and demand, production by country and Australian subregion, supplier
-identities, route feasibility and solver gap are compared, with tolerances
-that account for the gap and alternative optima.
-
-## Package map
-
-| Where | What |
+| Path | Role |
 |---|---|
-| [`legacy_lcoa/`](legacy_lcoa/README.md) | The legacy-lcoa model end to end: frozen source at two commits, environment, weather store, run harness, the recovered land/capacity step, supplier-table builder, cross-check tool; provenance and replication reports |
-| `../model/` | The green-lory model (PyPSA/linopy): `main.py` single site, `run_global.py` global sweep, `land_capacity.py`/`land_union.py` land accounting, `result_accounting.py` reporting; inputs in `../inputs/`, compiled plant bundles in `../basic_ammonia_plant*/` |
-| [`land/`](land/README.md) | Land reconstruction: paper-method replication stack and the corrected ("revised") stack; finite-site supply-curve and fixed-PV experiments; native MODIS checks |
-| `run_historical_network.py`, `sparse_network.py`, `network_heuristic.py` | Green-porpoise network replay with pinned equations (archived project or public deposit), explicit supplier contracts and QA |
-| `export_lory_surface.py`, `prepare_network_surfaces.py` | Supplier contracts from QA-passed green-lory surfaces |
-| `check_completed_campaign.py`, `audit_land_and_physics.py` | Revalidation of downloaded surfaces and independent land/physics checks |
-| `compare_networks.py` | Quantitative comparison of network runs (cost, gap, countries, Australian subregions, supplier overlap, focal cells) |
-| `build_three_cell_comparison.py` | One table of every accepted result at the three focal cells with source hashes |
-| [`PLAN_GLOBAL_CAMPAIGN_20260916.md`](PLAN_GLOBAL_CAMPAIGN_20260916.md) | State of the green-lory model, recommended implementation, scenario matrix and steps for the global campaign |
-| [`LAND_SHARE_STATEMENT_20260916.md`](LAND_SHARE_STATEMENT_20260916.md) | Why a higher land share or lower admission cutoff is defensible, and how the paper's nominal 2 % produced its results |
-| [`RUNS.md`](RUNS.md) | Run register: every ARC job, its purpose and whether its QA passed |
-| [`HANDOVER_20260915.md`](HANDOVER_20260915.md), [`REPORT_20260914.md`](REPORT_20260914.md), [`FINDINGS.md`](FINDINGS.md) | Dated reports; earlier evidence is not silently revised |
-| `../arc/` | ARC job templates and wrappers (`submit_lory_sequence.sh` for green-lory surfaces, `submit_network_run.sh` for network runs, `jobs/08_legacy_global.sh` and `jobs/09_extract_weather_store.sh` for the legacy surface) |
+| [DECISION.md](DECISION.md) | Results and decision (6 October 2026) |
+| `run_store.csv` | Execution record of every run and network in `../runs.yaml`: jobs, release, status, output location, headline result |
+| `run_historical_network.py`, `sparse_network.py`, `network_heuristic.py` | Green-porpoise network replay with pinned equations (archived project code or the public deposit) and explicit supplier contracts; ARC job `../arc/jobs/03_replay_historical_network.sh`, wrapper `../arc/submit_network_run.sh` |
+| `fetch_published_code.py` | Fetches and hashes the public green-porpoise deposit used by the replay |
+| `export_lory_surface.py`, `derive_land_share_surface.py`, `country_reference_20260928_v1.csv` | Supplier contracts from QA-passed green-lory surfaces; post-hoc land-share variants; country spellings of the network model |
+| `compare_networks.py` | Network comparison: delivered cost, gap, production by country and Australian subregion, supplier overlap, focal cells |
+| `compare_land_builds.py` | Cell-by-cell comparison of a green-lory land table with the legacy land step |
+| `focal_cells.py` | Land, LCOA and capacity of every kept run at the three focal cells (DECISION.md section 3) |
+| `coast_inland.py` | Coast against inland Australia: LCOA by distance to the coast for each model step, network production by band, effect of the spatial water and remoteness inputs (DECISION.md section 5) |
+| `supply_pilot/` | Finite-site supply curves at the focal cells: the plant re-solved at fixed quantities with land enforced in the solve (ARC job `../arc/jobs/06_land_supply_pilot.sh`) |
+| `archive/2026-09/` | The September reports, run log (`RUNS.md`), id grammar and land experiments, unedited; they name networks by letter (`../GLOSSARY.md` maps the letters) |
+| `archive/pre-reconciliation/` | The development log of March to June 2026 |
 
-Generated evidence lives under `../results/campaigns/`, never here:
+The legacy model itself is in `../legacy_lcoa/`.
 
-| Campaign | Contents |
-|---|---|
-| `legacy_lcoa_20260915_v1/` | Legacy three-cell, 563-cell sample and global (ARC + Mac) runs; weather stores; `audit/` supplier tables, land areas and cross-checks |
-| `verschuur_reconcile_20260907_v1/` | Frozen historical inputs and public deposit; green-lory replication and central surfaces; supplier contracts; network runs and comparisons |
-| `land_reconcile_20260914_v1/` | Land pilots, finite-site supply grid, fixed-PV threshold, native MODIS and alternative-weather evidence |
-| `reconciliation_final_20260916_v1/` | The consolidated three-cell table and network comparison behind the decision |
+## Evidence
 
-## Three focal cells
+Generated evidence is under `../results/campaigns/`, never here; `run_store.csv` gives each
+run's directory. The consolidated tables behind DECISION.md are in
+`../results/campaigns/reconciliation_final_20260916_v1/` (`focal_cells_v3/`, `networks_v3/`).
 
-Atacama (−23, −69), northwest Australia (−23, 117) and central Australia
-(−21, 135): the cells whose changed capacity and cost inputs drove the
-divergence of the green-porpoise supplier distribution. Their consolidated
-evidence is `results/campaigns/reconciliation_final_20260916_v1/three_cells_v2/`.
+## Working rules
 
-## Preservation and naming
-
-Existing green-lory, green-porpoise and paper working files remain untouched
-unless a specific, tested change is needed. RCP-named supplier tables are not
-overwritten with technology-year data. Every run receives a new directory with
-a manifest and input hashes; nothing is promoted without a passed QA record.
-Original source data are read-only inputs. `glr` in ARC job names is the
-green-lory reconciliation prefix; the numeric Slurm ID is the execution identity.
-
-## Land builds (added 23 September 2026)
-
-- `compare_land_builds.py`: cell-by-cell comparison of a green-lory land table (100 %, rescaled to
-  the requested shares) with the legacy land step; writes `cell_comparison.csv`,
-  `country_comparison.csv`, `focal_cells.csv`, `summary.json` and `land_build_comparison_maps.png`
-  under `results/campaigns/reconciliation_final_20260916_v1/land_builds/<tag>/`.
-- `interim_center_20260923`: local centred table with approximate exclusions (see RUNS.md); superseded
-  by the ARC build `land_center_20260923_v1` once fetched.
-- `plot_land_capacity_maps.py` now renders exact 1-degree rasters (no marker artefacts).
+Every run gets a new output directory with a manifest and input hashes, and nothing is
+accepted without a passed QA record. Original source data are read-only inputs. Land fractions
+and constants are never tuned to reproduce a map: residuals are reported as they are.

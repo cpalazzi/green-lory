@@ -3,71 +3,54 @@
 Working checklist for review. Delete this file once the cleanup has landed. Verified against
 the files, ARC and the code on 5 Oct; ARC had no queued jobs; the test suite passed (184 tests).
 
-## Update, 6 October 2026 (replaces the target layout of §3)
+## Status, 6 October 2026
 
-**Done.** Networks are entries in `runs.yaml` (`networks`, with `report_name` for the
-September letters) and rows in `run_store.csv`, as are the reconciling surface and its
-legacy-rule supplier table; `python arc/run_definitions.py show D` resolves a letter.
-`GLOSSARY.md` covers runners, roles, network letters, every `runs.yaml` key, plant bundles
-and source terms. `README.md` rewritten as the entry point; `model/README.md` added (module
-map, spatial cost inputs moved there); `MODEL_CHOICES.md` lists the settled and open modelling
-choices. Record corrections of §0.5 applied in `run_store.csv` (legacy array release v2; the
-September central row's release, PV and jobs). RUN_STORE.md kept as the id grammar.
+Sections 0 to 6 below are the plan of 5 October, kept for reference. Done on 6 October:
 
-**Not done (needs your go-ahead).** The file moves and deletions below were blocked by the
-session's permission check:
+- Layout: `legacy_lcoa/` at the root (with the MODIS helpers as `land_core.py`, diagnostics in
+  `diagnostics/`, dated reports in `reports/`); plant bundles in `model/plants/`; the supply
+  pilot reduced to `reconciliation/supply_pilot/`; dated reports, the run log and the id grammar
+  in `reconciliation/archive/2026-09/`; the development log in `archive/pre-reconciliation/`.
+- Code: dead functions and the unused Pyomo import removed from `model/`; defaults are the
+  improved runs' YAML and bundle; the June 2023 era removed from the legacy harness; the
+  superseded land-reconstruction, native-MODIS and fixed-PV pilot code removed; a test stub
+  that broke the network-replay tests after the Pyomo import went is removed;
+  `arc/stage_release.sh` stages releases; `reconciliation/focal_cells.py` replaces
+  `build_three_cell_comparison.py`.
+- Records and documents: networks and the reconciling surface defined and recorded (`runs.yaml`,
+  `run_store.csv`); `reconciliation/DECISION.md` (results and decision); README, GLOSSARY (with
+  the id grammar), MODEL_CHOICES, and the ARC, data, legacy, scripts and supply-pilot READMEs
+  rewritten.
+- Evidence: the accepted ARC outputs (centred land tables, key surfaces, contracts, key network
+  supplier tables) copied to `results/campaigns/`; `focal_cells_v3/` and `networks_v3/` built;
+  9.05 GB of superseded local results and the untracked scratch moved to
+  `../green-lory-archive/20261006/` (manifest there; delete when no longer needed). The September hourly surface (`revalidated/central`) was moved back: `coast_inland.py` reads it.
+- Outside: `lcoa_validation` repointed to `model/plants/basic_ammonia_plant_2050_way`.
 
-- `reconciliation/legacy_lcoa/` to `legacy_lcoa/` at the root, with `reconciliation/land/core.py`
-  as `legacy_lcoa/land_core.py`. Paths to update: `.gitignore` (xlsx rule), `arc/jobs/08` and
-  `09`, `arc/postprocess_keyruns_20260924.sh`, `runs.yaml`, `tests/test_legacy_surface_tools.py`,
-  `run_legacy_cells.py` (`parents[2]` becomes `parents[1]`), `legacy_land_areas.py`, the six
-  `reconciliation/land/` modules and three tests that import the land core, the docs.
-- `basic_ammonia_plant*/` to `model/plants/`. Paths to update: the defaults in `model/main.py` and
-  `model/run_global.py`, `runs.yaml`, four tests, the run and stage scripts in
-  `reconciliation/land/` (the audit and certify scripts read old releases and need a fallback to
-  the old path), notebook 00, and outside this repository `lcoa_validation`
-  (`data/greenlory_way_bundle` symlink and `WAY_BUNDLE` in `harness/gl_driver.py`).
-- Delete `notebooks/02_single_site_run.ipynb` and `notebooks/03_global_run.ipynb` (duplicates of
-  `03_single_site_run` and `04_global_run`).
+Waiting for the user (blocked by the session's permission check):
 
-Old ARC releases keep their own layout and job scripts, so the moves change only new releases.
-
-**Target layout.**
-
-```
-model/          green-lory as an installable package (pyproject.toml, pip install -e .),
-                one plant bundle in model/plants/ once efficiencies come from the YAML
-legacy_lcoa/    self-contained legacy package: frozen source, harness, land step, capacity
-                rule, supplier table, environment, README with commands and expected values
-workflow/       Snakefile and rules; profiles for a laptop and for ARC
-runs.yaml       the workflow's configuration: what each run and network is
-notebooks/      readers only; each opens with the workflow targets it reads
-                legacy_vs_green_lory.ipynb replaces reconciliation/
-arc/            job templates, release staging and QA tools the workflow calls
-data/ inputs/ tests/
-results/surfaces/<run id>/, results/networks/<network id>/   stable index for the papers (§4.6)
-```
-
-**Workflow (Snakemake).** Rules: land table, finance overrides, surface shard, surface (merge and
-QA), derived surface, supplier contract, network, comparison. Targets are named by run id, so
-"run X" is `snakemake results/surfaces/X/surface.csv`. To keep the rules of this project:
-outputs carry a version in the path and are `protected()`; reruns are triggered by input changes
-only (`--rerun-triggers mtime`), never by a code edit alone; global surfaces need an explicit
-`--config allow_global=true` after a dry run (`-n`). On ARC the SLURM executor plugin with an
-`arc` profile; check first that `--clusters=all` works with its job-status polling (otherwise
-pin one cluster per rule), and run the controller in `tmux` on a login node or as a small job on
-`long`. Legacy rules use the legacy environment.
-
-**Comparison notebook (replaces `reconciliation/`).** (1) Legacy reproduced: replicated network
-against the archived control (E against A2). (2) Same assumptions, same answer: green-lory
-configured like the legacy plant, with the legacy capacity rule, against the legacy networks
-(D against E and A2): the capacity rule, not the plant cost, separates the September networks.
-(3) What the improved model changes, one step at a time, with the evidence for each: land
-geometry (centred cells, exclusions, PV density, co-location) and plant physics (hourly
-dispatch, explicit compressor and DEA tank without double counting), using the three-cell
-decomposition of §6. (4) What is a data choice rather than a correction, stated as such: DEA
-against Way costs (+36 to +40 % at the focal cells), finance, land share. (5) Limits: weather,
-the capacity lower bound.
+1. Delete the superseded tracked files (all recoverable from git):
+   `legacy_lcoa/source/cd56c11/`, `model/plants/basic_ammonia_plant/`, `legacy_lcoa/debug_one.py`,
+   `model/plot_monthly_results.py`, `scripts/merge_global_results.py`, `filtered_dea.csv`;
+   in `reconciliation/`: `audit_land_and_physics.py`, `check_completed_campaign.py`,
+   `prepare_network_surfaces.py`, `land_share_sensitivity.py`, `plot_supplier_comparison.py`,
+   `compare_network_runs.py`, `build_three_cell_comparison.py`, `plot_land_capacity_maps.py`;
+   in `arc/`: `arc_initial_setup.sh`, `jobs/02_notification_test.sh`,
+   `jobs/04_land_reconstruction_pilot.sh`, `jobs/05_fixed_pv_land_pilot.sh`,
+   `resubmit_land_constraints_job.sh`, `stage_and_submit_land_constraints.sh`,
+   `submit_land_constraints_matrix.sh`, `submit_global_run.sh`, `submit_constrained_reruns.sh`;
+   notebooks `01_max_capacities`, `02_single_site_run`, `03_global_run`, `03_single_site_run`,
+   `04_global_run`, `05_run_analysis`; in `inputs/`: `tech_config_ammonia_plant_2050_way_usd.yaml`,
+   `amelired_wacc_country_map_2050.csv`, `amelired_wacc_tiam_regions_2050.csv`; the tests of
+   removed code: `test_compare_pv_pilot`, `test_model_evidence`, `test_supply_certificate`,
+   `test_supply_energy_bound`, `test_native_download_plan`, `test_native_modis`,
+   `test_native_pilot`.
+2. On ARC: stage a release from the committed tree (`arc/stage_release.sh`), run a smoke stage
+   of the improved base run and a three-cell legacy run from it, and compare with the accepted
+   values; then move the superseded releases and campaigns of section 4.5 into an archive
+   folder on ARC.
+3. green-dolphin-paper still reads five May surfaces under `results/` (section 4.6); they stay
+   until the paper is repointed to the accepted surfaces.
 
 ## 0. Corrections to the record (verified 5 Oct)
 

@@ -13,8 +13,10 @@
 | `data_store.py`, `constants.py`, `data_paths.py` | Result container, physical constants, default data paths |
 | `plot_global_heatmap.py` | LCOA maps, used by the notebooks (`plot_monthly_results.py` is unused) |
 
-Plant bundles (`basic_ammonia_plant*/`, at the repository root for now) and the options and
-result columns are described in `../GLOSSARY.md`; the open modelling choices in
+`plants/` holds the plant bundles (PyPSA component tables). Without explicit arguments,
+`main.py` and `run_global.py` use the improved runs' bundle, `plants/basic_ammonia_plant_2050`,
+and technology YAML, `inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml`. The bundles,
+options and result columns are described in `../GLOSSARY.md`; the open modelling choices in
 `../MODEL_CHOICES.md`.
 
 ## Spatial cost inputs

@@ -12,8 +12,8 @@ runs, roles, network names, plant bundles and terms added 6 October 2026.
 | What is run X, or "network D"? | `runs.yaml`; `python arc/run_definitions.py show X` (accepts an id or a report name such as `D`) |
 | Which runs exist? | `python arc/run_definitions.py list` |
 | How do the green-lory runs differ? | `python arc/run_definitions.py table` |
-| When and where did X run, and what did it give? | `reconciliation/run_store.csv` (one row per run id: jobs, release, status, output directory, headline results) |
-| What does a token in an id mean? | [Run identifiers](#run-identifiers) below; the full grammar is in `reconciliation/RUN_STORE.md` |
+| When and where did X run, and what did it give? | `reconciliation/run_store.csv` (one row per run id: jobs, release, status, output directory, headline results); [Run store](#run-store) below |
+| What does a token in an id mean? | [Run identifiers](#run-identifiers) below |
 
 ## Kinds of run (`runner` in `runs.yaml`)
 
@@ -21,8 +21,8 @@ runs, roles, network names, plant bundles and terms added 6 October 2026.
 |---|---|---|
 | `green_lory` | A global surface: the green-lory plant optimised at every cell, with LCOA, design and capacity per cell | `arc/submit_lory_sequence.sh --scenario <run id>` (smoke, diagnostic, global stages), which calls `model/run_global.py` |
 | `derived` | No new solve: the parent run's LCOA and designs with another land share or capacity rule (`derived_from` names the parent) | post-processing script named in the entry |
-| `legacy_lcoa` | The frozen lcoa-opt plant model (Salmon 2023) at the archived supplier cells | `reconciliation/legacy_lcoa/run_legacy_cells.py` through `arc/jobs/08_legacy_global.sh` |
-| `supply_pilot` | Finite-site supply curves at the three focal cells: the plant re-solved at increasing ammonia quantities with land enforced inside the solve, giving cost against quantity | `reconciliation/land/run_supply_pilot.py` through `arc/jobs/06_land_supply_pilot.sh` |
+| `legacy_lcoa` | The frozen lcoa-opt plant model (Salmon 2023) at the archived supplier cells | `legacy_lcoa/run_legacy_cells.py` through `arc/jobs/08_legacy_global.sh` |
+| `supply_pilot` | Finite-site supply curves at the three focal cells: the plant re-solved at increasing ammonia quantities with land enforced inside the solve, giving cost against quantity | `reconciliation/supply_pilot/run_supply_pilot.py` through `arc/jobs/06_land_supply_pilot.sh` |
 | network | A green-porpoise shipping network built on one supplier table (the `networks` section) | `arc/submit_network_run.sh` |
 
 ## Roles
@@ -38,7 +38,7 @@ runs, roles, network names, plant bundles and terms added 6 October 2026.
 
 ## Network names in the September reports
 
-The September reports (`reconciliation/DECISION_20260916.md` section 4, `RUNS.md`,
+The September reports (`reconciliation/archive/2026-09/`: `DECISION_20260916.md` section 4, `RUNS.md`,
 `HANDOVER_20260915.md`) name network runs by letter. All used the deposited equations, the
 MOD-AMB RCP4.5 70 % demand, a 1 Mt/yr supplier cutoff and a one-hour solver limit unless stated.
 Results are in USD2018 per tonne delivered.
@@ -54,7 +54,7 @@ Results are in USD2018 per tonne delivered.
 | D | `gpo_rep_way2050_flat_amelired_4h_tracking_nominal_h2_legacyrule_iso1000_1mt` | reconciling surface's costs and designs with the **legacy capacity rule**: shows that the capacity rule, not the plant cost, moves the network | 261.23, 238.5 | 8820849 |
 | E | `gpo_ll_xcost45_ameli_bflat_wnone_landarch_track_4h_iso1000_1mt` | the **legacy replication** surface: the published network reproduced from the replicated legacy model | 268.16, 250.4 | 8823893 (11-hour form 8823894) |
 | F | not kept | legacy costs and designs with the stated land method on the September table | 270.68, 209.8 | 13160450 |
-| land share x2, x4 | not kept | surfaces of B and C at 4 % and 8 % of suitable land | see DECISION section 4 | 8824427-8824430 |
+| land share x2, x4 | not kept | surfaces of B and C at 4 % and 8 % of suitable land | see the archived DECISION_20260916.md section 4 | 8824427-8824430 |
 
 The four networks of 28 September (key runs) have no letter; their ids are
 `gpo_<supplier run id>_iso1000_1mt`.
@@ -105,10 +105,13 @@ The four networks of 28 September (key runs) have no letter; their ids are
 
 ## Run identifiers
 
-`<model>_<costs>_<finance>_<build>_<water>_<land>_<pv>[_<step>][_<qualifier>]`; the full
-grammar and the run-store statuses are in `reconciliation/RUN_STORE.md`. Numeric values (the
-water price, the WACC of the Ameli map) belong in `reconciliation/run_store.csv` and in the run
-manifest, not in the id.
+`<model>_<costs>_<finance>_<build>_<water>_<land>_<pv>[_<step>][_<qualifier>]` for plant runs,
+for example `gl_dea2050_wacc5_bflat_wflat_land20c_fixed`, and
+`gpo_<supplier run id>_<routes>_<cutoff>` for networks. A derived run (another land share, a
+water price change) reuses its parent's LCOA and gets its own id. Extra qualifiers go after the
+pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run store's
+`notes`. Numeric values (the water price, the WACC of the Ameli map) belong in
+`reconciliation/run_store.csv` and in the run manifest, not in the id.
 
 | Token | Meaning |
 |---|---|
@@ -126,20 +129,28 @@ manifest, not in the id.
 | `pilot3cells` | supply pilot at the three focal cells |
 | `iso1000`, `1mt` | networks: routes within the same country or 1,000 km; 1 Mt/yr supplier cutoff |
 
+## Run store
+
+`reconciliation/run_store.csv` has one row per run id: `run_id, model, cost_basis, finance,
+build, water, land, land_table, pv, time_step_h, allocation, cells, weather, release, location,
+job_ids, status, submitted_utc, upstream_run, network_runs, notes`. Statuses: `planned`,
+`submitted`, `running`, `merged`, `qa_passed`, `exported`, `done`, `superseded`, `failed`,
+`deferred`. A run defined in `runs.yaml` gets its row (status `planned`) before it is submitted;
+a test checks that every definition has one.
+
 ## Plant bundles
 
 A plant bundle is a directory of PyPSA component tables (`buses`, `generators`, `links`,
-`stores`, `loads`, `network`). All four bundles have the same components and the same
-placeholder costs: `model/run_global.py` replaces the costs with those of the technology YAML
-at run time. They differ in the conversion efficiencies, which are read from the bundle
-(notebook `00_tech_config` copies them from a YAML), in the load, and in whether tracking PV
-may be built.
+`stores`, `loads`, `network`) in `model/plants/`. The bundles have the same components and the
+same placeholder costs: `model/run_global.py` replaces the costs with those of the technology
+YAML at run time. They differ in the conversion efficiencies, which are read from the bundle
+(notebook `00_tech_config` copies them from a YAML), in the load, and in whether tracking PV may
+be built.
 
 | Directory | Ammonia load | Electrolysis / battery charge, discharge / fuel cell efficiency | Tracking PV | Used by |
 |---|---|---|---|---|
-| `basic_ammonia_plant` | 10 Mt/yr | 0.74 / 0.954, 0.954 / 0.5 | off | default of `model/main.py` and `model/run_global.py` when no plant directory is given |
-| `basic_ammonia_plant_2050` | 1 Mt/yr | 0.84 / 0.96, 0.96 / 0.5 (DEA 2050) | off | improved key runs |
-| `basic_ammonia_plant_2050_way` | 1 Mt/yr | 0.8865 / 0.98, 0.99 / 0.54 (Way 2050) | off | fixed-PV pilot; `lcoa_validation` links to it |
+| `basic_ammonia_plant_2050` | 1 Mt/yr | 0.84 / 0.96, 0.96 / 0.5 (DEA 2050) | off | improved key runs; default of `model/main.py` and `model/run_global.py` |
+| `basic_ammonia_plant_2050_way` | 1 Mt/yr | 0.8865 / 0.98, 0.99 / 0.54 (Way 2050) | off | `lcoa_validation` (outside this repository) |
 | `basic_ammonia_plant_2050_way_tracking` | 1 Mt/yr | as `_way` | on | reconciling run, supply pilots |
 
 ## Sources and terms
@@ -199,4 +210,4 @@ may be built.
 - Campaign runs: `green-lory-campaigns/<campaign>/<class>/<scenario>/runs/<run-id>/<stage>/` with `manifest.json`, `shards/`, `merged/`, `qa/`.
 - Network runs: `green-lory-campaigns/verschuur_reconcile_20260907_v1/networks/` on ARC; local copies under `results/campaigns/verschuur_reconcile_20260907_v1/arc_received_*/` (paths per run in `run_store.csv`).
 - Supplier contracts for green-porpoise: `contract.json` plus `suppliers_USD2018.csv` (USD2018 because the network model keeps the deposited currency).
-- Legacy replication package: `reconciliation/legacy_lcoa/` (frozen lcoa-opt source, harness, land step, supplier-table builder).
+- Legacy replication package: `legacy_lcoa/` (frozen lcoa-opt source, harness, land step, supplier-table builder).

@@ -69,9 +69,9 @@ re-optimizations as well as frozen-central-design packing sensitivities.
 - `audit/superseded/`: retained development attempts; not accepted results.
 
 Run IDs, statuses, resource requests and notification settings are recorded in
-[the run log](../../../reconciliation/land/RUNS.md). Scientific interpretation
+[the run log](../../../reconciliation/archive/2026-09/land/RUNS.md). Scientific interpretation
 and the remaining validation gates are in
-[the land report](../../../reconciliation/land/FINDINGS_20260914.md).
+[the land report](../../../reconciliation/archive/2026-09/land/FINDINGS_20260914.md).
 The [completed fixed-PV report](../../../reconciliation/land/FIXED_PV_20260914.md)
 sets out the three-site results and their implications.
 The [dataset guide](../../../reconciliation/land/DATASETS_20260915.md) separates
@@ -91,7 +91,7 @@ clock; a later date typed in a connection message does not relabel these runs.
 
 ## 15 September model-evidence handover and completed fixed threshold
 
-The [handover](../../../reconciliation/HANDOVER_20260915.md) is the current
+The [handover](../../../reconciliation/archive/2026-09/HANDOVER_20260915.md) is the current
 investigation entry point. It distinguishes green-lory from legacy-lcoa and
 the frozen shipping input, locates both 2019 weather stacks, and explains
 reference-design scaling versus finite-site production.
