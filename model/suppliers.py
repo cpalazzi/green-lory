@@ -18,8 +18,8 @@
         --country-reference inputs/country_reference_20260928_v1.csv --minimum-capacity 1 --drop-unassigned \
         --output <new dir>
 
-The network itself runs in the green-porpoise repository (``replay/``; linked here, untracked,
-as ``green-porpoise/``), which reads ``contract.json`` and ``suppliers_USD2018.csv``.
+The network itself runs in the green-porpoise repository (``legacy_gpo/``; linked here,
+untracked, as ``legacy_gpo/``), which reads ``contract.json`` and ``suppliers_USD2018.csv``.
 """
 from __future__ import annotations
 

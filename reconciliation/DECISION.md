@@ -93,7 +93,7 @@ Reading:
 
 Deposited equations, MOD-AMB RCP4.5 70 % demand (594.5 Mt/yr), 1 Mt/yr cutoff, one-hour solver
 limit (gaps 0.48-0.89 %, accepted at the deposit's 1.5 %). Australia split by longitude: west
-< 129° E, centre 129-141° E, east > 141° E. Built by `replay/compare.py` of green-porpoise
+< 129° E, centre 129-141° E, east > 141° E. Built by `legacy_gpo/compare.py` of green-porpoise
 (`results/campaigns/reconciliation_final_20260916_v1/networks_v3/`).
 
 | Network (September name) | USD/t | Australia: total (west / centre / east), Mt/yr | Chile | Other leading producers |
@@ -179,7 +179,7 @@ and which further surfaces the papers need.
 |---|---|
 | Focal-cell table | `results/campaigns/reconciliation_final_20260916_v1/focal_cells_v3/` (`python reconciliation/focal_cells.py --output <new dir>`) |
 | Coast against inland Australia | `results/campaigns/reconciliation_final_20260916_v1/coast_inland_v1/` (`python reconciliation/coast_inland.py --output <new dir>`) |
-| Network comparison | `results/campaigns/reconciliation_final_20260916_v1/networks_v3/` (in green-porpoise: `python -m replay.compare --run <label>=<dir> ... --reference <label> --output <new dir>`) |
+| Network comparison | `results/campaigns/reconciliation_final_20260916_v1/networks_v3/` (`python -m legacy_gpo.compare --run <label>=<dir> ... --reference <label> --output <new dir>`) |
 | Every run's output | `location` column of `run_store.csv` |
 | Legacy package and its replication reports | `../legacy_lcoa/README.md`, `../legacy_lcoa/reports/` |
 | September evidence (reports, run log, land experiments) | `archive/2026-09/` |

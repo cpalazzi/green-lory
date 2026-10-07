@@ -21,7 +21,7 @@ history keeps everything.
 
 The legacy model itself is in `../legacy_lcoa/`; supplier tables for the network model are
 written by `../model/suppliers.py`; the network replay and comparison are in the green-porpoise
-repository (`replay/`, linked as `../green-porpoise/`); the execution record is `../run_store.csv`.
+repository (`legacy_gpo/`, linked as `../legacy_gpo/`); the execution record is `../run_store.csv`.
 
 ## Evidence
 

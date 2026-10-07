@@ -194,7 +194,7 @@ names are links, so staged releases resolve the same files.
     `land`, `land_table`, `surface`, `runs`, `results`, `suppliers`, `cli`, and one plant bundle,
     `model/plants/ammonia_plant_1mt/`;
   - the network code (replay and comparison) moved to the green-porpoise repository on
-    7 October (`replay/`, commit 0d71f8d there), linked here untracked as `green-porpoise/`;
+    7 October, as `legacy_gpo/` (commits 0d71f8d and bc36b19 there), linked here untracked;
     the supplier export stays here as `model/suppliers.py`;
   - `arc/`, 3 modules: `release`, `manifest`, `qa`, plus the wrappers and `jobs/`;
   - 15 test files, one per module.
@@ -327,7 +327,7 @@ All runs:
 
 - **Order:** new land build (about 4-8 h on ARC) → C1 → C2 → S1 → S2, each after your go-ahead →
   supplier contracts → networks at the 1 % tolerance, run from a green-porpoise release
-  (`replay/arc/` there).
+  (`legacy_gpo/arc/`).
 - **Compute:** about 1 h on four 48-core jobs per hourly surface of about 17,000 cells (less at
   4 h), and 1-2 h per network.
 - Every run is defined in `runs.yaml` with a run-store row before submission.

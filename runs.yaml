@@ -219,7 +219,7 @@ runs:
 # (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and
 # finds the cheapest way to supply the 2050 ammonia bunker demand from it. Every network uses
 # `network_defaults` unless its entry says otherwise. The network code is in the green-porpoise
-# repository (replay/, linked here as green-porpoise/): submitted with replay/arc/submit_network_run.sh
+# repository (legacy_gpo/, linked here): submitted with legacy_gpo/arc/submit_network_run.sh
 # there. The networks below ran from green-lory releases 20260914-v3 and 20260916-network-tools-v1.
 # `report_name` is the letter the September 2026 reports used (reconciliation/DECISION.md section 4);
 # GLOSSARY.md lists every letter, including the runs that were not kept.

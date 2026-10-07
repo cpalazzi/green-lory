@@ -50,10 +50,10 @@ the verification job of `stage_release.sh`, the merge/QA jobs).
    `postprocess_keyruns_20260924.sh` is the sequence used for the key runs. It is a Slurm job
    (2 CPUs, 16 GB, 4 h): submit it with `KEYRUN_RELEASE=<release> KEYRUN_ID=<run id> sbatch
    arc/postprocess_keyruns_20260924.sh`, never run it on a login node.
-5. **Networks** run from the green-porpoise repository (linked as `../green-porpoise/`):
-   stage a release of its `replay/` (`replay/arc/stage_release.sh`), then
-   `replay/arc/submit_network_run.sh --release <id> --name <run> --contract <contract.json>`
-   (4 CPUs, 64 GB, 2 h, one-hour solver limit by default; see `replay/README.md` there).
+5. **Networks** run from the green-porpoise repository (`legacy_gpo/`, linked as
+   `../legacy_gpo/`): stage a release (`legacy_gpo/arc/stage_release.sh`, run in green-porpoise),
+   then `legacy_gpo/arc/submit_network_run.sh --release <id> --name <run> --contract <contract.json>`
+   (4 CPUs, 64 GB, 2 h, one-hour solver limit by default; see `legacy_gpo/README.md`).
    Networks before 7 October 2026 ran from green-lory releases (`20260914-v3`,
    `20260916-network-tools-v1`), which still hold that code.
 6. **Legacy model**: `jobs/07_build_legacy_env.sh` (environment, once),

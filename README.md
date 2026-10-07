@@ -36,7 +36,7 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 | `runs.yaml` | run definitions: every setting of every run and network we keep |
 | `run_store.csv` | the execution record: when, where and with what result each run ran |
 | `legacy_lcoa/` | the legacy-lcoa model reproduced end to end: frozen source, harness, land step, capacity rule, supplier table |
-| `green-porpoise/` | link to the green-porpoise repository (not tracked here): the shipping-network model, whose `replay/` runs the published network on green-lory's supplier tables |
+| `legacy_gpo/` | link to `legacy_gpo/` of the green-porpoise repository (not tracked here): the published shipping network of Verschuur et al. (2024), which runs on green-lory's supplier tables (`python -m legacy_gpo.run`) |
 | `reconciliation/` | decision, comparison scripts, supply pilot, and the September reports in `archive/` |
 | `arc/` | ARC release staging, campaign wrappers, Slurm templates, QA tools |
 | `notebooks/` | `02_spatial_cost_inputs` (inputs of the spatial runs; replaced by `model/site_costs.py` in campaign step 3) |

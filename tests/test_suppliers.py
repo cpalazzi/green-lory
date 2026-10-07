@@ -102,3 +102,26 @@ class LandShareTest(unittest.TestCase):
             pd.DataFrame({"latitude": [0.0], "longitude": [0.0], "land_constraint": ["in_solve"], CAPACITY: [1e6]}).to_csv(surface, index=False)
             with self.assertRaises(ValueError):
                 derive_land_share(surface, 0.1, 0.20, Path(directory) / "out")
+
+
+class LegacyNetworkInterfaceTest(unittest.TestCase):
+    """The table green-lory exports is one the published network accepts (needs the legacy_gpo link)."""
+
+    def test_export_passes_the_network_supplier_checks(self):
+        try:
+            from legacy_gpo.run import select_suppliers
+        except ImportError:
+            self.skipTest("legacy_gpo (green-porpoise) is not linked")
+        rows = []
+        for lat, lon, lcoa, capacity in [(-23, -69, 420.0, 3.5e6), (-23, 117, 450.0, 2.0e6), (-21, 135, 400.0, 0.5e6)]:
+            rows.append({"latitude": lat, "longitude": lon, "country": "Chile" if lon < 0 else "Australia",
+                         "lcoa_eur_per_t": lcoa, CAPACITY: capacity, "annual_ammonia_production_t": 1e6,
+                         "currency": "EUR", "grid_energy_mwh": 0, "is_gridless_feasible": True,
+                         "is_full_year_result": True, "preferred_supplier_capacity_column": CAPACITY,
+                         **dict.fromkeys(ELECTRICITY_COSTS, 10.)})
+        reference = pd.DataFrame({"country": ["Chile", "Australia"], "iso3": ["CHL", "AUS"]})
+        table = convert(pd.DataFrame(rows), reference, minimum_capacity=1)
+        selected, effective, duplicates = select_suppliers(table, count=4000, minimum=1.0)
+        # the 0.5 Mt/yr cell is below the 1 Mt/yr cutoff; the others in order of cost
+        self.assertEqual(list(effective.Index), ["-23_-69_1000000.0", "-23_117_1000000.0"])
+        self.assertTrue(duplicates.empty)

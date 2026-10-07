@@ -85,7 +85,7 @@ fi
 if [[ "$SUBMIT_NETWORKS" == "1" ]]; then
   echo "== 4. green-porpoise runs"
   # $NT is the release 20260916-network-tools-v1, which holds the network wrapper of that time;
-  # since 7 Oct 2026 the network code is in the green-porpoise repository (replay/arc/).
+  # since 7 Oct 2026 the network code is in the green-porpoise repository (legacy_gpo/arc/).
   cd $NT
   RUNS=()
   for name in gl_dea2050_wacc5_bflat_wflat_land20c_fixed gl_dea2050_ameli_bflat_wflat_land20c_fixed gl_dea2050_wacc5_bflat_wflat_land2c_fixed; do
