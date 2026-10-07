@@ -129,3 +129,34 @@ class RunDefinitionsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- the green-lory command (model/cli.py) -------------------------------------------------------
+
+def test_cli_lists_shows_and_locates_runs(capsys):
+    from model import cli
+
+    assert cli.main(["list"]) == 0
+    listed = capsys.readouterr().out
+    assert "gl_dea2050_wacc5_bflat_wflat_land20c_fixed\tgreen_lory" in listed
+    assert "gpo_archived_iso1000_1mt\tnetwork" in listed
+
+    assert cli.main(["show", "A2"]) == 0  # a report name finds its network
+    assert capsys.readouterr().out.startswith("gpo_archived_iso1000_1mt:")
+
+    assert cli.main(["status", "gl_dea2050_wacc5_bflat_wflat_land20c_fixed"]) == 0
+    assert "\tdone\t" in capsys.readouterr().out
+
+    assert cli.main(["path", "gl_dea2050_wacc5_bflat_wflat_land20c_fixed"]) == 0
+    assert capsys.readouterr().out.strip().endswith("/runs/20260928-v4/global")
+
+    assert cli.main(["shell", "gl_dea2050_wacc5_bflat_wflat_land20c_fixed"]) == 0
+    assert "PV_POLICY=fixed" in capsys.readouterr().out.splitlines()
+
+
+def test_cli_reports_unknown_ids(capsys):
+    from model import cli
+
+    assert cli.main(["show", "no_such_run"]) == 2
+    assert "ERROR" in capsys.readouterr().err
+    assert cli.main(["run", "gpo_archived_iso1000_1mt", "--cell=-23,117"]) == 2  # not a green_lory run
