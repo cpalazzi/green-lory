@@ -48,6 +48,8 @@ references/
 !/results/README.md
 !/results/**/
 !/results/**/README.md
+# copies of the green-porpoise archive (legacy_gpo extract-archive) keep their own README
+/results/**/git-0a63616/**
 
 # Only the documented helper scripts are part of the supported interface.
 # Local diagnostics and Copilot scratch helpers under scripts/ stay ignored.
