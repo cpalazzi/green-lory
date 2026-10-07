@@ -20,7 +20,7 @@ changing the choice needs only post-processing of the existing key surfaces or a
 | Land table | centred 1-degree cells; MODIS MCD12C1 2022 with the Table-2 factors; WDPA and > 15 degree slope exclusions | 16 and 23 Sep | `land_center_20260923_v1` on ARC |
 | Land share | 20 % of suitable land as the base, 2 % as the sensitivity | 16 Sep | `land_share`, `land_table` |
 | Land and capacity | land applied after the solve; capacity = the 1 Mt/yr reference design scaled until it fills the land, stated as a conservative lower bound, with the three-cell finite-site curves quoted as its bias (at 2 %: Atacama 3.4 against 4.0 Mt/yr feasible, northwest Australia 1.17 against 1.75, central Australia 0.38 against 2.0; approximate, the two use different cost sets) | 5 Oct | `land_constraint`, `capacity_rule` |
-| Water | flat 2 EUR2020/m³ (1.5 m³/t) in the headline LCOA | 23 Sep | tech YAML, `site_costs_in_headline` |
+| Water | flat 2 EUR2020/m³ (1.5 m³/t) in the headline LCOA. Spatial runs: desalination at the nearest source plus a pipeline (official water-pipeline cost, to be set in step 3); sources are the sea and permanent lakes and reservoirs (Global Lakes and Wetlands Database v2, classes 01-03 and 06), not ephemeral lakes or salt pans; the same 2 USD/m³ at sea and lake, a shadow price that protects freshwater for other uses (**state in the paper**); no pumping for the elevation gain | 23 Sep, 7 Oct | tech YAML, `site_costs_in_headline`; `CAMPAIGN_PLAN.md` section 0b |
 | Build cost, land rent | flat build cost (multiplier 1), no land rent | 23 Sep | `cost_scope` |
 | Cells | onshore cells with suitable land (16,509) | 23 Sep | `--global-locations` |
 | Grid | no grid backstop | Sep | wrapper |

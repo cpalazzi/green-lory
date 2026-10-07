@@ -1,8 +1,9 @@
 # Plan: rationalised green-lory and the 2026 campaign
 
-Plan of 6 October 2026, decisions completed on 7 October. Status: steps 1 and 2 done
-(7 October); step 2 is at its **Review** gate. Steps run in order; each ends with a check, and the gates marked **Review**
-wait for you.
+Plan of 6 October 2026, decisions completed on 7 October. Status (7 October, evening): steps 1
+and 2 done and checked on ARC; water decided (section 0b); step 3 waits on the open decisions
+listed under "Decisions and access". Steps run in order; each ends with a check, and the gates
+marked **Review** wait for you.
 
 Working rule (7 October): clean up as we go. Each step deletes what it supersedes, listed under
 **Removes**, once its check has passed; git history keeps the code. Inputs that a run definition
@@ -170,7 +171,8 @@ source to the cell, added to the LCOA after the solve at 1.5 m³ per tonne of am
   heat-transmission line, scaled through an equivalent thermal capacity of the water flow,
   2.8 USD/m³ per 100 km at a remoteness factor of 1). Candidates, to be proposed with values at
   the step-3 review:
-  - the Texas Water Development Board's Unified Costing Model (2018): planning-level unit costs
+  - the Texas Water Development Board's Uniform Costing Model, version 2.0 (HDR and Freese and
+    Nichols, November 2018): planning-level unit costs
     of transmission pipelines by diameter, ground type and urbanisation, with pump stations,
     30 % engineering and contingency and O&M of 1 % (pipes) and 2.5 % (pumps) a year; sized
     for the plant's own flow;
@@ -184,14 +186,16 @@ source to the cell, added to the LCOA after the solve at 1.5 m³ per tonne of am
 - **Sources**: the sea and permanent lakes and reservoirs. Ephemeral and salt-pan lakes are not
   sources. With the present rule (any cell at least 10 % water in the 2022 land cover),
   Kati Thanda–Lake Eyre, a salt lake dry in most years, is the nearest source for 87 of
-  Australia's 696 land cells, all in the centre, up to 420 km closer than the sea. Proposed
-  test of permanence: the Global Lakes and Wetlands Database v2 classes (freshwater and saline
-  lakes and reservoirs count; salt pans and intermittent water do not), or, if that is
-  impractical, the water class in most years of the MODIS record; failing both, a named list of
-  ephemeral salt lakes.
+  Australia's 696 land cells, all in the centre, up to 420 km closer than the sea. **Decided 7
+  October**: the Global Lakes and Wetlands Database v2 (Lehner et al. 2025; 15 arc-seconds;
+  CC BY 4.0) decides which lakes count: classes 01 freshwater lake, 02 saline lake,
+  03 reservoir and 06 other permanent waterbody are sources; 20-21 ephemeral and 32 salt pan are
+  not. To check in step 3: which class the database gives Kati Thanda–Lake Eyre (if saline
+  lake, permanence needs a further test).
 - **Same source price for sea and lake**, 2 USD/m³ (coastal desalination). Lake water could be
   treated more cheaply, but charging the desalination price is a deliberate shadow price that
-  protects freshwater for other uses; the paper says so.
+  protects freshwater for other uses. Stated in the code (the tech YAMLs and, from step 3,
+  `model/site_costs.py`) and in the paper.
 - **Geometry**: distances between 1° cell centres, and a cell that holds a source pays no
   pipeline, though a plant in it may sit 50 km from the water; a stated limitation of the 1°
   model.
@@ -325,8 +329,8 @@ the legacy harness at its focal cells. **Review** of the new layout before step 
   - the GeoNames gazetteer for Australia, to locate the 75 sites.
 - The land build computes the land area in each slope class per cell from GEBCO, as it now
   computes the > 15° share. The slope ban goes; the class factors of D2 replace it.
-- Water follows D4 and section 0b. I propose the pipeline values with references, and the
-  permanence test for lakes, for you to approve.
+- Water follows D4 and section 0b. I propose the pipeline values with references for you to
+  approve; `model/site_costs.py` carries the shadow-price comment of the source price.
 - Write the "cost mechanisms" table in the model documentation: mechanism, module and function,
   input, reference.
 - **Check:** unit tests per factor; maps of each factor for Australia and Chile. **Review.**
@@ -388,8 +392,25 @@ All runs:
 
 ## Decisions and access
 
-- **D2, D3 and D7** were decided on 7 October (table above). D1, D4 to D6, D8 and D9 stand as
-  recommended, following your approval of the campaign on 6 October.
+- **D2, D3, D4 and D7** were decided on 7 October (table above, sections 0a and 0b). D1, D5,
+  D6 and D8 stand as recommended, following your approval of the campaign on 6 October; D9 is
+  the step-4 literature check.
+- **Open, for you** (7 October):
+  1. sign-off of the step-2 layout (the **Review** gate);
+  2. the slope classes: no uplift below 8.5°, 1.3 for 8.5–14°, 1.6 for 14–20°, land above 20°
+     excluded, flattest land first (needed for the new land build, the first step-3 job);
+  3. S2 interest rates: each cell's country as the surface assigns it (largest overlap), sea
+     cells from the nearest land cell (`python -m model.finance ameli`);
+  4. network equations for the campaign: corrected (`legacy_gpo --corrected`, recommended;
+     the archived-table control A2c gives 261.64 USD/t against A2's 260.94, Australia
+     unchanged, ships calling at 1,190 ports against 808) or as deposited;
+  5. supplier-site storage in the corrected networks: drop it (recommended; the plant LCOA
+     already holds its ammonia tank; about 1 USD/t, no change to the network);
+  6. Zotero: Lehner et al. (2025), the lakes database.
+- **Open, for me** (step 3): the remoteness fit to Aurecon's 75 sites (Nelson rasters, GeoNames,
+  Aurecon Table 11-1) and the water-pipeline values (Uniform Costing Model unit costs), each for
+  your review; the lakes database and the class of Kati Thanda–Lake Eyre; `model/site_costs.py`;
+  the land build with slope classes; maps of each factor for Australia and Chile.
 - **ARC access:** the socket was open on 7 October and step 1's move on ARC went through.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release
   `20261007-shakedown-v1`: release verification job 13396884, prepare jobs 13396930 (dry run) and
@@ -432,5 +453,14 @@ noted below.
 - Verschuur, J. et al. (2024). Optimal fuel supply of green ammonia to decarbonise global
   shipping. Environmental Research: Infrastructure and Sustainability 4, 015001. The network
   model and its port set.
+- HDR and Freese and Nichols (2018). *Uniform Costing Model User's Guide*, version 2.0, for the
+  Texas Water Development Board.
+  https://www.twdb.texas.gov/publications/reports/contracted_reports/doc/1800012227_UCM2018_User_Guide.pdf
+- Lehner, B. et al. (2025). Mapping the world's inland surface waters: an upgrade to the Global
+  Lakes and Wetlands Database (GLWD v2). Earth System Science Data 17, 2277.
+  https://doi.org/10.5194/essd-17-2277-2025 (data: https://doi.org/10.6084/m9.figshare.28519994;
+  not yet in Zotero).
 - Weiss, D. J. et al. (2018). A global map of travel time to cities to assess inequalities in
   accessibility in 2015. Nature 553, 333-336. https://doi.org/10.1038/nature25181
+- Zhou, Y. and Tol, R. S. J. (2005). Evaluating the costs of desalination and water transport.
+  Water Resources Research 41, W03003. https://doi.org/10.1029/2004WR003749

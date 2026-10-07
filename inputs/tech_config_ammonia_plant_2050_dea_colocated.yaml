@@ -8,6 +8,9 @@ extends: tech_config_ammonia_plant_2050_dea.yaml
 # Uniform baseline water price of 2.0 EUR2020 per m3 (decision of 23 Sep 2026: the model
 # currency is EUR).  The site-cost pipeline keeps the spatial input currency (USD2020), so the
 # value is entered as 2.0 / 0.875506 = 2.28439325 USD2020 per m3 (ECB 2020 average rate).
+# The same price applies at sea and at permanent lakes (spatial runs): lake water could be treated
+# more cheaply, but the desalination price is kept as a shadow price that protects freshwater for
+# other uses (decision of 7 Oct 2026; stated in the paper).
 water_cost_baseline_usd_per_m3: 2.28439325
 techs:
   solar_tracking:

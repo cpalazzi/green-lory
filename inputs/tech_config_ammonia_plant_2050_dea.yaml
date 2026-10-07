@@ -40,7 +40,10 @@ spatial_cost_to_model_currency: 0.875506
 
 # Global water and land cost parameters
 water_usage_m3_per_t_nh3: 1.5 # Process + cooling water per tonne of ammonia
-water_cost_baseline_usd_per_m3: 2.0 # Baseline desalination cost (coastal reference)
+# Baseline desalination cost (coastal reference). In the spatial runs it is also the source price at
+# permanent lakes: lake water could be treated more cheaply, but the desalination price is kept
+# as a shadow price that protects freshwater for other uses (decision of 7 Oct 2026).
+water_cost_baseline_usd_per_m3: 2.0
 
 techs:
 
