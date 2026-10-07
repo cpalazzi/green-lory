@@ -6,7 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-WEATHER_DATA_DIR = DATA_DIR / "weather_data"
+WEATHER_DATA_DIR = DATA_DIR / "weather_data" / "salmon2022_pv_wind_2019_hourly_1deg"
 DEA_REFERENCE_DIR = DATA_DIR / "dea_reference"
 
 LAND_COVER_FILE = DATA_DIR / "MCD12C1.A2022001.061.2023244164746.hdf"

@@ -54,7 +54,7 @@ From the repository root, in the legacy environment:
 conda env create -f legacy_lcoa/environment.legacy-min.yaml
 
 # 1. weather store for the cells of interest (nine-file stack, see ../data/README.md)
-python legacy_lcoa/extract_weather_store.py --weather-dir data/weather_data \
+python legacy_lcoa/extract_weather_store.py --weather-dir data/weather_data/salmon2022_pv_wind_2019_hourly_1deg \
   --cells legacy_lcoa/cells_archived_all_v1.csv --output <new store dir> --all
 
 # 2. plant model (the global surface runs one shard per ARC array task: arc/jobs/08_legacy_global.sh)

@@ -99,7 +99,7 @@ fi
 export ARC_TECH_YAML="${ARC_TECH_YAML:?ARC_TECH_YAML must name the technology YAML of the run}"
 export ARC_OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
 export ARC_LAND_CSV="${ARC_LAND_CSV:?ARC_LAND_CSV must point at a centred land table (cell_anchor=center)}"
-export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
+export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"
 
 bash arc/arc_check_run_inputs.sh "${ARC_LOCATIONS_CSV:-}" >/dev/null
 

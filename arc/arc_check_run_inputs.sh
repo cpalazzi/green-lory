@@ -36,7 +36,7 @@ if [[ -n "$OVERRIDE_CSV" ]]; then
   [[ -f "$OVERRIDE_CSV" ]] || missing+=("$OVERRIDE_CSV")
 fi
 
-WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
+WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"
 for pattern in "${WEATHER_DIR}/Solar*.nc" "${WEATHER_DIR}/SolarTracking*.nc" "${WEATHER_DIR}/WindPowers*.nc"; do
   if ! compgen -G "$pattern" >/dev/null; then
     missing+=("$pattern")

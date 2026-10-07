@@ -149,7 +149,7 @@ ARC_GROUP="${ARC_GROUP:-engs-df-green-ammonia}"
 ARC_WORK_BASE="${ARC_WORK_BASE:-/data/${ARC_GROUP}/${USER_NAME}}"
 ARC_ENV_PREFIX="${ARC_ENV_PREFIX:-${ARC_WORK_BASE}/envs/green-lory-env}"
 ARC_PYTHON="${ARC_PYTHON:-${ARC_ENV_PREFIX}/bin/python}"
-WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data}"
+WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"
 DIAGNOSTIC_LOCATIONS="${DIAGNOSTIC_LOCATIONS_OVERRIDE:-inputs/lory_reconciliation_diagnostic_cells.csv}"
 
 SOURCE_COMMIT="${ARC_SOURCE_COMMIT:-}"

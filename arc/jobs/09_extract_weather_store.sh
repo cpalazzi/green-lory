@@ -17,7 +17,7 @@ set -euo pipefail
 : "${LEGACY_RELEASE:?pinned source release directory required}"
 : "${LEGACY_STORE:?store output directory required}"
 : "${LEGACY_CELLS:?cells CSV (lat, lon) required}"
-WEATHER="${LEGACY_WEATHER:-/data/engs-df-green-ammonia/engs2523/green-lory/data/weather_data}"
+WEATHER="${LEGACY_WEATHER:-/data/engs-df-green-ammonia/engs2523/green-lory/data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"
 PY="${LEGACY_ENV:-/data/engs-df-green-ammonia/engs2523/envs/legacy-lcoa-env}/bin/python"
 export PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 FILES=(Solar.nc Solar1.nc Solar2.nc SolarTracking.nc SolarTracking1.nc SolarTracking2.nc WindPowers.nc WindPowers1.nc WindPowers2.nc)

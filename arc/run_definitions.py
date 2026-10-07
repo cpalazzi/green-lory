@@ -47,6 +47,7 @@ WRAPPER_VARIABLES = {
     "land_constraint": "LAND_CONSTRAINT",
     "capacity_rule": "CAPACITY_RULE",
     "land_allocation": "LAND_ALLOCATION",
+    "weather_dir": "WEATHER_DIR",
 }
 
 ALLOWED_VALUES = {
@@ -74,6 +75,7 @@ TABLE_KEYS = (
     "land_constraint",
     "capacity_rule",
     "land_allocation",
+    "weather_dir",
 )
 
 
@@ -87,18 +89,27 @@ def _load_document(path: str | Path) -> dict[str, Any]:
 
 
 def load_runs(path: str | Path = RUNS_FILE) -> dict[str, dict[str, Any]]:
-    runs = _load_document(path).get("runs")
-    if not isinstance(runs, dict) or not runs:
+    """Run entries with run_defaults filled in, each checked."""
+    document = _load_document(path)
+    entries = document.get("runs")
+    defaults = document.get("run_defaults") or {}
+    if not isinstance(entries, dict) or not entries:
         raise RunDefinitionError(f"{path} has no 'runs' mapping")
-    for run_id, run in runs.items():
+    if not isinstance(defaults, dict):
+        raise RunDefinitionError(f"{path}: run_defaults must be a mapping")
+    runs = {}
+    for run_id, run in entries.items():
         if not isinstance(run, dict):
             raise RunDefinitionError(f"Run {run_id} is not a mapping")
+        # the entry's own keys first, then the defaults it does not override
+        run = {**run, **{key: value for key, value in defaults.items() if key not in run}}
         if run.get("runner") not in RUNNERS:
             raise RunDefinitionError(f"Run {run_id}: runner must be one of {RUNNERS}")
         if run["runner"] == "green_lory":
             _validate_green_lory_run(run_id, run)
-        if run["runner"] == "derived" and run.get("derived_from") not in runs:
+        if run["runner"] == "derived" and run.get("derived_from") not in entries:
             raise RunDefinitionError(f"Run {run_id}: derived_from must name another run in {path}")
+        runs[run_id] = run
     for run_id in runs:
         chain = [run_id]
         while runs[chain[-1]]["runner"] == "derived":

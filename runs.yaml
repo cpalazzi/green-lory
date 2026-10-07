@@ -18,8 +18,16 @@
 #   its location differs between ARC and a laptop; land_table_sha256 pins which table it must be.
 # - Ids follow the grammar in GLOSSARY.md (Run identifiers), except the reconciling run, which keeps
 #   its September id so that its results directory stays findable.
-# - Settings that do not differ between runs (no grid backstop, no land rent, full-year global
-#   stage, solver retry chain) live in the wrapper and the model, not here.
+# - Settings shared by every run are in run_defaults; an entry overrides them by setting the key.
+#   Fixed behaviour (no grid backstop, no land rent, full-year global stage, solver retry chain)
+#   lives in the wrapper and the model, not here.
+
+run_defaults:
+  # Hourly 2019 output per unit of capacity for fixed PV, tracking PV and wind on a 1-degree
+  # grid: the profiles used by Salmon and Banares-Alcantara (2022), from ERA5. data/README.md
+  # gives the files and their hashes. Runs before 7 October 2026 read the same files from
+  # data/weather_data/.
+  weather_dir: data/weather_data/salmon2022_pv_wind_2019_hourly_1deg
 
 runs:
 

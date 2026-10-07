@@ -5,33 +5,41 @@ git (`/data/**` in `.gitignore`) and must be fetched or linked into place. Paths
 are relative to this directory. SHA-256 hashes identify the exact files used in
 the reconciliation campaigns; verify with `shasum -a 256 <file>`.
 
-## Legacy 2019 generation-profile stack (`weather_data/`)
+## 2019 PV and wind profiles (`weather_data/salmon2022_pv_wind_2019_hourly_1deg/`)
 
-Nine NetCDF-3 files produced for the original lcoa-opt model: hourly 2019,
-1-degree cells, three longitude bands per technology (unsuffixed = 180 W to
-61 W, `1` = 60 W to 59 E, `2` = 60 E to 179 E; the suffix is a longitude
-partition, not a year). Each file is 1.51 GB. Used unchanged by the frozen
-legacy model (`legacy_lcoa/`) and by the green-lory campaigns.
+Hourly output per unit of capacity for fixed PV (`Solar`), tracking PV (`SolarTracking`) and
+wind (`WindPowers`), 8,760 hours of 2019 on a 1-degree grid: the profiles used by Salmon and
+Bañares-Alcántara (2022, *J. Cleaner Production* 367, 133045,
+doi:10.1016/j.jclepro.2022.133045) and the original lcoa-opt model. The paper says its weather
+data come from the ERA5 reanalysis; the files carry no metadata of their own. Nine NetCDF-3
+files, three longitude bands per technology (unsuffixed = 180 W to 61 W, `1` = 60 W to 59 E,
+`2` = 60 E to 179 E; the suffix is a longitude partition, not a year), 1.51 GB each. Used
+unchanged by the frozen legacy model (`legacy_lcoa/`) and by every green-lory run
+(`weather_dir` in `run_defaults` of `../runs.yaml`).
 
 | File | SHA-256 |
 |---|---|
-| `weather_data/Solar.nc` | `757911abd570204079203cf298b3c0865dad661e260fbe261c7b8e75e94f9c2a` |
-| `weather_data/Solar1.nc` | `21498760861c1642ad8eef53bd462cf7934d45e08d2eea01b4878ff732198921` |
-| `weather_data/Solar2.nc` | `d42c5c78413f51e86e2ff424b578c5df9bef2365fc2a9fa7e0acd01a0d0ec1ba` |
-| `weather_data/SolarTracking.nc` | `168ad862fc38c385c8fc79acfcc2508f4f063bd19cef9b7492a0639f586da7c5` |
-| `weather_data/SolarTracking1.nc` | `0dd96f4ec3a52fee62125160a7f0af106214147a90cc8741676e44daecb3a430` |
-| `weather_data/SolarTracking2.nc` | `067519348768aed581994bb8a0c64eed10d8e41e59a73555c0e6bae414b5b344` |
-| `weather_data/WindPowers.nc` | `780c675aaca41d628a599a8f4a2c6f2b365e99a529e48fdff8bc3b8bf3a5050d` |
-| `weather_data/WindPowers1.nc` | `27754a50a4139b19a2b82ec27ff0fbff98af248f28020155f3687eed7af4deab` |
-| `weather_data/WindPowers2.nc` | `49e7ec627d3cb4320521fc9a64f2f507cb9456e9e4c18432fb58d5c99aa5ec22` |
+| `Solar.nc` | `757911abd570204079203cf298b3c0865dad661e260fbe261c7b8e75e94f9c2a` |
+| `Solar1.nc` | `21498760861c1642ad8eef53bd462cf7934d45e08d2eea01b4878ff732198921` |
+| `Solar2.nc` | `d42c5c78413f51e86e2ff424b578c5df9bef2365fc2a9fa7e0acd01a0d0ec1ba` |
+| `SolarTracking.nc` | `168ad862fc38c385c8fc79acfcc2508f4f063bd19cef9b7492a0639f586da7c5` |
+| `SolarTracking1.nc` | `0dd96f4ec3a52fee62125160a7f0af106214147a90cc8741676e44daecb3a430` |
+| `SolarTracking2.nc` | `067519348768aed581994bb8a0c64eed10d8e41e59a73555c0e6bae414b5b344` |
+| `WindPowers.nc` | `780c675aaca41d628a599a8f4a2c6f2b365e99a529e48fdff8bc3b8bf3a5050d` |
+| `WindPowers1.nc` | `27754a50a4139b19a2b82ec27ff0fbff98af248f28020155f3687eed7af4deab` |
+| `WindPowers2.nc` | `49e7ec627d3cb4320521fc9a64f2f507cb9456e9e4c18432fb58d5c99aa5ec22` |
 
-Locations: this directory on the Mac (moved here on 16 September 2026;
-`~/programming/shipping_sprint/lcoa_model/lcoa-opt/data/*.nc` are symlinks to
-these files) and `/data/engs-df-green-ammonia/engs2523/green-lory/data/weather_data/`
-on ARC. A compact per-cell store for the 15,377 archived supplier cells
-(`extract_weather_store.py`, 3.2 GB, values unchanged) is at
-`results/campaigns/legacy_lcoa_20260915_v1/weather_store_archived15377_mac_v1/`
-locally and `green-lory/data/weather_store_archived15377_v1/` on ARC.
+Locations:
+- On the Mac, this folder. The files were moved here from `weather_data/` on 7 October 2026;
+  the three focal cells load identical profiles from the new place.
+  `~/programming/shipping_sprint/lcoa_model/lcoa-opt/data/*.nc` link to them (and through those
+  links, `lcoa_validation/data/`).
+- On ARC, `/data/engs-df-green-ammonia/engs2523/green-lory/data/weather_data/salmon2022_pv_wind_2019_hourly_1deg/`.
+  Links with the old names stay in `weather_data/`, so releases staged before 7 October still run.
+- A compact per-cell store for the 15,377 archived supplier cells (`extract_weather_store.py`,
+  3.2 GB, values unchanged) is at
+  `results/campaigns/legacy_lcoa_20260915_v1/weather_store_archived15377_mac_v1/` locally and
+  `green-lory/data/weather_store_archived15377_v1/` on ARC.
 
 Known open point: PV profiles occasionally exceed 1.0 (Atacama fixed 1.06,
 tracking 1.12); the AC/DC normalisation basis is undocumented.
@@ -70,7 +78,7 @@ and is linked here (the file stays in that repository, which is also worked on):
 
 | Item | Location | Notes |
 |---|---|---|
-| `cutouts/cutout-2013-era5.nc` | symlink to `~/programming/pypsa_models/pypsa-earth-green-auklet/pypsa-earth/cutouts/cutout-2013-era5.nc` | PyPSA-Earth ERA5 cutout, year 2013, 18.4 GB; a PyPSA-Earth artifact, not used by any green-lory campaign yet |
+| `weather_data/cutouts/cutout-2013-era5.nc` | symlink to `~/programming/pypsa_models/pypsa-earth-green-auklet/pypsa-earth/cutouts/cutout-2013-era5.nc` | PyPSA-Earth ERA5 cutout, year 2013, 18.4 GB; a PyPSA-Earth artifact, not used by any green-lory campaign yet |
 
 | Item | Location on ARC | Notes |
 |---|---|---|
@@ -83,9 +91,15 @@ At the three focal cells these profiles give 7 to 9 % lower fixed-PV and 26 to
 (`results/campaigns/land_reconcile_20260914_v1/audit/alternative-weather-v1/`);
 they have not been used in any accepted surface.
 
+## Ports (`ports/`)
+
+| File | Purpose | SHA-256 |
+|---|---|---|
+| `ports/verschuur2024_ports.csv` | The 1,377 ports of the green-porpoise shipping network (Verschuur et al. 2024, *Environ. Res.: Infrastruct. Sustain.* 4, 015001), with location, country and trade columns; 46 in Australia, 16 in Chile. Copied on 7 October 2026 from the archived project snapshot `../results/campaigns/verschuur_reconcile_20260907_v1/historical/git-0a63616/data/c_port_data.csv`, byte for byte. For the equipment (port-distance) factor of the site costs | `497b9bc9fdcb9b67af57c5834f1a068633b0776535e254ec644bc89750f13651` |
+
 ## Other inputs referenced by scripts
 
-`dea_reference/` workbooks (DEA technology datasheets), `port_locations.csv`,
-`travel_time_by_cell.csv` and `single_site_weather_data.csv` live on ARC under
-`green-lory/data/`; copy them here when running the corresponding notebooks
-locally. Small tracked inputs are under `inputs/`.
+`port_locations.csv`, `travel_time_by_cell.csv` and `single_site_weather_data.csv` live on ARC
+under `green-lory/data/`; copy them here when running the corresponding notebooks locally. The
+DEA technology data sheets that the technology YAMLs cite are linked from Zotero in
+`../references/` (not tracked). Small tracked inputs are under `inputs/`.
