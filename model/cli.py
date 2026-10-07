@@ -6,6 +6,7 @@
     green-lory status [<id>]             the execution record (run_store.csv)
     green-lory path <id>                 where a run's output is
     green-lory run <id> --cell=-23,117   a defined run at a few cells, here on this machine
+    green-lory map <id> --output m.html  a map of a run's result (LCOA by default; .png for a static map)
     green-lory shell <id>                shell assignments for arc/submit_lory_sequence.sh
 
 `python -m model.cli ...` does the same without installing the package. Building land tables
@@ -52,6 +53,23 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _map(args: argparse.Namespace) -> int:
+    from . import results
+
+    frame = results.load_surface(args.id)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.suffix == ".html":
+        results.plot_map(frame, color_column=args.column).write_html(output)
+    else:
+        import matplotlib
+        matplotlib.use("Agg")
+        figure, _ = results.plot_map_static(frame, color_column=args.column)
+        figure.savefig(output, dpi=200)
+    print(f"Map: {output}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="green-lory", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -76,6 +94,10 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--workers", type=int, default=1)
     run.add_argument("--threads", type=int, default=None, help="solver threads per worker")
     run.add_argument("--verbose", action="store_true", help="show the solver and PyPSA logs")
+    map_ = commands.add_parser("map", help="a map of a run's result")
+    map_.add_argument("id")
+    map_.add_argument("--column", default="auto", help="result column to show (default: the LCOA column)")
+    map_.add_argument("--output", required=True, help=".html for an interactive map, .png or .pdf for a static one")
     shell = commands.add_parser("shell", help="shell assignments for the ARC wrapper")
     shell.add_argument("id")
     args = parser.parse_args(argv)
@@ -83,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "run":
             return _run(args)
+        if args.command == "map":
+            return _map(args)
         definitions = runs.load_runs(args.runs)
         networks = runs.load_networks(args.runs)
         if args.command == "list":

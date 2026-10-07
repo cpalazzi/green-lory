@@ -14,12 +14,14 @@ a run uses them:
 | `land.py` | Land budgets per cell (co-located or exclusive wind and PV land), the capacity rules (`scaled_reference_design`, `solved_quantity`), loading and checking land tables |
 | `land_table.py` | Building land tables from MODIS land cover, WDPA protected areas and GEBCO slope (`python -m model.land_table --help`) |
 | `surface.py` | Running the plant over many cells, serially or in forked workers, with a numerical retry chain (`python -m model.surface --help`) |
-| `plot_global_heatmap.py` | LCOA maps for the notebooks |
+| `runs.py` | Run definitions (`../runs.yaml`) and the execution record (`../run_store.csv`); the `run_surface` arguments of a defined run |
+| `results.py` | Reading results by run id: surfaces, network suppliers, rows at the focal cells, coast against inland, maps |
+| `cli.py` | The `green-lory` command: `list`, `show`, `table`, `status`, `path`, `run`, `map`, `shell` |
 
 `plants/ammonia_plant_1mt/` is the plant; its README lists what the bundle fixes and what each
 run sets from its YAML. Runs are data: `../runs.yaml` gives every setting of every run by id,
 and the ARC job `../arc/jobs/01_run_global.sh` passes one run's settings to
-`surface.run_surface`. Options and result columns are described in `../GLOSSARY.md`, the open
+`surface.run_surface`; `green-lory run <id> --cell=lat,lon` does the same at a few cells locally. Options and result columns are described in `../GLOSSARY.md`, the open
 modelling choices in `../MODEL_CHOICES.md`.
 
 ## One cell, step by step (`surface.run_cell`)

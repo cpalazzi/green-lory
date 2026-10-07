@@ -31,7 +31,7 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 
 | Path | Contents |
 |---|---|
-| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
+| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command), `results` (results by run id, tables, maps); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
 | `inputs/` | technology and cost YAMLs, finance (WACC) override CSVs, cell lists |
 | `runs.yaml` | run definitions: every setting of every run and network we keep |
 | `run_store.csv` | the execution record: when, where and with what result each run ran |
@@ -106,7 +106,10 @@ green-lory-campaigns/<campaign>/<results class>/<run id>/runs/<execution id>/<st
 results/campaigns/<campaign>/...                                                        (local copies)
 ```
 
-`run_store.csv` gives the location of each run's output (`green-lory path <run id>`).
+`run_store.csv` gives the location of each run's output (`green-lory path <run id>`). `model/results.py` reads
+outputs by run id from the local copies under `results/campaigns/`
+(`results.load_surface(run_id)`, `results.focal_cell_table(...)`, coast-against-inland tables),
+and `green-lory map <run id> --output lcoa.html` (or `.png`) draws a run's LCOA.
 
 ## Planned layout
 

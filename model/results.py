@@ -1,19 +1,171 @@
-"""Visualise global LCOA outputs on a choropleth grid."""
+"""Results: surfaces and networks by run id, and the tables and maps the notebooks show.
+
+Reads only; nothing here solves. Run ids are those of runs.yaml; where a run's output is comes
+from the ``location`` column of run_store.csv, whose ARC paths map to the local copies under
+results/campaigns/.
+
+- ``output_dir``, ``load_surface``, ``load_network_suppliers``: outputs by run id;
+- ``at_cells``, ``focal_cell_table``: rows at named cells (the three focal cells by default);
+- ``coast_distance_bands``, ``lcoa_by_band``, ``production_by_band``: coast against inland;
+- ``plot_map`` (interactive, plotly) and ``plot_map_static`` (matplotlib, for papers): any
+  column of a surface on the 1-degree grid.
+"""
 from __future__ import annotations
 
-import argparse
-from pathlib import Path
-from typing import Dict
-
 import json
+from pathlib import Path
+from typing import Dict, Mapping
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Repo root is the directory containing the 'model/' package.
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from . import runs
+from .config import COUNTRIES_GEOJSON, REPO_ROOT
 
+FOCAL_CELLS = {"Atacama": (-23.0, -69.0), "NW Australia": (-23.0, 117.0), "Central Australia": (-21.0, 135.0)}
+CAPACITY_COLUMN = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
+COAST_BANDS = ([-1, 100, 300, 5000], ["coast <100 km", "100-300 km", "inland >300 km"])
+
+# Where the result table sits inside a run's output directory, by kind of output
+SURFACE_FILES = (
+    "merged/global_run_results.csv",  # a global stage of arc/submit_lory_sequence.sh
+    "global_run_results.csv",  # a derived land-share variant
+    "merged.csv",  # the September revalidated surfaces
+    "suppliers_USD2018.csv",  # a supplier contract
+)
+ARC_CAMPAIGN_PREFIXES = ("/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/", "green-lory-campaigns/")
+
+
+# --- outputs by run id ------------------------------------------------------------------------
+
+def output_dir(run_id: str, *, campaigns_dir: str | Path = runs.LOCAL_CAMPAIGNS_DIR) -> Path:
+    """The local directory holding a run's output, from its run_store.csv location."""
+    record = runs.run_record(run_id)
+    location = record["location"].strip()
+    if not location:
+        raise runs.RunDefinitionError(f"{run_id} has no output location in run_store.csv (status {record['status']})")
+    if "; local copy " in location:
+        return Path(campaigns_dir) / location.split("; local copy ", 1)[1].strip()
+    for prefix in ARC_CAMPAIGN_PREFIXES:
+        if location.startswith(prefix):
+            return Path(campaigns_dir) / location[len(prefix):]
+    path = Path(location)
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+def load_surface(run_id: str, *, campaigns_dir: str | Path = runs.LOCAL_CAMPAIGNS_DIR) -> pd.DataFrame:
+    """The result table of a surface (or the supplier table of a contract) by run id."""
+    directory = output_dir(run_id, campaigns_dir=campaigns_dir)
+    for name in SURFACE_FILES:
+        if (directory / name).is_file():
+            return pd.read_csv(directory / name, low_memory=False)
+    raise FileNotFoundError(f"{run_id}: none of {', '.join(SURFACE_FILES)} in {directory}")
+
+
+def load_network_suppliers(network_id: str, *, campaigns_dir: str | Path = runs.LOCAL_CAMPAIGNS_DIR) -> pd.DataFrame:
+    """The suppliers.csv of a network run (production by supplier cell)."""
+    return pd.read_csv(output_dir(network_id, campaigns_dir=campaigns_dir) / "suppliers.csv")
+
+
+# --- rows at named cells ----------------------------------------------------------------------
+
+def at_cells(frame: pd.DataFrame, cells: Mapping[str, tuple[float, float]] = FOCAL_CELLS, *,
+             lat: str = "latitude", lon: str = "longitude") -> pd.DataFrame:
+    """One row per named cell, indexed by the cell name; an error if a cell is missing or repeated."""
+    picked = []
+    for name, (la, lo) in cells.items():
+        match = frame[(frame[lat].round(3) == la) & (frame[lon].round(3) == lo)]
+        if len(match) != 1:
+            raise ValueError(f"{name}: expected one row at ({la}, {lo}), found {len(match)}")
+        picked.append(match.assign(cell=name))
+    return pd.concat(picked).set_index("cell")
+
+
+def focal_cell_table(run_ids: list[str], cells: Mapping[str, tuple[float, float]] = FOCAL_CELLS, *,
+                     campaigns_dir: str | Path = runs.LOCAL_CAMPAIGNS_DIR) -> pd.DataFrame:
+    """LCOA, supplier capacity and design of green-lory surfaces at the named cells.
+
+    One row per run and cell: LCOA in EUR/t, capacity in Mt/yr at the run's land share, wind and
+    PV in MW per Mt/yr of ammonia, and the land constraint that limits the capacity.
+    """
+    rows = []
+    for run_id in run_ids:
+        for name, row in at_cells(load_surface(run_id, campaigns_dir=campaigns_dir), cells).iterrows():
+            rows.append({"run_id": run_id, "cell": name,
+                         "lcoa_eur_per_t": float(row["lcoa_eur_per_t"]),
+                         "capacity_mt_per_year": float(row[CAPACITY_COLUMN]) / 1e6,
+                         "wind_mw_per_mt": float(row["wind_mw"]),
+                         "pv_mw_per_mt": float(row["solar_mw"]) + float(row.get("solar_tracking_mw", 0.0)),
+                         "limiting": row.get("scaled_design_limiting_constraint")})
+    return pd.DataFrame(rows)
+
+
+# --- coast against inland ---------------------------------------------------------------------
+
+def coast_distance_bands(frame: pd.DataFrame, country: str = "Australia", *, crs: int = 3577,
+                         buffer_km: float = 60.0, bands: tuple = COAST_BANDS) -> pd.DataFrame:
+    """The cells of one country with the distance from each centre to the coast, in bands.
+
+    The coast is the boundary of the country's polygon in data/countries.geojson, which is the
+    coastline only for a country without land borders, such as Australia (the default, in the
+    Australian Albers projection, EPSG 3577). Cell centres up to buffer_km offshore are kept, so
+    coastal cells whose centre falls in the sea count.
+    """
+    import geopandas as gpd
+
+    world = gpd.read_file(COUNTRIES_GEOJSON)
+    name = next(c for c in world.columns if c.lower() in ("admin", "name", "name_en", "country", "sovereignt"))
+    shape = world[world[name].astype(str) == country].to_crs(crs).geometry.union_all()
+    points = gpd.GeoSeries(gpd.points_from_xy(frame["longitude"], frame["latitude"]), crs=4326).to_crs(crs)
+    inside = points.within(shape.buffer(buffer_km * 1000)).to_numpy()
+    banded = frame[inside].copy()
+    banded["coast_km"] = [shape.boundary.distance(point) / 1000 for point in points[inside]]
+    banded["band"] = pd.cut(banded["coast_km"], bands[0], labels=bands[1])
+    return banded
+
+
+def lcoa_by_band(banded: pd.DataFrame, surfaces: Mapping[str, pd.DataFrame], *,
+                 column: str = "lcoa_eur_per_t", bands: tuple = COAST_BANDS) -> pd.DataFrame:
+    """Median and 10th percentile of a column by coast band for each named surface.
+
+    Uses the cells common to the banded table and every surface, so the surfaces are compared
+    on the same cells.
+    """
+    frame = banded[["latitude", "longitude", "band"]]
+    for label, surface in surfaces.items():
+        frame = frame.merge(surface[["latitude", "longitude", column]].rename(columns={column: label}),
+                            on=["latitude", "longitude"], how="inner")
+    rows = []
+    for label in surfaces:
+        grouped = frame.groupby("band", observed=True)[label]
+        median, p10 = grouped.median(), grouped.quantile(0.1)
+        rows.append({"surface": label, "cells": len(frame),
+                     **{f"median {band}": median.get(band) for band in bands[1]},
+                     **{f"p10 {band}": p10.get(band) for band in bands[1]},
+                     "median inland minus coast": median.get(bands[1][-1]) - median.get(bands[1][0]),
+                     "p10 inland minus coast": p10.get(bands[1][-1]) - p10.get(bands[1][0])})
+    return pd.DataFrame(rows)
+
+
+def production_by_band(banded: pd.DataFrame, suppliers: Mapping[str, pd.DataFrame], *, iso3: str = "AUS") -> pd.DataFrame:
+    """Network production (Mt/yr) of one country by coast band, for each named network run.
+
+    suppliers maps a label to a network's suppliers.csv (load_network_suppliers).
+    """
+    rows = []
+    for label, table in suppliers.items():
+        table = table.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
+        active = table[(table["iso3"] == iso3) & (table["production_t_per_year"] > 0)]
+        merged = active.merge(banded[["latitude", "longitude", "band"]], on=["latitude", "longitude"], how="left")
+        if merged["band"].isna().any():
+            raise ValueError(f"{label}: {iso3} suppliers outside the banded cells")
+        production = merged.groupby("band", observed=False)["production_t_per_year"].sum() / 1e6
+        rows.append({"network": label, "production_mt_per_year": production.sum(), **production.to_dict()})
+    return pd.DataFrame(rows)
+
+
+# --- maps -------------------------------------------------------------------------------------
 
 def _cell_id(lat: float, lon: float, decimals: int = 2) -> str:
     return f"{lat:.{decimals}f}_{lon:.{decimals}f}"
@@ -84,7 +236,7 @@ def _country_border_trace(
     )
 
 
-def plot_lcoa_heatmap(
+def plot_map(
     csv_path: "str | Path | pd.DataFrame",
     color_column: str = "auto",
     cell_size_deg: float = 1.0,
@@ -99,7 +251,7 @@ def plot_lcoa_heatmap(
     lat_range: "tuple[float, float] | None" = None,
     colorbar_len: float = 0.85,
 ):
-    """Render a global LCOA choropleth heatmap.
+    """An interactive map of one column of a surface on its 1-degree cells (LCOA by default).
 
     Args:
         csv_path: Path to a results CSV **or** a pre-filtered ``pd.DataFrame``.
@@ -268,7 +420,7 @@ def plot_lcoa_heatmap(
     )
 
     if show_country_borders:
-        geojson_path = REPO_ROOT / "data" / "countries.geojson"
+        geojson_path = COUNTRIES_GEOJSON
         if geojson_path.exists():
             border_trace = _country_border_trace(
                 geojson_path,
@@ -280,11 +432,7 @@ def plot_lcoa_heatmap(
     return fig
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Matplotlib (publication) heatmap
-# ─────────────────────────────────────────────────────────────────────────────
-
-def plot_lcoa_heatmap_mpl(
+def plot_map_static(
     csv_path: "str | Path | pd.DataFrame",
     color_column: str = "auto",
     cell_size_deg: float = 1.0,
@@ -303,7 +451,7 @@ def plot_lcoa_heatmap_mpl(
     colorbar_label: str = "LCOA (EUR/t NH\u2083)",
     figsize: "tuple[float, float]" = (14.0, 6.0),
 ) -> tuple:
-    """Render a publication-quality LCOA heatmap using matplotlib.
+    """A static map of one column of a surface, for papers (LCOA by default).
 
     Uses an equirectangular (plate carrée) projection — latitude and longitude
     map directly to y/x axes — with a proper cartographic cornice: inward tick
@@ -405,7 +553,7 @@ def plot_lcoa_heatmap_mpl(
     ax.set_facecolor(ocean_color)  # ocean background
 
     # ── Land fill & border source ─────────────────────────────────────────────
-    geojson_path = REPO_ROOT / "data" / "countries.geojson"
+    geojson_path = COUNTRIES_GEOJSON
     land_patches = []
     border_segments: list = []
 
@@ -537,37 +685,3 @@ def plot_lcoa_heatmap_mpl(
 
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
     return fig, ax
-
-
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render a global LCOA heatmap from a surface result table.")
-    parser.add_argument("csv", type=str, help="Path to the aggregated global results CSV.")
-    parser.add_argument("--output", type=str, default=None, help="Optional HTML file for saving the figure.")
-    parser.add_argument(
-        "--color-column",
-        type=str,
-        default="auto",
-        help="Results column to visualise (default: auto).",
-    )
-    parser.add_argument(
-        "--color-scale",
-        type=str,
-        default="Viridis_r",
-        help="Plotly colour scale name (e.g., Viridis, Viridis_r, Inferno, Cividis).",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = _parse_args()
-    figure = plot_lcoa_heatmap(args.csv, color_column=args.color_column, color_scale=args.color_scale)
-    if args.output:
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        figure.write_html(output_path)
-    else:
-        figure.show()
-
-
-if __name__ == "__main__":
-    main()
