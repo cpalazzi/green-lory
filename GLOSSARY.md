@@ -1,7 +1,7 @@
 # Glossary
 
 Every option, run setting, id token, role, network name and result column used in
-`runs.yaml`, `reconciliation/run_store.csv` and the reports, in one place. Names are the
+`runs.yaml`, `run_store.csv` and the reports, in one place. Names are the
 current ones; names they replaced are given in brackets. First written 24 September 2026;
 runs, roles, network names, plant bundles and terms added 6 October 2026.
 
@@ -9,10 +9,10 @@ runs, roles, network names, plant bundles and terms added 6 October 2026.
 
 | Question | Where |
 |---|---|
-| What is run X, or "network D"? | `runs.yaml`; `python arc/run_definitions.py show X` (accepts an id or a report name such as `D`) |
-| Which runs exist? | `python arc/run_definitions.py list` |
-| How do the green-lory runs differ? | `python arc/run_definitions.py table` |
-| When and where did X run, and what did it give? | `reconciliation/run_store.csv` (one row per run id: jobs, release, status, output directory, headline results); [Run store](#run-store) below |
+| What is run X, or "network D"? | `runs.yaml`; `green-lory show X` (accepts an id or a report name such as `D`) |
+| Which runs exist? | `green-lory list` |
+| How do the green-lory runs differ? | `green-lory table` |
+| When and where did X run, and what did it give? | `run_store.csv` or `green-lory status X` (one row per run id: jobs, release, status, output directory, headline results); [Run store](#run-store) below |
 | What does a token in an id mean? | [Run identifiers](#run-identifiers) below |
 
 ## Kinds of run (`runner` in `runs.yaml`)
@@ -111,7 +111,7 @@ for example `gl_dea2050_wacc5_bflat_wflat_land20c_fixed`, and
 water price change) reuses its parent's LCOA and gets its own id. Extra qualifiers go after the
 pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run store's
 `notes`. Numeric values (the water price, the WACC of the Ameli map) belong in
-`reconciliation/run_store.csv` and in the run manifest, not in the id.
+`run_store.csv` and in the run manifest, not in the id.
 
 | Token | Meaning |
 |---|---|
@@ -131,7 +131,7 @@ pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run
 
 ## Run store
 
-`reconciliation/run_store.csv` has one row per run id: `run_id, model, cost_basis, finance,
+`run_store.csv` has one row per run id: `run_id, model, cost_basis, finance,
 build, water, land, land_table, pv, time_step_h, allocation, cells, weather, release, location,
 job_ids, status, submitted_utc, upstream_run, network_runs, notes`. Statuses: `planned`,
 `submitted`, `running`, `merged`, `qa_passed`, `exported`, `done`, `superseded`, `failed`,

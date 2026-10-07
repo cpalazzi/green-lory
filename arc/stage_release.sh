@@ -61,7 +61,7 @@ trap 'rm -rf "$STAGE"' EXIT
 "$PY" - "$STAGE/extras.txt" <<'PY'
 import hashlib, subprocess, sys
 from pathlib import Path
-from arc.run_definitions import load_runs
+from model.runs import load_runs
 
 extras = []
 for run_id, run in load_runs().items():

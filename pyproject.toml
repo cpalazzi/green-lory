@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "green-lory"
+version = "0.2.0"
+description = "Levelised cost and land-limited capacity of green ammonia from wind and PV at every 1-degree cell"
+readme = "README.md"
+requires-python = ">=3.11"
+# Direct dependencies; requirements.txt pins the full environment the results were made with
+dependencies = [
+    "pypsa>=1.0",
+    "linopy>=0.5",
+    "highspy",
+    "pandas",
+    "numpy",
+    "xarray",
+    "netCDF4",
+    "dask",
+    "geopandas",
+    "shapely",
+    "pyproj",
+    "pyogrio",
+    "pyhdf",
+    "pyyaml",
+    "matplotlib",
+    "plotly",
+]
+
+[project.optional-dependencies]
+gurobi = ["gurobipy"]
+
+[project.scripts]
+green-lory = "model.cli:main"
+
+[tool.setuptools]
+packages = ["model"]

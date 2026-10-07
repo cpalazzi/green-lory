@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Land, plant cost and capacity of every kept run at the three focal cells.
 
-Reads the accepted outputs named in reconciliation/run_store.csv (local copies under
+Reads the accepted outputs named in run_store.csv (local copies under
 results/campaigns/) and writes one long table, focal_cells.csv, plus focal_cells.md:
 
     python reconciliation/focal_cells.py --output results/campaigns/reconciliation_final_20260916_v1/focal_cells_v3

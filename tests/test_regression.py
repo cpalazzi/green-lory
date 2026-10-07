@@ -18,8 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from arc.run_definitions import load_runs
-from model.config import REPO_ROOT
+from model.runs import load_runs, surface_arguments
 from model.surface import RunSettings, run_surface
 
 pytestmark = pytest.mark.slow
@@ -47,29 +46,18 @@ TOLERANCES = {  # column -> relative tolerance; everything else numeric must agr
 
 
 def _run(run_id: str, horizon: str) -> pd.DataFrame:
-    run = load_runs()[run_id]
-    land_csv = REPO_ROOT / "results" / "campaigns" / run["land_table"]
-    weather_dir = REPO_ROOT / run["weather_dir"]
-    if not land_csv.exists() or not weather_dir.exists():
-        pytest.skip(f"data for {run_id} not present")
     pytest.importorskip("gurobipy")
-    step = float(run["time_step_h"])
-    settings = RunSettings(
-        time_step=step,
-        max_snapshots=int(168 / step) if horizon == "week" else None,
-        pv_policy=run["pv_policy"],
-        land_constraint=run["land_constraint"],
-        capacity_rule=run["capacity_rule"],
-        land_allocation=run["land_allocation"],
-        temporal_accounting_mode=run["temporal_accounting"],
-        ramp_limit_basis=run["ramp_limit_basis"],
-        include_site_costs=bool(run["site_costs_in_headline"]),
-    )
-    return run_surface(
-        FOCAL_CELLS, land_csv=land_csv, tech_yaml=REPO_ROOT / run["tech_yaml"], plant_dir=REPO_ROOT / run["plant_dir"],
-        override_csv=REPO_ROOT / run["finance_csv"], weather_dir=weather_dir, settings=settings,
-        quiet=True, threads_per_worker=4, num_workers=3, fail_fast=True,
-    )
+    try:
+        arguments = surface_arguments(run_id, runs=load_runs())
+    except FileNotFoundError:
+        pytest.skip(f"data for {run_id} not present")
+    if not arguments["weather_dir"].exists():
+        pytest.skip(f"weather for {run_id} not present")
+    settings = arguments.pop("settings")
+    if horizon == "week":
+        settings = RunSettings(**{**settings.__dict__, "max_snapshots": int(168 / settings.time_step)})
+    return run_surface(FOCAL_CELLS, settings=settings, quiet=True, threads_per_worker=4, num_workers=3,
+                       fail_fast=True, **arguments)
 
 
 @pytest.mark.parametrize("horizon", ["week", "year"])

@@ -6,7 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from arc.run_definitions import (
+from model.runs import (
+    RUN_STORE_FILE,
     RUNS_FILE,
     WRAPPER_VARIABLES,
     RunDefinitionError,
@@ -98,7 +99,7 @@ class RunDefinitionsTest(unittest.TestCase):
 
     def test_every_defined_run_and_network_has_an_execution_record(self):
         # a new definition gets a run_store.csv row (status planned) before it is submitted
-        with (RUNS_FILE.parent / "reconciliation" / "run_store.csv").open(newline="") as handle:
+        with RUN_STORE_FILE.open(newline="") as handle:
             recorded = {row["run_id"] for row in csv.DictReader(handle)}
         defined = set(load_runs(RUNS_FILE)) | set(load_networks(RUNS_FILE))
         self.assertEqual(sorted(defined - recorded), [])

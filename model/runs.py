@@ -1,25 +1,30 @@
-#!/usr/bin/env python3
-"""Read the run definitions in runs.yaml.
+"""Run definitions (runs.yaml) and the execution record (run_store.csv).
 
-    python arc/run_definitions.py list           # run and network ids, runner and role
-    python arc/run_definitions.py show <id>      # one entry; also accepts a report name such as D
-    python arc/run_definitions.py table          # green-lory settings side by side (Markdown)
-    python arc/run_definitions.py shell <run id> # shell assignments for arc/submit_lory_sequence.sh
+runs.yaml says what each run is: every setting, by run id, for plant surfaces (`runs`) and
+shipping networks (`networks`, with `network_defaults` filled in). run_store.csv says when and
+where each run ran: jobs, release, status, output location, headline result. The command line
+reads both (`green-lory list | show | table | status | path`, see model/cli.py).
+
+This module only needs PyYAML, so the ARC wrappers can read run definitions with a minimal
+Python.
 """
 
 from __future__ import annotations
 
-import argparse
-from pathlib import Path
+import csv
 import shlex
-import sys
+from pathlib import Path
 from typing import Any, Mapping
 
 import yaml
 
+from .config import REPO_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNS_FILE = REPO_ROOT / "runs.yaml"
+RUN_STORE_FILE = REPO_ROOT / "run_store.csv"
+# Where runs.yaml land tables (land_table: <campaign>/<file>) live on a laptop; on ARC the
+# campaign root is green-lory-campaigns/
+LOCAL_CAMPAIGNS_DIR = REPO_ROOT / "results" / "campaigns"
 
 RUNNERS = ("green_lory", "derived", "legacy_lcoa", "supply_pilot")
 
@@ -264,36 +269,63 @@ def _report_suffix(network: Mapping[str, Any]) -> str:
     return f', "{name}" in the September reports' if name else ""
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--runs", type=Path, default=RUNS_FILE, help="run-definition file (default: runs.yaml)")
-    commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("list")
-    show = commands.add_parser("show")
-    show.add_argument("id", help="run id, network id or report name (for example D or A2)")
-    commands.add_parser("table")
-    shell = commands.add_parser("shell")
-    shell.add_argument("run_id")
-    args = parser.parse_args(argv)
-    try:
-        runs = load_runs(args.runs)
-        networks = load_networks(args.runs)
-        if args.command == "list":
-            for run_id, run in runs.items():
-                print(f"{run_id}\t{run['runner']}\t{run.get('role', '')}")
-            for network_id, network in networks.items():
-                print(f"{network_id}\tnetwork{_report_suffix(network)}\t{network.get('role', '')}")
-        elif args.command == "show":
-            print(describe_entry(args.id, runs, networks))
-        elif args.command == "table":
-            print(markdown_table(runs, networks))
-        else:
-            print(shell_assignments(args.run_id, runs))
-    except (RunDefinitionError, OSError, yaml.YAMLError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 2
-    return 0
+# ---------------------------------------------------------------------------------------------
+# The execution record
+# ---------------------------------------------------------------------------------------------
+
+def load_run_store(path: str | Path = RUN_STORE_FILE) -> list[dict[str, str]]:
+    """Every row of run_store.csv, in file order."""
+    with Path(path).open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def run_record(run_id: str, path: str | Path = RUN_STORE_FILE) -> dict[str, str]:
+    """The run store row of one run id."""
+    for row in load_run_store(path):
+        if row["run_id"] == run_id:
+            return row
+    raise RunDefinitionError(f"{run_id!r} has no row in {path}")
+
+
+# ---------------------------------------------------------------------------------------------
+# Running a defined surface locally
+# ---------------------------------------------------------------------------------------------
+
+def surface_arguments(run_id: str, *, campaigns_dir: str | Path = LOCAL_CAMPAIGNS_DIR,
+                      runs: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    """Keyword arguments of model.surface.run_surface for a green_lory run of runs.yaml.
+
+    Checks the pinned hashes of the land table and the finance file.
+    """
+    import hashlib
+
+    from .surface import RunSettings  # heavy imports only when a run is asked for
+
+    runs = load_runs() if runs is None else runs
+    if run_id not in runs or runs[run_id]["runner"] != "green_lory":
+        raise RunDefinitionError(f"{run_id!r} is not a green_lory run of runs.yaml")
+    run = runs[run_id]
+    land_csv = Path(campaigns_dir) / run["land_table"]
+    finance_csv = REPO_ROOT / run["finance_csv"]
+    for label, path, expected in (("land table", land_csv, run["land_table_sha256"]),
+                                  ("finance CSV", finance_csv, run["finance_csv_sha256"])):
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected:
+            raise RunDefinitionError(f"{run_id}: {label} {path} has sha256 {actual}; runs.yaml pins {expected}")
+    return {
+        "land_csv": land_csv,
+        "tech_yaml": REPO_ROOT / run["tech_yaml"],
+        "plant_dir": REPO_ROOT / run["plant_dir"],
+        "override_csv": finance_csv,
+        "weather_dir": REPO_ROOT / run["weather_dir"],
+        "settings": RunSettings(
+            time_step=float(run["time_step_h"]),
+            pv_policy=run["pv_policy"],
+            land_constraint=run["land_constraint"],
+            capacity_rule=run["capacity_rule"],
+            land_allocation=run["land_allocation"],
+            temporal_accounting_mode=run["temporal_accounting"],
+            ramp_limit_basis=run["ramp_limit_basis"],
+            include_site_costs=bool(run["site_costs_in_headline"]),
+        ),
+    }

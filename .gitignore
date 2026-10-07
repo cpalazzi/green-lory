@@ -19,6 +19,7 @@
 !*.yaml
 !*.yml
 !pytest.ini
+!pyproject.toml
 
 # Reconciliation package: frozen legacy cost workbooks and small experiment configs
 !/legacy_lcoa/source/**/*.xlsx
@@ -60,3 +61,6 @@ arc_exchange/
 # their hashes are pinned in the ARC release manifests
 /inputs/uniform_interest_inputs_0p05_2050.csv
 /inputs/amelired_interest_inputs_2050_center.csv
+
+# pip install -e . metadata
+*.egg-info/

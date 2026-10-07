@@ -5,10 +5,11 @@
 #   networks, each built on one supplier table from `runs` (or on the archived table).
 # - Every key, role and id token is explained in GLOSSARY.md. To look an entry up from the
 #   command line, by id or by the letter the September reports used ("network D"):
-#       python arc/run_definitions.py list           # every run and network, one line each
-#       python arc/run_definitions.py show D         # one entry, network defaults filled in
-#       python arc/run_definitions.py table          # green-lory settings side by side
-# - This file says what a run is. reconciliation/run_store.csv says when and where it ran (jobs,
+#       green-lory list           # every run and network, one line each
+#       green-lory show D         # one entry, network defaults filled in
+#       green-lory table          # green-lory settings side by side
+#   (`python -m model.cli ...` without installing the package)
+# - This file says what a run is. run_store.csv says when and where it ran (jobs,
 #   release, status, output directory, headline results), under the same id.
 #
 # Conventions

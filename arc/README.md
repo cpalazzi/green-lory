@@ -2,7 +2,7 @@
 
 Everything that runs on ARC runs from an **immutable source release** and writes to a **new
 campaign directory**; nothing is overwritten, and only a passed QA record makes a result
-accepted. Run definitions are in `../runs.yaml` (`python3 arc/run_definitions.py list`).
+accepted. Run definitions are in `../runs.yaml` (`python3 -m model.cli list`).
 
 | Location on ARC | Contents |
 |---|---|
@@ -53,7 +53,6 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
 | File | Role |
 |---|---|
 | `stage_release.sh` | Stage, verify and lock a source release (run on the Mac) |
-| `run_definitions.py` | Read `runs.yaml`: `list`, `show <id or letter>`, `table`, `shell <run id>` |
 | `submit_lory_sequence.sh` | Plant-surface campaigns by run id, in smoke, diagnostic and global stages |
 | `submit_land_center_matrix.sh` | Centred land build and derived shares |
 | `submit_network_run.sh` | One green-porpoise network from a supplier contract |

@@ -18,9 +18,9 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 | You want to | Look at |
 |---|---|
 | see the current results and why legacy-lcoa and green-lory differ | [reconciliation/DECISION.md](reconciliation/DECISION.md) |
-| know what a run is, or what "network D" means | [runs.yaml](runs.yaml), or `python arc/run_definitions.py show D` |
+| know what a run is, or what "network D" means | [runs.yaml](runs.yaml), or `green-lory show D` |
 | look up an option, id token, term or result column | [GLOSSARY.md](GLOSSARY.md) |
-| see when and where a run ran, and its headline result | [reconciliation/run_store.csv](reconciliation/run_store.csv) |
+| see when and where a run ran, and its headline result | [run_store.csv](run_store.csv), or `green-lory status <run id>` |
 | see which modelling choices are settled and which are open | [MODEL_CHOICES.md](MODEL_CHOICES.md) |
 | run the legacy model | [legacy_lcoa/README.md](legacy_lcoa/README.md) |
 | run on ARC | [arc/README.md](arc/README.md) |
@@ -31,11 +31,12 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 
 | Path | Contents |
 |---|---|
-| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
+| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
 | `inputs/` | technology and cost YAMLs, finance (WACC) override CSVs, cell lists |
 | `runs.yaml` | run definitions: every setting of every run and network we keep |
+| `run_store.csv` | the execution record: when, where and with what result each run ran |
 | `legacy_lcoa/` | the legacy-lcoa model reproduced end to end: frozen source, harness, land step, capacity rule, supplier table |
-| `reconciliation/` | decision, run store, green-porpoise network replay, supplier-contract export, comparison scripts, supply pilot, and the September reports in `archive/` |
+| `reconciliation/` | decision, green-porpoise network replay, supplier-contract export, comparison scripts, supply pilot, and the September reports in `archive/` |
 | `arc/` | ARC release staging, campaign wrappers, Slurm templates, QA tools |
 | `notebooks/` | `02_spatial_cost_inputs` (inputs of the spatial runs; replaced by `model/site_costs.py` in campaign step 3) |
 | `scripts/` | input builders (`build_ameli_wacc_inputs.py`, `fetch_travel_time.py`) |
@@ -46,24 +47,34 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 ## Setup
 
 Python 3.11 or later, a linear-programming solver supported by linopy (Gurobi on ARC; HiGHS
-works locally), and the packages in `requirements.txt`:
+works locally), and the packages in `requirements.txt` (the pinned environment). Installing the
+repository as a package adds the `green-lory` command:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e . --no-deps
 python -m pytest -q
+green-lory list
 ```
 
 The legacy model needs its own environment (PyPSA 0.25.1 with Pyomo 6.5.0); see its README.
 
 ## Running
 
-**One or a few cells locally.** `model/surface.py` needs a centred land table
-(`cell_anchor=center`; the accepted tables are listed in `data/README.md`). Its defaults are
-the improved runs' technology YAML and the plant bundle; for another run, read its settings
-with `python arc/run_definitions.py show <run id>`. One week of weather at the cells of a
-`lat,lon` CSV, fixed-tilt PV only as in the key runs:
+**A defined run at one or a few cells.** `green-lory run` takes every setting from
+`runs.yaml` and checks the pinned hashes of the land table and finance file (local copies
+under `results/campaigns/`). The key run at the Pilbara cell for one week:
+
+```bash
+green-lory run gl_dea2050_wacc5_bflat_wflat_land20c_fixed --cell=-23,117 --week
+```
+
+**Ad hoc settings.** `model/surface.py` needs a centred land table (`cell_anchor=center`; the
+accepted tables are listed in `data/README.md`). Its defaults are the improved runs'
+technology YAML and the plant bundle. One week of weather at the cells of a `lat,lon` CSV,
+fixed-tilt PV only as in the key runs:
 
 ```bash
 python -m model.surface \
@@ -94,7 +105,7 @@ green-lory-campaigns/<campaign>/<results class>/<run id>/runs/<execution id>/<st
 results/campaigns/<campaign>/...                                                        (local copies)
 ```
 
-`reconciliation/run_store.csv` gives the location of each run's output.
+`run_store.csv` gives the location of each run's output (`green-lory path <run id>`).
 
 ## Planned layout
 

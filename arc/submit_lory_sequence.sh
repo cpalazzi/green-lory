@@ -34,7 +34,7 @@ Options:
 
 Runs:
   Every setting of a run is defined in runs.yaml; list them with
-  python3 arc/run_definitions.py list (or table for a side-by-side view).
+  python3 -m model.cli list (or table for a side-by-side view).
 
 This wrapper never overwrites an existing run directory and never discovers
 shards with a wildcard. Every QA/merge job receives its exact input paths.
@@ -225,10 +225,10 @@ done
 
 configure_scenario() {
   SCENARIO_ID="$1"
-  # Every per-run setting comes from runs.yaml (see arc/run_definitions.py).
+  # Every per-run setting comes from runs.yaml (see model/runs.py).
   local definition
-  if ! definition="$("$VALIDATION_PYTHON" arc/run_definitions.py shell "$SCENARIO_ID")"; then
-    echo "Run 'python3 arc/run_definitions.py list' to see the runs defined in runs.yaml." >&2
+  if ! definition="$("$VALIDATION_PYTHON" -m model.cli shell "$SCENARIO_ID")"; then
+    echo "Run 'python3 -m model.cli list' to see the runs defined in runs.yaml." >&2
     exit 2
   fi
   eval "$definition"
