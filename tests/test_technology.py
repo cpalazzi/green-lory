@@ -89,3 +89,41 @@ def test_cell_override_multiplies_only_the_installation_part():
                                     time_step=1.0, temporal_accounting_mode="snapshot_weighted")
     expected = (100.0 + 200.0 * 1.5) * technology.annuity_factor(0.05, 20)
     assert network.generators.at["solar", "capital_cost"] == pytest.approx(expected)
+
+
+# --- finance tables (model/finance.py) --------------------------------------------------------
+
+def test_tiam_regions_of_countries():
+    from model import finance
+
+    assert finance.tiam_region("Australia") == "AUS"
+    assert finance.tiam_region("Chile") == "CSA"
+    assert finance.tiam_region("Mongolia") == "CHI"
+    assert finance.tiam_region("Greenland") == "CAN"
+    for nothing in (None, float("nan"), "", "Antarctica", "Atlantis"):
+        assert finance.tiam_region(nothing) == finance.UNASSIGNED
+
+
+def test_ameli_rates_follow_the_scenario():
+    from model import finance
+
+    rates = finance.ameli_rates(pd.Series(["Australia", "Morocco", ""]), "low-carbon-regional")
+    assert list(rates.tiam_region_code) == ["AUS", "AFR", finance.UNASSIGNED]
+    assert rates.interest_rate.iloc[0] == pytest.approx(0.061) and rates.interest_rate.iloc[1] == pytest.approx(0.118)
+    assert pd.isna(rates.interest_rate.iloc[2])
+    assert finance.ameli_rates(pd.Series(["Morocco"]), "reduced").interest_rate.iloc[0] == pytest.approx(0.051)
+
+
+def test_uniform_table_and_nearest_fill():
+    from model import finance
+
+    cells = pd.DataFrame({"lat": [0.0, 0.0, 10.0], "lon": [0.0, 1.0, 0.0]})
+    uniform = finance.uniform_table(cells, 0.05)
+    assert len(uniform) == 3 * len(finance.TECHNOLOGIES) and (uniform.interest_rate == 0.05).all()
+    covered = finance.uniform_table(cells.iloc[[0, 2]], 0.05)
+    covered.loc[covered.lat == 10.0, "interest_rate"] = 0.09
+    filled, fills = finance.fill_from_nearest(cells, covered)
+    assert len(filled) == len(uniform)
+    assert (filled[(filled.lat == 0.0) & (filled.lon == 1.0)].interest_rate == 0.05).all()  # nearest is (0, 0)
+    assert list(fills[["source_lat", "source_lon"]].iloc[0]) == [0.0, 0.0]
+    assert fills.distance_km.iloc[0] == pytest.approx(111.19, abs=0.01)

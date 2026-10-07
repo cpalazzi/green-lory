@@ -58,7 +58,6 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
 | `submit_land_center_matrix.sh` | Centred land build and derived shares |
 | `submit_network_run.sh` | One green-porpoise network from a supplier contract |
 | `postprocess_keyruns_20260924.sh` | Slurm job: derived 2 % surface, contracts and legacy key table of the 28 September key runs |
-| `build_finance_overrides.py` | Per-cell interest-only override CSVs (uniform 5 %, Ameli by country) |
 | `write_campaign_manifest.py`, `write_campaign_submission.py` | Run manifest (source, inputs, resolved settings, hashes) and job ids |
 | `merge_and_qa_campaign.py` | Merge an explicit shard list and run the QA gates |
 | `release_source_inventory.py`, `verify_campaign_manifest_inputs.py`, `validate_land_campaign_input.py`, `arc_check_run_inputs.sh` | Inventory and input checks (centred land tables only) |

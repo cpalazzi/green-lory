@@ -115,7 +115,7 @@ build and remoteness, water), not on the land choices still open. In order:
    (S5), all spatial mechanisms (S2), and DEA 2030 (S6). For finance, Ameli's reduced WACC is
    5.1 % almost everywhere, so it moves the median LCOA by under 1 % against uniform 5 %; a
    borrowing-cost sensitivity needs Ameli's low-carbon (current) WACC series (8 to 12 % in the
-   regions that matter; `scripts/build_ameli_wacc_inputs.py --scenario` selects the series) or a
+   regions that matter; `python -m model.finance ameli --scenario` selects the series) or a
    uniform 10 %. A tracking-only twin of S1 is worth adding: tracking changes the ranking of
    PV-only regions (Chile) against wind–PV hybrids (`reconciliation/DECISION.md` section 3).
 4. **Figures**: LCOA maps and maps of the change against S1 for each mechanism, the mechanism

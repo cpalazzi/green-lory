@@ -40,7 +40,7 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 | `reconciliation/` | decision, comparison scripts, supply pilot, and the September reports in `archive/` |
 | `arc/` | ARC release staging, campaign wrappers, Slurm templates, QA tools |
 | `notebooks/` | `02_spatial_cost_inputs` (inputs of the spatial runs; replaced by `model/site_costs.py` in campaign step 3) |
-| `scripts/` | input builders (`build_ameli_wacc_inputs.py`, `fetch_travel_time.py`) |
+| `scripts/` | `fetch_travel_time.py` (moves into `model/site_costs.py` in campaign step 3) |
 | `tests/` | `pytest` suite |
 | `data/` | large inputs; only the layout and README are tracked |
 | `results/` | local outputs; current evidence under `results/campaigns/` |

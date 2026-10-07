@@ -8,6 +8,7 @@ a run uses them:
 |---|---|
 | `config.py` | Paths (data, inputs, plant bundle), the default YAML and bundle, physical constants |
 | `technology.py` | The technology YAML (with `extends:`): link efficiencies from each link's recipe, annualised costs, and the per-cell override table (interest rates, build-cost multipliers, water and land prices) |
+| `finance.py` | The per-cell interest-rate (WACC) tables runs pin as `finance_csv`: uniform, or Ameli et al. (2021) by TIAM-UCL region (`python -m model.finance --help`) |
 | `weather.py` | Hourly PV and wind profiles of a cell from the NetCDF stack, and block averages for coarser steps |
 | `plant.py` | One plant at one cell: the PyPSA network from the plant bundle, its constraints (Haber-Bosch ramps, battery coupling, land in the solve), the Gurobi solve and its acceptance check, the plant results |
 | `accounting.py` | After the solve: cost splits (equipment, installation, O&M, interest), water and land costs in the headline, grid-use classification |

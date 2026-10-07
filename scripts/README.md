@@ -3,21 +3,9 @@
 Only the scripts listed here are tracked; other files in this folder are local scratch and
 stay gitignored.
 
-## `build_ameli_wacc_inputs.py`
-
-Builds the Ameli et al. (2021) Fig. 2 WACC inputs (`amelired` = the reduced-WACC case) from
-`inputs/ameli_tiam_wacc_fig2.csv`: the per-cell interest-only override
-`inputs/amelired_interest_inputs_2050.csv` (used by the reconciling run) and, for spatial runs,
-`inputs/spatial_cost_inputs_amelired_2050.csv`, which keeps the build, remoteness and water
-columns of a spatial base file and replaces `interest_rate`. The finance overrides of the key
-runs on the centred cells are built by `arc/build_finance_overrides.py` from these.
-
-```bash
-python scripts/build_ameli_wacc_inputs.py   # --help for the inputs and outputs
-```
-
-The interest-only output covers the union of the spatial base grid and `--locations-input`;
-the combined output covers only the spatial base grid and warns about cells missing from it.
+Finance inputs (uniform and Ameli WACC tables) are built by `model/finance.py`
+(`python -m model.finance --help`); the September builder `build_ameli_wacc_inputs.py` is in
+git history.
 
 ## `fetch_travel_time.py`
 

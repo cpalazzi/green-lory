@@ -72,7 +72,7 @@ for run_id, run in load_runs().items():
     if not ignored:
         continue  # tracked or untracked-visible: already in the inventory
     if not Path(path).is_file():
-        sys.exit(f"{run_id}: {path} is missing; rebuild it with arc/build_finance_overrides.py")
+        sys.exit(f"{run_id}: {path} is missing; rebuild it with python -m model.finance (see its --help)")
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     if digest != expected:
         sys.exit(f"{run_id}: {path} has sha256 {digest}, runs.yaml pins {expected}")
