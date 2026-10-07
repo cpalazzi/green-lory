@@ -36,7 +36,6 @@ ROOT=/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/keyruns_20260923_
 LANDC=/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/land_center_20260923_v1
 VER=/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/verschuur_reconcile_20260907_v1
 PY=/data/engs-df-green-ammonia/engs2523/envs/green-lory-env/bin/python
-DERIVE="${DERIVE_SCRIPT:-$ROOT/tools/derive_land_share_surface.py}"
 CUTOFF="${CUTOFF_MT:-1.0}"
 SUBMIT_NETWORKS="${SUBMIT_NETWORKS:-1}"
 EXPORTS="${EXPORTS_DIR:-$ROOT/exports_${RUN_ID}_v1}"
@@ -47,8 +46,8 @@ export_surface() {  # run dir, export name
   local d="$1" name="$2"
   if [[ -f "$EXPORTS/$name/contract.json" ]]; then echo "  $name: contract exists, skipping"; return 0; fi
   test -f "$d/qa/validation.json" && grep -Eq '"status": *"passed"' "$d/qa/validation.json" || { echo "QA not passed for $d" >&2; return 2; }
-  $PY reconciliation/export_lory_surface.py --surface "$d/merged/global_run_results.csv" --qa "$d/qa/validation.json" \
-     --manifest "$d/manifest.json" --country-reference "$R/reconciliation/country_reference_20260928_v1.csv" --drop-unassigned \
+  $PY -m networks.contracts export --surface "$d/merged/global_run_results.csv" --qa "$d/qa/validation.json" \
+     --manifest "$d/manifest.json" --country-reference "$R/inputs/country_reference_20260928_v1.csv" --drop-unassigned \
      --output "$EXPORTS/$name" --minimum-capacity "$CUTOFF" | grep -E '"exported_positive_capacity_rows"|"excluded_positive_below_cutoff_rows"|"output_sha256"'
 }
 
@@ -61,13 +60,13 @@ export_surface "$AM" gl_dea2050_ameli_bflat_wflat_land20c_fixed
 echo "== 2. 2 % variant of the uniform-5 % surface (post hoc, capacities x 0.1)"
 D2=$ROOT/30_keyruns/gl_dea2050_wacc5_bflat_wflat_land2c_fixed/runs/$RUN_ID/derived
 if [[ ! -f "$D2/global_run_results.csv" ]]; then
-  $PY "$DERIVE" --surface "$W5/merged/global_run_results.csv" --multiplier 0.1 --parent-share 0.20 --output-dir "$D2" | grep -E '"effective_land_competition_fraction"|"sha256"' | head -3
+  $PY -m networks.contracts derive --surface "$W5/merged/global_run_results.csv" --multiplier 0.1 --parent-share 0.20 --output-dir "$D2" | grep -E '"effective_land_competition_fraction"|"sha256"' | head -3
   mkdir -p "$D2/qa" && cp "$W5/qa/validation.json" "$D2/qa/validation.json" && cp "$W5/manifest.json" "$D2/manifest.json"
 fi
 if [[ -f "$EXPORTS/gl_dea2050_wacc5_bflat_wflat_land2c_fixed/contract.json" ]]; then echo "  2 % contract exists, skipping"; else
-$PY reconciliation/export_lory_surface.py --surface "$D2/global_run_results.csv" --qa "$D2/qa/validation.json" --manifest "$D2/manifest.json" \
+$PY -m networks.contracts export --surface "$D2/global_run_results.csv" --qa "$D2/qa/validation.json" --manifest "$D2/manifest.json" \
    --derived-provenance "$D2/provenance.json" --scenario-id-override gl_dea2050_wacc5_bflat_wflat_land2c_fixed \
-   --country-reference "$R/reconciliation/country_reference_20260928_v1.csv" --drop-unassigned --output "$EXPORTS/gl_dea2050_wacc5_bflat_wflat_land2c_fixed" \
+   --country-reference "$R/inputs/country_reference_20260928_v1.csv" --drop-unassigned --output "$EXPORTS/gl_dea2050_wacc5_bflat_wflat_land2c_fixed" \
    --minimum-capacity "$CUTOFF" | grep -E '"exported_positive_capacity_rows"|"excluded_positive_below_cutoff_rows"|"output_sha256"'
 fi
 

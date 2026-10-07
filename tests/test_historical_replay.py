@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from reconciliation.run_historical_network import extract_demand, select_suppliers, great_circle_km
+from networks.replay import extract_demand, select_suppliers, great_circle_km
 
 
 class HistoricalInputTests(unittest.TestCase):
@@ -63,8 +63,7 @@ class HistoricalInputTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec("pyomo"), "Optional solver parity test")
     def test_sparse_matches_original_with_maritime_storage(self):
         import xarray as xr
-        from reconciliation.run_historical_network import solve
-        from reconciliation.sparse_network import solve_sparse
+        from networks.replay import solve, solve_sparse
         campaign = Path(__file__).resolve().parents[1] / "results/campaigns/verschuur_reconcile_20260907_v1"
         archive = campaign / "historical/git-0a63616"
         published = campaign / "historical/mendeley-v1"
@@ -99,7 +98,7 @@ class HistoricalInputTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec("pyomo"), "Optional pinned GPO solver integration test")
     def test_solver_export_keeps_zero_production_values(self):
         import xarray as xr
-        from reconciliation.run_historical_network import solve
+        from networks.replay import solve
         archive = Path(__file__).resolve().parents[1] / "results/campaigns/verschuur_reconcile_20260907_v1/historical/git-0a63616"
         if not archive.exists():
             self.skipTest("Pinned historical data not extracted")

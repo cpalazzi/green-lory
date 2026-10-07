@@ -12,11 +12,6 @@ history keeps everything.
 | Path | Role |
 |---|---|
 | [DECISION.md](DECISION.md) | Results and decision (6 October 2026) |
-| `run_store.csv` | Execution record of every run and network in `../runs.yaml`: jobs, release, status, output location, headline result |
-| `run_historical_network.py`, `sparse_network.py`, `network_heuristic.py` | Green-porpoise network replay with pinned equations (archived project code or the public deposit) and explicit supplier contracts; ARC job `../arc/jobs/03_replay_historical_network.sh`, wrapper `../arc/submit_network_run.sh` |
-| `fetch_published_code.py` | Fetches and hashes the public green-porpoise deposit used by the replay |
-| `export_lory_surface.py`, `derive_land_share_surface.py`, `country_reference_20260928_v1.csv` | Supplier contracts from QA-passed green-lory surfaces; post-hoc land-share variants; country spellings of the network model |
-| `compare_networks.py` | Network comparison: delivered cost, gap, production by country and Australian subregion, supplier overlap, focal cells |
 | `compare_land_builds.py` | Cell-by-cell comparison of a green-lory land table with the legacy land step |
 | `focal_cells.py` | Land, LCOA and capacity of every kept run at the three focal cells (DECISION.md section 3) |
 | `coast_inland.py` | Coast against inland Australia: LCOA by distance to the coast for each model step, network production by band, effect of the spatial water and remoteness inputs (DECISION.md section 5) |
@@ -24,11 +19,12 @@ history keeps everything.
 | `archive/2026-09/` | The September reports, run log (`RUNS.md`), id grammar and land experiments, unedited; they name networks by letter (`../GLOSSARY.md` maps the letters) |
 | `archive/pre-reconciliation/` | The development log of March to June 2026 |
 
-The legacy model itself is in `../legacy_lcoa/`.
+The legacy model itself is in `../legacy_lcoa/`; the network replay, supplier contracts and
+network comparison are in `../networks/`, and the execution record is `../run_store.csv`.
 
 ## Evidence
 
-Generated evidence is under `../results/campaigns/`, never here; `run_store.csv` gives each
+Generated evidence is under `../results/campaigns/`, never here; `../run_store.csv` gives each
 run's directory. The consolidated tables behind DECISION.md are in
 `../results/campaigns/reconciliation_final_20260916_v1/` (`focal_cells_v3/`, `networks_v3/`).
 

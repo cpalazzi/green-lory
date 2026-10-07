@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-from reconciliation.export_lory_surface import verify_derivation, convert, CAPACITY, ELECTRICITY_COSTS
+from networks.contracts import verify_derivation, convert, CAPACITY, ELECTRICITY_COSTS
 
 
 class SupplierExportTests(unittest.TestCase):

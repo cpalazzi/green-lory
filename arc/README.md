@@ -36,13 +36,14 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
    `qa/validation.json` and `logs/`; a merge/QA job runs after the shards and fails on missing
    or duplicated rows, unexpected coordinates, currency, finance or cost-scope mismatches.
    `--dry-run` validates inputs and prints the commands.
-4. **Post-processing**: derived land shares (`../reconciliation/derive_land_share_surface.py`)
-   and supplier contracts (`../reconciliation/export_lory_surface.py`);
+4. **Post-processing**: derived land shares and supplier contracts
+   (`python -m networks.contracts derive|export`, `../networks/contracts.py`);
    `postprocess_keyruns_20260924.sh` is the sequence used for the key runs. It is a Slurm job
    (2 CPUs, 16 GB, 4 h): submit it with `KEYRUN_RELEASE=<release> KEYRUN_ID=<run id> sbatch
    arc/postprocess_keyruns_20260924.sh`, never run it on a login node.
 5. **Networks**: `submit_network_run.sh --name <id> --contract <contract.json>` runs
-   `jobs/03_replay_historical_network.sh` (4 CPUs, 64 GB, 2 h, one-hour solver limit by default).
+   `jobs/03_replay_historical_network.sh` (`python -m networks.replay`; 4 CPUs, 64 GB, 2 h,
+   one-hour solver limit by default).
 6. **Legacy model**: `jobs/07_build_legacy_env.sh` (environment, once),
    `jobs/09_extract_weather_store.sh` (weather store, once), `jobs/08_legacy_global.sh`
    (16-shard array; `LEGACY_EXTRA_ARGS` adds harness options such as `--annuity green_lory`).

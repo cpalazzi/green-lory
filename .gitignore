@@ -24,6 +24,7 @@
 # Reconciliation package: frozen legacy cost workbooks and small experiment configs
 !/legacy_lcoa/source/**/*.xlsx
 !/reconciliation/**/*.json
+!/inputs/**/*.json
 
 # Never commit virtualenvs or Python caches
 .venv/

@@ -1,37 +1,28 @@
-#!/usr/bin/env python3
-"""Quantitative comparison of green-porpoise network runs.
+"""Network comparison: tables across green-porpoise network runs.
 
 Reads each run's ``summary.json``, ``manifest.json``, ``suppliers.csv`` and
-``country_production.csv`` (as written by ``run_historical_network.py`` /
-``sparse_network.py``) and tabulates delivered cost, solver gap, production by
-country and Australian subregion, active-supplier identities and overlap with a
-reference run, and the role of named focal cells. A run that ended at its time
+``country_production.csv`` (as written by ``networks.replay``) and tabulates delivered cost,
+solver gap, production by country and Australian subregion, active-supplier identities and
+overlap with a reference run, and the role of named focal cells. A run that ended at its time
 limit is reported with its gap; nothing is relabelled as accepted.
 
-    python compare_networks.py --run <label>=<dir> [--run ...] \
+    python -m networks.compare --run <label>=<dir> [--run ...] \
         --reference <label> --focal "Atacama=-23_-69_1000000.0" ... --output <new dir>
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from .replay import digest
+
 # Australian subregions by longitude of the 1-degree cell (explicit, coarse):
 # west (WA) < 129 E, centre (NT/SA) 129-141 E, east (QLD/NSW/VIC/TAS) > 141 E.
 AUS_BANDS = [("west_lt129E", -np.inf, 129.0), ("centre_129_141E", 129.0, 141.0), ("east_gt141E", 141.0, np.inf)]
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def load_run(label: str, d: Path) -> dict:
@@ -65,14 +56,14 @@ def load_run(label: str, d: Path) -> dict:
     }
 
 
-def main():
+def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--run", action="append", required=True, help="label=directory (repeatable, order kept)")
     p.add_argument("--reference", required=True, help="label of the reference run for supplier-overlap statistics")
     p.add_argument("--focal", action="append", default=[], help="name=Index of a focal supplier cell (repeatable)")
     p.add_argument("--top", type=int, default=8)
     p.add_argument("--output", type=Path, required=True)
-    a = p.parse_args()
+    a = p.parse_args(argv)
     if a.output.exists():
         raise SystemExit(f"refusing to overwrite {a.output}")
     runs = []
@@ -162,7 +153,7 @@ def main():
     meta = {"runs": [{k: r[k] for k in ("label", "dir", "endpoint", "supplier_table", "supplier_table_sha256", "capacity_method",
                                         "supplier_contract_scenario", "manifest_inputs", "failure")} for r in runs],
             "reference": a.reference, "focal": focal, "australia_bands": [(n, lo, hi) for n, lo, hi in AUS_BANDS],
-            "script_sha256": sha256_file(Path(__file__)),
+            "script_sha256": digest(__file__),
             "note": "Delivered cost divides the objective by the all-file demand as the runner does; covered-demand cost uses model_total_demand_requirement when present."}
     (a.output / "summary.json").write_text(json.dumps(meta, indent=2, default=str) + "\n")
     print("\n".join(lines))

@@ -65,7 +65,7 @@ STATED_D_WIND_MW_PER_KM2 = 5.0   # 200 km2/GW (Salmon 2022 section 2.2.1; Versch
 LAND_SHARE = 0.02            # already applied in the 2 % area columns used as input
 REFERENCE_MTPA = 1.0
 AREA_ANCHOR = "center"
-EUR2020_PER_USD2018 = 0.9024  # documented Way conversion used by export_lory_surface.py
+EUR2020_PER_USD2018 = 0.9024  # documented Way conversion used by networks/contracts.py
 
 PROVENANCE = {
     "rule_id": RULE_ID,

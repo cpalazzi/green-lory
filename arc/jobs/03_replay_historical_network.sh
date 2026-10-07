@@ -26,7 +26,7 @@ export PATH="${REPLAY_ENV}/bin:$PATH"
 cd "$REPLAY_SOURCE"
 date -u
 scontrol --oneliner show job "$SLURM_JOB_ID"
-"${REPLAY_ENV}/bin/python" reconciliation/run_historical_network.py \
+"${REPLAY_ENV}/bin/python" -m networks.replay \
   --archive "$REPLAY_ARCHIVE" --output "$REPLAY_OUTPUT" \
   --threads "${SLURM_CPUS_PER_TASK:-12}" "$@"
 date -u

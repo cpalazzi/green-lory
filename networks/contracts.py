@@ -1,9 +1,22 @@
-#!/usr/bin/env python3
-"""Export a QA-passed Lory surface to an isolated, explicit GPO input contract.
+"""Supplier contracts: green-lory and legacy surfaces as supplier tables of the network model.
 
-The output does not overwrite an RCP-labelled project table. Costs use the
-inverse of the documented Way input conversion (USD2018 × 0.9024 = EUR2020).
-Max_capacity is a 1 Mt/year reference-plant multiplier, not annual production.
+- ``export``: a QA-passed surface to the green-porpoise supplier schema (``Index``, ``LCOA`` in
+  USD2018, ``Max_capacity`` in Mt/yr of a 1 Mt reference plant, ``iso3``, ...), written as
+  ``suppliers_USD2018.csv`` with ``contract.json``, which records the input hashes and every
+  exclusion. Costs use the inverse of the documented Way conversion (USD2018 x 0.9024 =
+  EUR2020); no live exchange rate. The surface itself is never changed.
+- ``derive``: a land-share variant of a QA-passed surface without a new solve. Under
+  ``land_constraint: after_solve`` the plant design and LCOA do not depend on the land share;
+  only the scaled-design capacities do, and linearly. So the 2 % variant of a 20 % surface is
+  the same table with every scaled-design capacity multiplied by 0.1, recorded in
+  ``provenance.json`` with the parent's hash; ``export --derived-provenance`` checks it against
+  the parent's QA report.
+
+    python -m networks.contracts derive --surface <merged csv> --multiplier 0.1 --parent-share 0.20 \
+        --output-dir <new dir>
+    python -m networks.contracts export --surface <csv> --qa <validation.json> --manifest <manifest.json> \
+        --country-reference inputs/country_reference_20260928_v1.csv --minimum-capacity 1 --drop-unassigned \
+        --output <new dir>
 """
 from __future__ import annotations
 
@@ -14,14 +27,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-try:
-    from .run_historical_network import digest, write_json
-except ImportError:
-    from run_historical_network import digest, write_json
+from .replay import digest, write_json
 
 CAPACITY = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
 EUR2020_PER_USD2018 = .9024
 ELECTRICITY_COSTS = [f"lcoa_tech_{technology}_eur_per_t" for technology in ("wind", "solar", "solar_tracking")]
+CAPACITY_PREFIX = "scaled_design_max_"  # every column the land share scales
 
 
 def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False):
@@ -81,8 +92,7 @@ def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False
 
 
 def verify_derivation(provenance, qa, surface_sha256):
-    """A post-hoc derivative (reconciliation/derive_land_share_surface.py) is exported against its
-    parent's QA report: the QA must identify the parent surface and the provenance must identify
+    """A post-hoc derivative (derive_land_share) is exported against its parent's QA report: the QA must identify the parent surface and the provenance must identify
     this file.  Returns the derivation record for the contract."""
     if provenance.get("kind") != "post_hoc_land_share_variant":
         raise ValueError("Unsupported derivation kind")
@@ -161,8 +171,47 @@ def export(args):
     print(json.dumps(report, indent=2))
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
+def derive_land_share(surface: Path, multiplier: float, parent_share: float, output_dir: Path) -> dict:
+    """Rescale the scaled-design capacities of an after_solve surface to another land share.
+
+    Writes global_run_results.csv and provenance.json to output_dir (new) and returns the provenance.
+    """
+    surface, output_dir = Path(surface), Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=False)
+    df = pd.read_csv(surface, low_memory=False)
+    if "land_constraint" in df.columns and set(df["land_constraint"].dropna().unique()) - {"after_solve"}:
+        raise ValueError("Only after_solve surfaces can be rescaled post hoc")
+    scaled = [c for c in df.columns if c.startswith(CAPACITY_PREFIX)]
+    if not scaled:
+        raise ValueError("No scaled_design capacity columns found")
+    for c in scaled:
+        df[c] = pd.to_numeric(df[c], errors="coerce") * multiplier
+    if "scaled_design_renewable_capacity_scale_factor" in df.columns:
+        df["scaled_design_renewable_capacity_scale_factor"] = pd.to_numeric(df["scaled_design_renewable_capacity_scale_factor"], errors="coerce") * multiplier
+    df["land_share_multiplier_applied"] = multiplier
+    df["land_competition_fraction_effective"] = parent_share * multiplier
+    out = output_dir / "global_run_results.csv"
+    df.to_csv(out, index=False)
+    provenance = {
+        "schema_version": 1,
+        "kind": "post_hoc_land_share_variant",
+        "parent_surface": {"path": str(surface.resolve()), "sha256": digest(surface)},
+        "parent_land_competition_fraction": parent_share,
+        "multiplier": multiplier,
+        "effective_land_competition_fraction": parent_share * multiplier,
+        "columns_rescaled": scaled + (["scaled_design_renewable_capacity_scale_factor"] if "scaled_design_renewable_capacity_scale_factor" in df.columns else []),
+        "lcoa_columns_untouched": True,
+        "justification": "land_constraint=after_solve: the reference design is solved without land; capacity scales linearly with the land share",
+        "output": {"path": str(out.resolve()), "sha256": digest(out), "rows": int(len(df))},
+    }
+    (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2))
+    return provenance
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    p = commands.add_parser("export", help="a QA-passed surface as a supplier table of the network model")
     for name in ("surface", "qa", "manifest", "country-reference", "output"):
         p.add_argument(f"--{name}", type=Path, required=True)
     p.add_argument("--allow-diagnostic", action="store_true")
@@ -172,7 +221,16 @@ def main():
     p.add_argument("--drop-unassigned", action="store_true",
                    help="Drop cells without a country polygon (NaN country) instead of rejecting the export; counted in the contract")
     p.add_argument("--minimum-capacity", type=float, default=0., help="Explicit minimum annual capacity in Mt; raw surface stays unchanged")
-    export(p.parse_args())
+    d = commands.add_parser("derive", help="a land-share variant of an after_solve surface")
+    d.add_argument("--surface", type=Path, required=True, help="merged global_run_results.csv of the parent run")
+    d.add_argument("--multiplier", type=float, required=True, help="capacity multiplier, e.g. 0.1 for 20 %% -> 2 %%")
+    d.add_argument("--parent-share", type=float, required=True)
+    d.add_argument("--output-dir", type=Path, required=True)
+    args = parser.parse_args(argv)
+    if args.command == "export":
+        export(args)
+    else:
+        print(json.dumps(derive_land_share(args.surface, args.multiplier, args.parent_share, args.output_dir), indent=2))
 
 
 if __name__ == "__main__":

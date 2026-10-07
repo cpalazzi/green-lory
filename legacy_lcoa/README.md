@@ -78,7 +78,7 @@ python legacy_lcoa/build_legacy_supplier_table.py --rule stated_method --anchor 
 ```
 
 The network step consumes `gpo_export/contract.json` through
-`../reconciliation/run_historical_network.py --supplier-contract` (ARC:
+`python -m networks.replay --supplier-contract` (`../networks/replay.py`; ARC:
 `../arc/submit_network_run.sh --contract <contract.json>`).
 
 ## Expected values
