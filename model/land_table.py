@@ -1306,7 +1306,7 @@ def write_land_availability_table(config: LandAvailabilityConfig) -> pd.DataFram
     return df
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a land table, or derive a land-share variant of one.")
     parser.add_argument("--output", type=str, required=True, help="Destination CSV path.")
     parser.add_argument("--land-competition-fraction", type=float, default=DEFAULT_LAND_COMPETITION_FRACTION,
@@ -1324,12 +1324,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--slope-raster", type=str, default=None, help="Elevation NetCDF (GEBCO) for the slope screen.")
     parser.add_argument("--max-slope-degrees", type=float, default=DEFAULT_MAX_SLOPE_DEGREES)
     parser.add_argument("--skip-slope-exclusion", action="store_true", help="Keep land of any slope.")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    args = _parse_args()
+    args = _parse_args(argv)
     if args.base_csv is not None:
         write_land_competition_variant(
             base_csv=repo_path(args.base_csv),

@@ -1,4 +1,4 @@
-"""Regression: the focal cells reproduce the accepted results.
+"""Regression: the focal cells and a band of the land table reproduce the accepted results.
 
 Three focal cells (inland Chile -23,-69; Pilbara -23,117; central Australia -21,135) for the
 improved key run and the reconciling run, over one week and over the full year. The baseline
@@ -6,9 +6,14 @@ improved key run and the reconciling run, over one week and over the full year. 
 before the step-2 restructuring; its full-year LCOA equals the accepted ARC surfaces to within
 5e-5 (the solver tolerance).
 
+The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells),
+against the same rows of the accepted centred 100 % table of 23 September 2026
+(tests/regression/land_center_100pct_lat_m24_m22.csv).
+
     python -m pytest -m slow tests/test_regression.py
 
-Needs Gurobi, the weather stack, and the centred land tables in results/campaigns/.
+Needs Gurobi, the weather stack, the land inputs (MODIS, WDPA, GEBCO) and the centred land
+tables in results/campaigns/.
 """
 from __future__ import annotations
 
@@ -18,6 +23,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from model import config
 from model.runs import load_runs, surface_arguments
 from model.surface import RunSettings, run_surface
 
@@ -80,4 +86,35 @@ def test_focal_cells_reproduce_the_baseline(run_id, horizon):
             )
         elif column not in {"run_id", "scenario_id", "manifest_sha256"}:
             # An empty text field reads back from CSV as NaN
+            assert list(got.fillna("").astype(str)) == list(want.fillna("").astype(str)), column
+
+
+LAND_BAND = Path(__file__).parent / "regression" / "land_center_100pct_lat_m24_m22.csv"
+
+
+def test_land_build_reproduces_a_band_of_the_accepted_table(tmp_path):
+    inputs = [config.LAND_COVER_FILE, config.GEBCO_FILE, *config.WDPA_SHAPEFILES]
+    if not all(path.exists() for path in inputs):
+        pytest.skip("land inputs not present")
+    from model import land_table
+
+    output = tmp_path / "band.csv"
+    argv = ["--output", str(output), "--land-competition-fraction", "1.0", "--include-offshore-wind",
+            "--land-cover", str(config.LAND_COVER_FILE), "--slope-raster", str(config.GEBCO_FILE),
+            "--max-slope-degrees", "15", "--min-lat", "-24", "--max-lat", "-22"]
+    for shapefile in config.WDPA_SHAPEFILES:
+        argv += ["--protected-area", str(shapefile)]
+    land_table.main(argv)
+
+    expected = pd.read_csv(LAND_BAND).set_index(["latitude", "longitude"]).sort_index()
+    actual = pd.read_csv(output).set_index(["latitude", "longitude"]).sort_index()
+    assert list(actual.index) == list(expected.index)
+    assert list(actual.columns) == list(expected.columns)
+    for column in expected.columns:
+        want, got = expected[column], actual[column]
+        if pd.api.types.is_numeric_dtype(want):
+            # geometry operations differ in the last digits between GEOS builds
+            np.testing.assert_allclose(got.to_numpy(float), want.to_numpy(float), rtol=1e-9, atol=1e-9,
+                                       equal_nan=True, err_msg=column)
+        else:
             assert list(got.fillna("").astype(str)) == list(want.fillna("").astype(str)), column
