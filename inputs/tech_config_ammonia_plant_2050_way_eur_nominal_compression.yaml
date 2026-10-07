@@ -43,11 +43,6 @@ spatial_cost_to_model_currency: 0.875506
 water_usage_m3_per_t_nh3: 1.5
 water_cost_baseline_usd_per_m3: 2.0
 
-# ── Feasibility backstop ───────────────────────────────────────────────────────
-grid_backstop:
-  p_nom_mw: 20000
-  marginal_cost_eur_per_mwh: 100000
-
 techs:
 
  # -----------------
@@ -110,8 +105,8 @@ techs:
     lifetime_years: 25
     interest_rate: 0.1
     fixed_om_fraction: 0.02
-    carriers_in: {power: 1.1280201329}  # 1/0.886509 — Way 2050 HHV efficiency
-    carriers_out: {hydrogen: 1.0}
+    carriers_in: {power: 1.0}           # per MW of power in
+    carriers_out: {hydrogen: 0.886509}  # Way 2050 HHV efficiency
     overall_efficiency: 0.886509
   hydrogen_compression:
     component_type: link
@@ -136,8 +131,8 @@ techs:
     lifetime_years: 20
     interest_rate: 0.1
     fixed_om_fraction: 0.02
-    carriers_in: {hydrogen: 1.8518004130}  # 1/0.540015 — Way 2050 fuel cell efficiency
-    carriers_out: {power: 1.0}
+    carriers_in: {hydrogen: 1.0}           # per MW of hydrogen in
+    carriers_out: {power: 0.540015}        # Way 2050 fuel cell efficiency
     overall_efficiency: 0.540015
   hydrogen_from_storage:
     component_type: link

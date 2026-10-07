@@ -128,22 +128,18 @@ September for 52,702 cells, so fewer for the onshore subset.
 
 Not modelling choices, but they decide what the reorganised code looks like.
 
-Done on 6 October: the plant bundles live in `model/plants/`; the defaults of `model/main.py`
-and `model/run_global.py` are the improved runs' YAML and bundle (the 10 Mt 2030 bundle is no
-longer used); the dead functions and the unused Pyomo import are gone from `model/`.
+Done on 6 October: the plant bundles live in `model/plants/`; the dead functions and the unused
+Pyomo import are gone from `model/`.
 
-Remaining:
+Done on 7 October (CAMPAIGN_PLAN.md step 2; the focal-cell regression reproduces the accepted
+results):
 
-1. **One source for plant parameters.** The YAML holds the efficiencies, notebook 00 copies them
-   into the plant bundles, and `run_global` reads them back from the bundle; costs, by contrast,
-   are applied from the YAML at run time. The bundles differ only in efficiencies, load and the
-   tracking switch (GLOSSARY, Plant bundles). Recommendation: apply efficiencies and the load
-   from the YAML at run time, take the tracking switch from `pv_policy`, and keep one topology
-   bundle in `model/plants/`. Check that the key cells give identical results.
-2. **One capacity column family.** Drop the `max_*` columns, which are unused downstream, and
-   move the QA gate to the `scaled_design_*` columns.
-3. **Grid backstop default.** The command line and the job template keep the backstop on by
-   default while every campaign removes it. Recommendation: default to off.
-4. **Dead options.** Remove the `southwest` anchor (keep it in its test), the conservative union
-   fallback, the grid backstop, the `aggregation_count` plumbing and, once open item 1 is
-   settled, the run-time PV density recomputation.
+1. **One source for plant parameters.** One plant bundle, `model/plants/ammonia_plant_1mt/`;
+   each run takes the link efficiencies from its YAML recipe and the tracking switch from its
+   `pv_policy`. The load stays in the bundle (1 Mt/yr for every run).
+2. **One capacity column family.** The `max_*` columns are gone; the QA gate checks the
+   `scaled_design_*` columns.
+3. **Grid backstop.** Removed: the plant has no grid imports and nothing can switch them on.
+4. **Dead options.** Removed: the south-west cell anchor, the conservative union fallback, the
+   `aggregation_count` plumbing, the netCDF land-cover path and the unused land-build options.
+   Still to settle with open item 1: the run-time PV density recomputation.

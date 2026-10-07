@@ -87,7 +87,7 @@ The four networks of 28 September (key runs) have no letter; their ids are
 
 ## Run options
 
-`model/run_global.py`, `arc/submit_lory_sequence.sh`:
+`model/surface.py` (`python -m model.surface --help`), run definitions in `runs.yaml`:
 
 | Option | Values | Meaning |
 |---|---|---|
@@ -97,11 +97,11 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `--temporal-accounting-mode` | `snapshot_weighted`, `legacy_scaled` | How energy and cost are integrated over snapshots longer than one hour. `legacy_scaled` reproduces the archived lcoa-opt arithmetic and is used only for the replication. |
 | `--ramp-limit-basis` | `per_hour`, `legacy_per_snapshot` | Whether Haber-Bosch ramp limits are per hour or per snapshot (replication only). |
 | `--exclude-site-costs` | flag | Keeps water and land rent out of the headline LCOA (replication only). |
-| `--no-ensure-feasibility` | flag | Removes the grid backstop (an expensive grid import that keeps every cell feasible). All campaign runs pass it; the command-line default keeps the backstop. |
 | `--override-csv` | path | Per-cell, per-technology `interest_rate` (and optionally build multipliers, water, land rent). Interest-only files are the *flat* cases. |
-| `--land-csv` | path | Land table from `model/land_processing.py`; its `land_competition_fraction` column is the share of suitable land open to ammonia (2 % or 20 %). |
+| `--land-csv` | path | Land table from `model/land_table.py`; its `land_competition_fraction` column is the share of suitable land open to ammonia (2 % or 20 %). |
 | `--locations-csv` / `--global-locations` | path | Restricts the run to listed `lat,lon` cells (the key runs use onshore cells with suitable land). |
-| `--cell-anchor` (land build) | `center`, `southwest` | Where the `(latitude, longitude)` label sits in its 1-degree cell. `center` matches the weather nodes and the legacy land step. |
+| `--pv-policy` (`pv_policy` in `runs.yaml`) | `both`, `fixed`, `tracking` | Which PV the plant may build; `fixed` switches tracking PV off. |
+| `weather_dir` (`runs.yaml`) | path | The weather profile folder; every run uses `data/weather_data/salmon2022_pv_wind_2019_hourly_1deg`. |
 
 ## Run identifiers
 
@@ -138,20 +138,15 @@ job_ids, status, submitted_utc, upstream_run, network_runs, notes`. Statuses: `p
 `deferred`. A run defined in `runs.yaml` gets its row (status `planned`) before it is submitted;
 a test checks that every definition has one.
 
-## Plant bundles
+## Plant bundle
 
-A plant bundle is a directory of PyPSA component tables (`buses`, `generators`, `links`,
-`stores`, `loads`, `network`) in `model/plants/`. The bundles have the same components and the
-same placeholder costs: `model/run_global.py` replaces the costs with those of the technology
-YAML at run time. They differ in the conversion efficiencies, which are read from the bundle
-(notebook `00_tech_config` copies them from a YAML), in the load, and in whether tracking PV may
-be built.
-
-| Directory | Ammonia load | Electrolysis / battery charge, discharge / fuel cell efficiency | Tracking PV | Used by |
-|---|---|---|---|---|
-| `basic_ammonia_plant_2050` | 1 Mt/yr | 0.84 / 0.96, 0.96 / 0.5 (DEA 2050) | off | improved key runs; default of `model/main.py` and `model/run_global.py` |
-| `basic_ammonia_plant_2050_way` | 1 Mt/yr | 0.8865 / 0.98, 0.99 / 0.54 (Way 2050) | off | `lcoa_validation` (outside this repository) |
-| `basic_ammonia_plant_2050_way_tracking` | 1 Mt/yr | as `_way` | on | reconciling run, supply pilots |
+The plant is one directory of PyPSA component tables, `model/plants/ammonia_plant_1mt/`: the
+components, how they connect, the 1 Mt/yr ammonia load, the Haber-Bosch minimum load and ramp
+limits. Each run sets the rest from its technology YAML: the capital costs and every link's
+efficiencies (from the YAML's `carriers_in`/`carriers_out` recipe), and from its `pv_policy`
+whether tracking PV may be built. Until 7 October 2026 there were three bundles
+(`basic_ammonia_plant_2050`, `_2050_way`, `_2050_way_tracking`), which differed only in four
+efficiencies and the tracking flag; the September reports name them.
 
 ## Sources and terms
 
@@ -188,21 +183,21 @@ be built.
 | `interest_rate_<tech>` | WACC used per technology after overrides. |
 | `annual_ammonia_production_t` | Reference-design production (1 Mt/yr). |
 | `scaled_design_max_onshore_ammonia_capacity_t` [`paper_scaled_max_onshore_ammonia_capacity_t`] | Capacity of the scaled reference design on onshore land. |
-| `scaled_design_max_gridless_onshore_ammonia_capacity_t` [`paper_scaled_max_gridless_...`] | The same, counting only production that needed no grid backstop; this is what the supplier contract exports as `Max_capacity` (Mt/yr). |
+| `scaled_design_max_gridless_onshore_ammonia_capacity_t` [`paper_scaled_max_gridless_...`] | The same, counting only production that needed no grid imports (all of it: the grid is off); this is what the supplier contract exports as `Max_capacity` (Mt/yr). |
 | `scaled_design_limiting_constraint` | Which budget stopped the scaling: `wind`, `solar` or `renewable_union`. |
-| `max_ammonia_capacity_t` and the other `max_*` columns | An older capacity family from separate per-technology caps; still written and required by the QA gate, but not used downstream (to be dropped, see `MODEL_CHOICES.md`). |
+| `max_ammonia_capacity_t` and the other `max_*` columns | An older capacity family from separate per-technology caps, in surfaces before 7 October 2026; no longer written. |
 | `land_constraint`, `capacity_rule`, `land_allocation` | The options above, echoed per row. |
-| `is_gridless_feasible`, `grid_energy_share` | Whether the cell's design ran without the grid backstop. |
+| `is_gridless_feasible`, `grid_energy_share` | Whether the cell's design ran without grid imports (always, since the grid is off in the plant). |
 
-## Land table columns (`model/land_processing.py`)
+## Land table columns (`model/land_table.py`)
 
 | Column | Meaning |
 |---|---|
-| `cell_anchor` | `center` or `southwest`, see above. |
+| `cell_anchor` | Always `center`: the cell labelled (lat, lon) covers lat ± 0.5, lon ± 0.5, like the weather nodes. Tables of September 2026 and earlier were labelled by the south-west corner or the north edge and are refused. |
 | `onshore_land_pct`, `area` | MODIS land fraction of the cell and the cell's spherical area (km²). |
 | `protected_area_pct`, `slope_suitable_land_pct`, `land_exclusion_factor` | WDPA share of the cell, share of land at or below 15 degrees, and their combined factor (multiplied by the land share in the 2 % / 20 % tables). |
 | `solar_area_km2`, `wind_onshore_area_km2`, `renewable_union_area_classwise_nested_v1_km2` | Suitable area per technology after exclusions and share; the union is a classwise nested lower bound of the physical union. |
-| `solar_density_mw_per_km2`, `wind_density_mw_per_km2` | Latitude-packed First Solar fixed-tilt density (about 106 MW/km² at the equator) and 5 MW/km² wind. When the table has no `solar_density_method` column, `model/run_global.py` recomputes the PV density from the YAML instead (73.6 MW/km² at 23°); which rule to keep is open (`MODEL_CHOICES.md`). |
+| `solar_density_mw_per_km2`, `wind_density_mw_per_km2` | Latitude-packed First Solar fixed-tilt density (about 106 MW/km² at the equator) and 5 MW/km² wind. When the table has no `solar_density_method` column, `model/land.py` recomputes the PV density from the YAML instead (73.6 MW/km² at 23°); which rule to keep is open (`MODEL_CHOICES.md`). |
 
 ## Files and where they live
 

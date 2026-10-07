@@ -3,7 +3,7 @@
 
 Legacy step (reconciliation/legacy_lcoa/legacy_land_areas.py): centred 1-degree
 cells, MODIS MCD12C1 2022 x Table-2 suitability, 2 % share, no exclusions.
-green-lory build (model/land_processing.py): same MODIS and factors, centred
+green-lory build (model/land_table.py): same MODIS and factors, centred
 cells, WDPA and >15 degree slope exclusions, any land-competition share (the
 100 % table is rescaled here with apply_land_competition_scenario).
 
@@ -32,8 +32,8 @@ import pandas as pd
 import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from model.land_processing import apply_land_competition_scenario  # noqa: E402
-from model.land_union import CLASSWISE_NESTED_UNION_AREA_COLUMN  # noqa: E402
+from model.land import CLASSWISE_NESTED_UNION_AREA_COLUMN  # noqa: E402
+from model.land_table import apply_land_competition_scenario  # noqa: E402
 
 C = ROOT / "results/campaigns"
 LEGACY = C / "legacy_lcoa_20260915_v1/audit/legacy-land-areas-v1/legacy_land_areas.csv"

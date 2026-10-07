@@ -31,13 +31,13 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 
 | Path | Contents |
 |---|---|
-| `model/` | the green-lory model: `main.py` (one plant), `run_global.py` (many cells, results table), `land_processing.py` (land tables), `land_capacity.py` and `land_union.py` (land budget and capacity rules), `result_accounting.py` (LCOA and site costs); `plants/` holds the plant bundles |
+| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
 | `inputs/` | technology and cost YAMLs, finance (WACC) override CSVs, cell lists |
 | `runs.yaml` | run definitions: every setting of every run and network we keep |
 | `legacy_lcoa/` | the legacy-lcoa model reproduced end to end: frozen source, harness, land step, capacity rule, supplier table |
 | `reconciliation/` | decision, run store, green-porpoise network replay, supplier-contract export, comparison scripts, supply pilot, and the September reports in `archive/` |
 | `arc/` | ARC release staging, campaign wrappers, Slurm templates, QA tools |
-| `notebooks/` | `00_tech_config` (YAML to plant bundle) and `02_spatial_cost_inputs` (inputs of the spatial runs) |
+| `notebooks/` | `02_spatial_cost_inputs` (inputs of the spatial runs; replaced by `model/site_costs.py` in campaign step 3) |
 | `scripts/` | input builders (`build_ameli_wacc_inputs.py`, `fetch_travel_time.py`) |
 | `tests/` | `pytest` suite |
 | `data/` | large inputs; only the layout and README are tracked |
@@ -59,21 +59,22 @@ The legacy model needs its own environment (PyPSA 0.25.1 with Pyomo 6.5.0); see 
 
 ## Running
 
-**One or a few cells locally.** `model/run_global.py` needs a centred land table
+**One or a few cells locally.** `model/surface.py` needs a centred land table
 (`cell_anchor=center`; the accepted tables are listed in `data/README.md`). Its defaults are
-the improved runs' technology YAML and plant bundle; for another run, read its settings with
-`python arc/run_definitions.py show <run id>`. One week of weather at the cells of a `lat,lon`
-CSV:
+the improved runs' technology YAML and the plant bundle; for another run, read its settings
+with `python arc/run_definitions.py show <run id>`. One week of weather at the cells of a
+`lat,lon` CSV, fixed-tilt PV only as in the key runs:
 
 ```bash
-python -m model.run_global \
+python -m model.surface \
   --land-csv results/campaigns/land_center_20260923_v1/max_capacities_center_20pct_slope15.csv \
-  --locations-csv <cells.csv> --max-snapshots 168 --no-ensure-feasibility \
+  --locations-csv <cells.csv> --max-snapshots 168 --pv-policy fixed \
   --output-csv results/scratch/smoke.csv --quiet
 ```
 
-`--no-ensure-feasibility` matters: the command line keeps the grid backstop by default, while
-every campaign run removes it. Without `--override-csv` the YAML's own WACC applies.
+Without `--override-csv` the YAML's own WACC applies. The regression test runs the three focal
+cells of the key run and the reconciling run against the accepted results:
+`python -m pytest -m slow` (needs Gurobi and the data).
 
 **A defined run on ARC.** Stage a release (`bash arc/stage_release.sh <release id>`), then
 submit the run by id from it, in smoke, diagnostic and global stages

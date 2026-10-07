@@ -42,11 +42,6 @@ spatial_cost_to_model_currency: 0.875506
 water_usage_m3_per_t_nh3: 1.5 # Process + cooling water per tonne of ammonia
 water_cost_baseline_usd_per_m3: 2.0 # Baseline desalination cost (coastal reference)
 
-# ── Feasibility backstop ───────────────────────────────────────────────────────
-grid_backstop:
-  p_nom_mw: 20000
-  marginal_cost_eur_per_mwh: 100000
-
 techs:
 
  # -----------------

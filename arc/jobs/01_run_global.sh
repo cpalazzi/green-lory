@@ -144,11 +144,9 @@ export ARC_LON_MIN="${ARC_LON_MIN:-}"
 export ARC_LON_MAX="${ARC_LON_MAX:-}"
 export ARC_TIME_STEP="${ARC_TIME_STEP:-1.0}"
 export ARC_FAIL_FAST="${ARC_FAIL_FAST:-1}"  # set to 0 to swallow per-location failures silently
-export ARC_ENSURE_FEASIBILITY="${ARC_ENSURE_FEASIBILITY:-1}"  # set to 0 to disable grid backstop (hard infeasibility)
 export ARC_LAND_CONSTRAINT="${ARC_LAND_CONSTRAINT:-after_solve}"
 export ARC_CAPACITY_RULE="${ARC_CAPACITY_RULE:-scaled_reference_design}"
 export ARC_LAND_ALLOCATION="${ARC_LAND_ALLOCATION:-colocated}"
-export ARC_ALLOW_CONSERVATIVE_UNION_FALLBACK="${ARC_ALLOW_CONSERVATIVE_UNION_FALLBACK:-1}"
 export ARC_TEMPORAL_ACCOUNTING_MODE="${ARC_TEMPORAL_ACCOUNTING_MODE:-snapshot_weighted}"
 export ARC_RAMP_LIMIT_BASIS="${ARC_RAMP_LIMIT_BASIS:-per_hour}"
 export ARC_INCLUDE_SITE_COSTS="${ARC_INCLUDE_SITE_COSTS:-1}"
@@ -167,94 +165,67 @@ env | grep -E '^(ARC_|GREEN_LORY_|GRB_LICENSE_FILE|OMP_NUM_THREADS|MKL_NUM_THREA
 
 "$ARC_PYTHON" - <<'PY' 2>&1 | tee -a "$LOGFILE"
 import os
+
 import pandas as pd
-from model.run_global import run_global
+
+from model.surface import RunSettings, run_surface
+
+
+def env(name, default=""):
+    return os.environ.get(name, default).strip()
+
+
+def flag(name, default):
+    return env(name, default).lower() not in {"0", "false", "no"}
+
 
 locations = None
-locations_csv = os.environ.get("ARC_LOCATIONS_CSV", "").strip()
-limit_raw = os.environ.get("ARC_LIMIT", "").strip()
-max_snapshots_raw = os.environ.get("ARC_MAX_SNAPSHOTS", "").strip()
-threads_raw = os.environ.get("ARC_THREADS_PER_WORKER", "1").strip()
+if env("ARC_LOCATIONS_CSV"):
+    frame = pd.read_csv(env("ARC_LOCATIONS_CSV"))
+    columns = {column.lower(): column for column in frame.columns}
+    if "lat" not in columns or "lon" not in columns:
+        raise SystemExit(f"Locations CSV must contain lat/lon columns: {env('ARC_LOCATIONS_CSV')}")
+    locations = list(zip(frame[columns["lat"]].astype(float), frame[columns["lon"]].astype(float)))
+if env("ARC_LIMIT"):
+    limit = int(env("ARC_LIMIT"))
+    if locations is None:
+        land = pd.read_csv(env("ARC_LAND_CSV"))
+        columns = {column.lower(): column for column in land.columns}
+        lat, lon = columns.get("latitude") or columns.get("lat"), columns.get("longitude") or columns.get("lon")
+        if lat is None or lon is None:
+            raise SystemExit(f"Land CSV missing latitude/longitude columns: {env('ARC_LAND_CSV')}")
+        locations = list(zip(land[lat].astype(float), land[lon].astype(float)))
+    locations = locations[:limit]
 
-if locations_csv:
-    df = pd.read_csv(locations_csv)
-    cols = {c.lower(): c for c in df.columns}
-    if "lat" not in cols or "lon" not in cols:
-        raise SystemExit(f"Locations CSV must contain lat/lon columns: {locations_csv}")
-    locations = list(zip(df[cols["lat"]].astype(float), df[cols["lon"]].astype(float)))
-
-if limit_raw:
-    limit = int(limit_raw)
-    if locations is not None:
-        locations = locations[:limit]
-    else:
-        land_csv = os.environ.get("ARC_LAND_CSV")
-        ldf = pd.read_csv(land_csv)
-        lcols = {c.lower(): c for c in ldf.columns}
-        lat_col = lcols.get("latitude") or lcols.get("lat")
-        lon_col = lcols.get("longitude") or lcols.get("lon")
-        if lat_col is None or lon_col is None:
-            raise SystemExit(f"Land CSV missing latitude/longitude columns: {land_csv}")
-        locations = list(zip(ldf[lat_col].astype(float), ldf[lon_col].astype(float)))[:limit]
-
-max_snapshots = int(max_snapshots_raw) if max_snapshots_raw else None
-quiet_raw = os.environ.get("ARC_QUIET", "1").strip().lower()
-quiet = quiet_raw not in {"0", "false", "no"}
-threads_per_worker = int(threads_raw) if threads_raw else None
-lon_min_raw = os.environ.get("ARC_LON_MIN", "").strip()
-lon_max_raw = os.environ.get("ARC_LON_MAX", "").strip()
-lon_min = float(lon_min_raw) if lon_min_raw else None
-lon_max = float(lon_max_raw) if lon_max_raw else None
-time_step_raw = os.environ.get("ARC_TIME_STEP", "1.0").strip()
-time_step = float(time_step_raw) if time_step_raw else 1.0
-num_workers_raw = os.environ.get("ARC_NUM_WORKERS", "1").strip()
-num_workers = int(num_workers_raw) if num_workers_raw else 1
-fail_fast_raw = os.environ.get("ARC_FAIL_FAST", "1").strip().lower()
-fail_fast = fail_fast_raw in {"1", "true", "yes"}
-ensure_feasibility_raw = os.environ.get("ARC_ENSURE_FEASIBILITY", "1").strip().lower()
-ensure_feasibility = ensure_feasibility_raw not in {"0", "false", "no"}
-land_constraint = os.environ.get("ARC_LAND_CONSTRAINT", "after_solve").strip()
-capacity_rule = os.environ.get("ARC_CAPACITY_RULE", "scaled_reference_design").strip()
-land_allocation = os.environ.get("ARC_LAND_ALLOCATION", "colocated").strip()
-union_fallback_raw = os.environ.get(
-    "ARC_ALLOW_CONSERVATIVE_UNION_FALLBACK", "1"
-).strip().lower()
-allow_conservative_union_fallback = union_fallback_raw not in {"0", "false", "no"}
-temporal_accounting_mode = os.environ.get(
-    "ARC_TEMPORAL_ACCOUNTING_MODE", "snapshot_weighted"
-).strip()
-ramp_limit_basis = os.environ.get("ARC_RAMP_LIMIT_BASIS", "per_hour").strip()
-include_site_costs_raw = os.environ.get("ARC_INCLUDE_SITE_COSTS", "1").strip().lower()
-include_site_costs = include_site_costs_raw not in {"0", "false", "no"}
-
-result_df = run_global(
-    locations=locations,
-    land_csv=os.environ.get("ARC_LAND_CSV"),
-    override_csv=(os.environ.get("ARC_OVERRIDE_CSV") or "").strip() or None,
-    tech_yaml=os.environ.get("ARC_TECH_YAML"),
-    plant_dir=os.environ.get("ARC_PLANT_DIR") or None,
-    time_step=time_step,
-    max_snapshots=max_snapshots,
-    output_csv=os.environ.get("ARC_OUTPUT_CSV"),
-    quiet=quiet,
-    threads_per_worker=threads_per_worker,
-    num_workers=num_workers,
-    lon_min=lon_min,
-    lon_max=lon_max,
-    weather_dir=os.environ.get("ARC_WEATHER_DIR") or None,
-    fail_fast=fail_fast,
-    ensure_feasibility=ensure_feasibility,
-    land_constraint=land_constraint,
-    capacity_rule=capacity_rule,
-    land_allocation=land_allocation,
-    allow_conservative_union_fallback=allow_conservative_union_fallback,
-    temporal_accounting_mode=temporal_accounting_mode,
-    ramp_limit_basis=ramp_limit_basis,
-    include_site_costs=include_site_costs,
+settings = RunSettings(
+    time_step=float(env("ARC_TIME_STEP", "1.0") or 1.0),
+    max_snapshots=int(env("ARC_MAX_SNAPSHOTS")) if env("ARC_MAX_SNAPSHOTS") else None,
+    pv_policy=env("ARC_PV_POLICY", "both"),
+    land_constraint=env("ARC_LAND_CONSTRAINT", "after_solve"),
+    capacity_rule=env("ARC_CAPACITY_RULE", "scaled_reference_design"),
+    land_allocation=env("ARC_LAND_ALLOCATION", "colocated"),
+    temporal_accounting_mode=env("ARC_TEMPORAL_ACCOUNTING_MODE", "snapshot_weighted"),
+    ramp_limit_basis=env("ARC_RAMP_LIMIT_BASIS", "per_hour"),
+    include_site_costs=flag("ARC_INCLUDE_SITE_COSTS", "1"),
 )
-
-print(f"Processed {len(result_df)} locations")
-print(f"Saved: {os.environ.get('ARC_OUTPUT_CSV')}")
+result = run_surface(
+    locations,
+    land_csv=env("ARC_LAND_CSV"),
+    tech_yaml=env("ARC_TECH_YAML"),
+    plant_dir=env("ARC_PLANT_DIR") or None,
+    override_csv=env("ARC_OVERRIDE_CSV") or None,
+    weather_dir=env("ARC_WEATHER_DIR") or None,
+    settings=settings,
+    output_csv=env("ARC_OUTPUT_CSV"),
+    quiet=flag("ARC_QUIET", "1"),
+    threads_per_worker=int(env("ARC_THREADS_PER_WORKER", "1") or 1),
+    num_workers=int(env("ARC_NUM_WORKERS", "1") or 1),
+    lon_min=float(env("ARC_LON_MIN")) if env("ARC_LON_MIN") else None,
+    lon_max=float(env("ARC_LON_MAX")) if env("ARC_LON_MAX") else None,
+    fail_fast=flag("ARC_FAIL_FAST", "1"),
+)
+print(f"Processed {len(result)} locations")
+print(f"Saved: {env('ARC_OUTPUT_CSV')}")
 PY
 
 echo "Completed run: $RUN_LABEL"

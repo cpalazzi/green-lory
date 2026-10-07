@@ -67,7 +67,7 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
 
 ## Notes
 
-- All surfaces disable the grid backstop. Full-year runs require the versioned
+- No surface has a grid backstop (the option was removed on 7 October 2026). Full-year runs require the versioned
   `renewable_union_area_km2_classwise_nested_v1` column of the land table (a lower bound on the
   physical wind/PV union).
 - `--smoke-hours` (default 168) sets the simulated duration of the smoke stage;

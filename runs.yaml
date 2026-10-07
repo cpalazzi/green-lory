@@ -41,7 +41,7 @@ runs:
     results_class: 10_replication
     job_token: rep-nomh2
     tech_yaml: inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml
-    plant_dir: model/plants/basic_ammonia_plant_2050_way_tracking
+    plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: both
     finance_csv: inputs/amelired_interest_inputs_2050.csv
     finance_csv_sha256: b6cb3600a9a0a2a7d5a0c0fef016304d62b049ea308512224ba30e0bfb020ba8
@@ -92,7 +92,7 @@ runs:
     results_class: 30_keyruns
     job_token: key-dea50-wacc5
     tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
-    plant_dir: model/plants/basic_ammonia_plant_2050
+    plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
     finance_csv: inputs/uniform_interest_inputs_0p05_2050.csv  # generated: arc/build_finance_overrides.py
     finance_csv_sha256: d29259c8e4d094a3a56f2007e61a48b56e6e6fc7bbbe62b7f9ad0a2caea08a3d
@@ -125,7 +125,7 @@ runs:
     results_class: 30_keyruns
     job_token: key-dea50-ameli
     tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
-    plant_dir: model/plants/basic_ammonia_plant_2050
+    plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
     finance_csv: inputs/amelired_interest_inputs_2050_center.csv  # generated: arc/build_finance_overrides.py
     finance_csv_sha256: bddbc6dbd47a2c0b5eb0db3300d2c07dd10ec9bad8baec14e4515667fcf68333

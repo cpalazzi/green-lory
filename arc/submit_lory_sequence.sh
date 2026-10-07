@@ -246,7 +246,6 @@ configure_scenario() {
     SIMULATED_HOURS="$SMOKE_HOURS"
     EXPECTED_FULL_YEAR="0"
     NUM_WORKERS="${ARC_CAMPAIGN_DIAGNOSTIC_WORKERS:-3}"
-    ALLOW_CONSERVATIVE_UNION_FALLBACK="1"
   elif [[ "$RUN_STAGE" == "diagnostic" ]]; then
     PATH_CLASS="$SCENARIO_CLASS"
     LOCATIONS_CSV="$DIAGNOSTIC_LOCATIONS"
@@ -254,7 +253,6 @@ configure_scenario() {
     SIMULATED_HOURS="8760"
     EXPECTED_FULL_YEAR="1"
     NUM_WORKERS="${ARC_CAMPAIGN_DIAGNOSTIC_WORKERS:-3}"
-    ALLOW_CONSERVATIVE_UNION_FALLBACK="0"
   else
     PATH_CLASS="$SCENARIO_CLASS"
     LOCATIONS_CSV="$GLOBAL_LOCATIONS_CSV"
@@ -262,9 +260,7 @@ configure_scenario() {
     SIMULATED_HOURS="8760"
     EXPECTED_FULL_YEAR="1"
     NUM_WORKERS="${ARC_CAMPAIGN_GLOBAL_WORKERS:-12}"
-    ALLOW_CONSERVATIVE_UNION_FALLBACK="0"
   fi
-  ENSURE_FEASIBILITY="0"
   THREADS_PER_WORKER="${ARC_CAMPAIGN_THREADS_PER_WORKER:-4}"
   SLURM_CPUS="$((NUM_WORKERS * THREADS_PER_WORKER))"
   if [[ "$RUN_STAGE" == "global" ]]; then
@@ -301,11 +297,9 @@ with open(path, newline="", encoding="utf-8") as handle:
 tracking = rows.get("solar_tracking")
 if tracking is None:
     raise SystemExit(f"solar_tracking generator missing from {path}")
-extendable = tracking.get("p_nom_extendable", "").strip().lower() in {"1", "true", "yes"}
-if pv_policy == "fixed" and extendable:
-    raise SystemExit(f"fixed-PV scenario but solar_tracking is extendable in {path}")
-if pv_policy != "fixed" and not extendable:
-    raise SystemExit(f"solar_tracking is not extendable in {path}")
+# The bundle allows tracking PV; the run's pv_policy switches it off at run time
+if tracking.get("p_nom_extendable", "").strip().lower() not in {"1", "true", "yes"}:
+    raise SystemExit(f"solar_tracking is not extendable in {path}; pv_policy {pv_policy} cannot apply")
 PY
 }
 
@@ -415,9 +409,7 @@ validate_scenario_sources() {
   validate_pinned_sha256 "Land table" "$LAND_CSV" "$EXPECTED_LAND_TABLE_SHA256"
   validate_pinned_sha256 "Finance CSV" "$OVERRIDE_CSV" "$EXPECTED_OVERRIDE_CSV_SHA256"
   validate_release_source_inventory
-  if [[ "$ALLOW_CONSERVATIVE_UNION_FALLBACK" == "0" ]]; then
-    validate_explicit_union_area "$LAND_CSV"
-  fi
+  validate_explicit_union_area "$LAND_CSV"
   validate_cost_scope_and_override_coverage
 
   if $DRY_RUN; then
@@ -500,11 +492,9 @@ manifest_command() {
     --slurm-memory "$SLURM_MEMORY"
     --mail-user "$MAIL_USER"
     --mail-type "$MAIL_TYPE"
-    --ensure-feasibility "$ENSURE_FEASIBILITY"
     --land-constraint "$LAND_CONSTRAINT"
     --capacity-rule "$CAPACITY_RULE"
     --land-allocation "$LAND_ALLOCATION"
-    --allow-conservative-union-fallback "$ALLOW_CONSERVATIVE_UNION_FALLBACK"
     --temporal-accounting-mode "$TEMPORAL_ACCOUNTING_MODE"
     --ramp-limit-basis "$RAMP_LIMIT_BASIS"
     --include-site-costs "$INCLUDE_SITE_COSTS"
@@ -563,8 +553,6 @@ for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
   echo "  land:        $LAND_CONSTRAINT / $CAPACITY_RULE / $LAND_ALLOCATION"
   echo "  temporal:    $TEMPORAL_ACCOUNTING_MODE / $RAMP_LIMIT_BASIS"
   echo "  site costs:  $INCLUDE_SITE_COSTS"
-  echo "  grid backstop: $ENSURE_FEASIBILITY"
-  echo "  union fallback: $ALLOW_CONSERVATIVE_UNION_FALLBACK"
   echo "  locations:   ${LOCATIONS_CSV:-<all positive-capacity land cells>}"
   echo "  snapshots:   ${MAX_SNAPSHOTS:-<full year>}"
   echo "  simulated hours: $SIMULATED_HOURS"
@@ -601,6 +589,7 @@ for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
     "ARC_MANIFEST_SHA256=$MANIFEST_SHA256"
     "ARC_TECH_YAML=$TECH_YAML"
     "ARC_PLANT_DIR=$PLANT_DIR"
+    "ARC_PV_POLICY=$PV_POLICY"
     "ARC_OVERRIDE_CSV=$OVERRIDE_CSV"
     "ARC_LAND_CSV=$LAND_CSV"
     "ARC_WEATHER_DIR=$WEATHER_DIR"
@@ -609,11 +598,9 @@ for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
     "ARC_MAX_SNAPSHOTS=$MAX_SNAPSHOTS"
     "ARC_LIMIT="
     "ARC_FAIL_FAST=1"
-    "ARC_ENSURE_FEASIBILITY=$ENSURE_FEASIBILITY"
     "ARC_LAND_CONSTRAINT=$LAND_CONSTRAINT"
     "ARC_CAPACITY_RULE=$CAPACITY_RULE"
     "ARC_LAND_ALLOCATION=$LAND_ALLOCATION"
-    "ARC_ALLOW_CONSERVATIVE_UNION_FALLBACK=$ALLOW_CONSERVATIVE_UNION_FALLBACK"
     "ARC_TEMPORAL_ACCOUNTING_MODE=$TEMPORAL_ACCOUNTING_MODE"
     "ARC_RAMP_LIMIT_BASIS=$RAMP_LIMIT_BASIS"
     "ARC_INCLUDE_SITE_COSTS=$INCLUDE_SITE_COSTS"

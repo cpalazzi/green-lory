@@ -1,23 +1,39 @@
 # model/: the green-lory plant model
 
+The package computes, for each 1-degree cell, the levelised cost of ammonia (LCOA) of a plant
+powered by wind and PV, and how much ammonia the cell's land can supply. Modules, in the order
+a run uses them:
+
 | Module | Role |
 |---|---|
-| `main.py` | Builds the PyPSA network of one plant from a plant bundle (`generate_network`), applies the weather profiles and solves it (`main`); solver options and the optimal-termination check |
-| `run_global.py` | Runs the plant over many cells: reads the technology YAML (with `extends:`), the finance overrides and the land table, applies the YAML costs to the bundle, solves each cell (with a solver retry chain), and writes one results row per cell. Command-line entry point: `python -m model.run_global --help` |
-| `auxiliary.py` | Ammonia ramp constraints (linopy), weather loading and aggregation, result dictionaries |
-| `land_processing.py` | Builds land tables (`max_capacities_*.csv`) from MODIS land cover, WDPA protected areas and GEBCO slope, per centred 1-degree cell |
-| `land_capacity.py` | Renewable land budget per cell (co-located or exclusive wind/PV land), and the capacity rules (`scaled_reference_design`, `solved_quantity`) |
-| `land_union.py` | Names and provenance of the wind/PV land-overlap (union) estimate |
-| `result_accounting.py` | Final LCOA accounting: site costs (water, land rent), headline shares, grid-backstop reporting |
-| `location_tools.py` | Weather data access (the 2019 NetCDF stack) and cell-to-country attribution |
-| `data_store.py`, `constants.py`, `data_paths.py` | Result container, physical constants, default data paths |
-| `plot_global_heatmap.py` | LCOA maps, used by the notebooks (`plot_monthly_results.py` is unused) |
+| `config.py` | Paths (data, inputs, plant bundle), the default YAML and bundle, physical constants |
+| `technology.py` | The technology YAML (with `extends:`): link efficiencies from each link's recipe, annualised costs, and the per-cell override table (interest rates, build-cost multipliers, water and land prices) |
+| `weather.py` | Hourly PV and wind profiles of a cell from the NetCDF stack, and block averages for coarser steps |
+| `plant.py` | One plant at one cell: the PyPSA network from the plant bundle, its constraints (Haber-Bosch ramps, battery coupling, land in the solve), the Gurobi solve and its acceptance check, the plant results |
+| `accounting.py` | After the solve: cost splits (equipment, installation, O&M, interest), water and land costs in the headline, grid-use classification |
+| `land.py` | Land budgets per cell (co-located or exclusive wind and PV land), the capacity rules (`scaled_reference_design`, `solved_quantity`), loading and checking land tables |
+| `land_table.py` | Building land tables from MODIS land cover, WDPA protected areas and GEBCO slope (`python -m model.land_table --help`) |
+| `surface.py` | Running the plant over many cells, serially or in forked workers, with a numerical retry chain (`python -m model.surface --help`) |
+| `plot_global_heatmap.py` | LCOA maps for the notebooks |
 
-`plants/` holds the plant bundles (PyPSA component tables). Without explicit arguments,
-`main.py` and `run_global.py` use the improved runs' bundle, `plants/basic_ammonia_plant_2050`,
-and technology YAML, `inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml`. The bundles,
-options and result columns are described in `../GLOSSARY.md`; the open modelling choices in
-`../MODEL_CHOICES.md`.
+`plants/ammonia_plant_1mt/` is the plant; its README lists what the bundle fixes and what each
+run sets from its YAML. Runs are data: `../runs.yaml` gives every setting of every run by id,
+and the ARC job `../arc/jobs/01_run_global.sh` passes one run's settings to
+`surface.run_surface`. Options and result columns are described in `../GLOSSARY.md`, the open
+modelling choices in `../MODEL_CHOICES.md`.
+
+## One cell, step by step (`surface.run_cell`)
+
+1. Copy the base network: the plant bundle with the YAML's link efficiencies and the run's PV
+   policy, read once per run.
+2. Set the costs: every YAML cost annualised at its default interest rate
+   (`technology.apply_base_costs`), then the cell's overrides: its interest rates, and the
+   installation part times its build-cost multiplier (`technology.apply_cell_overrides`).
+3. Read the cell's land row. With `after_solve` (all campaign runs) the land does not limit the
+   design; with `in_solve` it bounds wind and PV inside the optimisation.
+4. Solve the plant for the cell's year of weather (`plant.solve`).
+5. Complete the accounting: water and land costs, cost shares, grid use (`accounting.py`), and
+   the capacity: the 1 Mt/yr design scaled until it fills the cell's land (`land.py`).
 
 ## Spatial cost inputs
 
@@ -25,7 +41,7 @@ Moved here unchanged from the May 2026 README. These inputs are used only by the
 runs (`bspat`, `wspat`), which are deferred until the remoteness and water inputs are reviewed;
 the key runs are flat.
 
-Notebook 02 generates per-location, per-technology cost overrides in `inputs/spatial_cost_inputs.csv`. The build cost multiplier adjusts only the **build/installation** portion of CAPEX — equipment costs are unchanged.
+Notebook 02 generates per-location, per-technology cost overrides in `inputs/spatial_cost_inputs.csv`. Campaign step 3 replaces this method (equipment by port, installation by city, slope classes; `../CAMPAIGN_PLAN.md` section 0a). The build cost multiplier adjusts only the **build/installation** portion of CAPEX — equipment costs are unchanged.
 
 ### Composite multiplier
 
@@ -76,7 +92,7 @@ Placeholder at 1.0 everywhere. Will accept a per-country index when available.
 
 ### How the multiplier enters the model
 
-In `run_global.py`, only the **build** portion of overnight cost is scaled:
+In `technology.apply_cell_overrides`, only the **build** portion of overnight cost is scaled:
 
 ```
 effective_overnight = tech_cost + (build_cost × build_cost_multiplier)

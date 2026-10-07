@@ -39,7 +39,7 @@ class RunDefinitionsTest(unittest.TestCase):
         }
         self.assertEqual(set(values), set(WRAPPER_VARIABLES.values()))
         self.assertEqual(values["TECH_YAML"], "inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml")
-        self.assertEqual(values["PLANT_DIR"], "model/plants/basic_ammonia_plant_2050")
+        self.assertEqual(values["PLANT_DIR"], "model/plants/ammonia_plant_1mt")
         self.assertEqual(values["TIME_STEP"], "1.0")
         self.assertEqual(values["INCLUDE_SITE_COSTS"], "1")
         self.assertEqual(values["FLAT_WATER_MODEL_PER_M3"], "2.0")

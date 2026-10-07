@@ -22,9 +22,6 @@ REQUIRED_COLUMNS = (
     "country",
     "currency",
     "annual_ammonia_production_t",
-    "max_ammonia_capacity_t",
-    "max_onshore_ammonia_capacity_t",
-    "max_gridless_onshore_ammonia_capacity_t",
     "scaled_design_max_onshore_ammonia_capacity_t",
     "scaled_design_max_gridless_onshore_ammonia_capacity_t",
     "wind_mw_per_t_nh3",
@@ -61,11 +58,9 @@ REQUIRED_COLUMNS = (
     "grid_free_result_status",
     "is_gridless_feasible",
     "renewable_union_area_source",
-    "renewable_union_area_is_conservative_fallback",
     "renewable_union_area_is_lower_bound_approximation",
     "renewable_union_area_method",
     "renewable_union_area_method_version",
-    "legacy_capacity_alias_method",
     "preferred_supplier_capacity_column",
 )
 
@@ -381,9 +376,6 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         positive=True,
     )
     capacity_columns = (
-        "max_ammonia_capacity_t",
-        "max_onshore_ammonia_capacity_t",
-        "max_gridless_onshore_ammonia_capacity_t",
         "scaled_design_max_onshore_ammonia_capacity_t",
         "scaled_design_max_gridless_onshore_ammonia_capacity_t",
     )
@@ -458,11 +450,6 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
 
     _require_constant_text(
         combined,
-        "legacy_capacity_alias_method",
-        "historical_independent_total_vs_onshore_power_caps_v0",
-    )
-    _require_constant_text(
-        combined,
         "preferred_supplier_capacity_column",
         "scaled_design_max_gridless_onshore_ammonia_capacity_t",
     )
@@ -471,43 +458,11 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
     )
     _require_constant_bool(combined, "is_gridless_feasible", True)
 
-    union_sources = set(combined["renewable_union_area_source"].dropna().astype(str))
-    allowed_union_sources = {
-        "explicit_classwise_nested_v1_lower_bound",
-        "explicit_legacy_unversioned",
-        "conservative_max",
-    }
-    if not union_sources or not union_sources.issubset(allowed_union_sources):
-        raise ValueError(f"Unexpected renewable-union source(s): {sorted(union_sources)}")
-    if args.stage != "smoke":
-        _require_constant_text(
-            combined,
-            "renewable_union_area_source",
-            "explicit_classwise_nested_v1_lower_bound",
-        )
-        _require_constant_bool(
-            combined, "renewable_union_area_is_conservative_fallback", False
-        )
-        _require_constant_bool(
-            combined, "renewable_union_area_is_lower_bound_approximation", True
-        )
-        _require_constant_text(
-            combined,
-            "renewable_union_area_method",
-            "classwise_nested_overlap_lower_bound",
-        )
-        _require_constant_text(
-            combined, "renewable_union_area_method_version", "v1"
-        )
-    else:
-        fallback_flags = _truthy_series(
-            combined["renewable_union_area_is_conservative_fallback"]
-        )
-        expected_fallback = combined["renewable_union_area_source"].astype(str).eq(
-            "conservative_max"
-        )
-        if not fallback_flags.equals(expected_fallback):
-            raise ValueError("Smoke union fallback flag contradicts its source label")
+    # Every stage reads a versioned land table (the model refuses others)
+    _require_constant_text(combined, "renewable_union_area_source", "explicit_classwise_nested_v1_lower_bound")
+    _require_constant_bool(combined, "renewable_union_area_is_lower_bound_approximation", True)
+    _require_constant_text(combined, "renewable_union_area_method", "classwise_nested_overlap_lower_bound")
+    _require_constant_text(combined, "renewable_union_area_method_version", "v1")
 
     if args.require_interest_overrides and not _truthy_series(
         combined["interest_overrides_applied"]

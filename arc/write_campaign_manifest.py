@@ -60,18 +60,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--slurm-memory", default="370G")
     parser.add_argument("--mail-user", default="carlo.palazzi@eng.ox.ac.uk")
     parser.add_argument("--mail-type", default="BEGIN,END,FAIL")
-    parser.add_argument("--ensure-feasibility", required=True, type=_zero_or_one)
     parser.add_argument("--land-constraint", choices=("after_solve", "in_solve"), required=True)
     parser.add_argument("--capacity-rule", choices=("scaled_reference_design",), required=True)
     parser.add_argument(
         "--land-allocation",
         choices=("colocated", "exclusive"),
         required=True,
-    )
-    parser.add_argument(
-        "--allow-conservative-union-fallback",
-        required=True,
-        type=_zero_or_one,
     )
     parser.add_argument(
         "--temporal-accounting-mode",
@@ -563,11 +557,9 @@ def main() -> None:
             "num_workers": args.num_workers,
             "threads_per_worker": args.threads_per_worker,
             "fail_fast": True,
-            "ensure_feasibility": args.ensure_feasibility,
             "land_constraint": args.land_constraint,
             "capacity_rule": args.capacity_rule,
             "land_allocation": args.land_allocation,
-            "allow_conservative_union_fallback": args.allow_conservative_union_fallback,
             "temporal_accounting_mode": args.temporal_accounting_mode,
             "ramp_limit_basis": args.ramp_limit_basis,
             "include_site_costs": args.include_site_costs,

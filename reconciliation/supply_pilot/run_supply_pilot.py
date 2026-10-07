@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 import json
@@ -19,20 +18,13 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from arc.release_source_inventory import _sha256 as sha, verify_inventory
 from arc.validate_land_campaign_input import validate_land_campaign_input
-from model import main as plant_main, location_tools as lt
-from model.constants import AMMONIA_HHV_MWH_PER_T
-from model import data_paths
-from model.data_store import _apply_unit_suffixes
-from model.run_global import (
-    _load_tech_inputs, _load_tech_meta, _load_land_table, _load_interest_table,
-    _build_land_lookup, _build_interest_lookup, _apply_spatial_solar_density_from_tech_config,
-    _run_single_location,
-)
+from model import config, land, plant, technology, weather
+from model.surface import CellFailure, RunInputs, RunSettings, run_cell
 import yaml
 
 # Way 2050 costs with the explicit compressor and the DEA tank (the pilots' plant cost set)
 TECH_YAML = Path("inputs/tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml")
-PLANT_DIR = Path("model/plants/basic_ammonia_plant_2050_way_tracking")
+PLANT_DIR = Path("model/plants/ammonia_plant_1mt")  # the Way efficiencies come from TECH_YAML
 
 STATE = {}
 
@@ -77,28 +69,25 @@ def validate_bathymetry_input(path, expected_sha256):
 
 def is_proven_infeasible(error):
     """Do not confuse setup, licence, numerical or ambiguous solver failures with infeasibility."""
-    while error is not None:
-        if isinstance(error, plant_main.OptimizationFailure):
-            return error.condition == "infeasible"
-        error = error.__cause__
-    return False
+    failure = solver_failure(error)
+    return failure is not None and failure.condition == "infeasible"
 
 
 def solver_failure(error):
     while error is not None:
-        if isinstance(error, plant_main.OptimizationFailure):
+        if isinstance(error, plant.OptimizationFailure):
             return error
         error = error.__cause__
     return None
 
 
-def run_location_with_retry(*args, attempts, **kwargs):
+def run_location_with_retry(inputs, lat, lon, *, attempts):
     """One fresh-network retry for identified numerical/ambiguous terminations."""
     for index, options in enumerate((None, ROBUST_GUROBI_OPTIONS)):
         attempt = {"solver_options_override": options}
         try:
-            status, result = _run_single_location(*args, **kwargs, solver_options_override=options)
-        except RuntimeError as error:
+            result = run_cell(inputs, lat, lon, quiet=True, solver_options_override=options)
+        except CellFailure as error:
             failure = solver_failure(error)
             if failure is None:
                 raise
@@ -109,40 +98,22 @@ def run_location_with_retry(*args, attempts, **kwargs):
                 print(f"RETRY numerical termination {failure.condition}: dual simplex", flush=True)
                 continue
             raise
-        if status != "done" or result is None:
-            raise ValueError("Missing solved point")
-        plant_main.require_optimal_termination(result["solver_status"], result["solver_termination"])
+        plant.require_optimal_termination(result["solver_status"], result["solver_termination"])
         attempt.update(status=result["solver_status"], termination=result["solver_termination"])
         attempts.append(attempt)
-        return status, result
+        return result
     raise AssertionError("Exhausted numerical retry without a result or exception")
 
 
-def set_quantity(base, quantity_mtpa):
-    if not np.isfinite(quantity_mtpa) or quantity_mtpa <= 0:
-        raise ValueError("Quantity must be positive and finite")
-    if list(base.loads.index) != ["ammonia"] or not base.loads_t.p_set.empty:
-        raise ValueError("Pilot requires one constant ammonia load")
-    network = copy.deepcopy(base)
-    network.loads.at["ammonia", "p_set"] = quantity_mtpa * 1e6 * AMMONIA_HHV_MWH_PER_T / 8760
-    return network
-
-
+set_quantity = plant.set_ammonia_output
+# The experiment configs name the PV policies as below; model.plant calls them both/fixed/tracking
 PV_POLICIES = ("both", "fixed-only", "tracking-only")
 
 
 def apply_pv_policy(network, policy):
-    """Disable the PV technology excluded by the policy before any solve."""
     if policy not in PV_POLICIES:
-        raise ValueError("Unknown PV policy")
-    excluded = {"both": None, "fixed-only": "solar_tracking", "tracking-only": "solar"}[policy]
-    if excluded is not None:
-        if excluded not in network.generators.index:
-            raise ValueError(f"Missing {excluded} generator")
-        network.generators.loc[excluded, "p_nom"] = 0.
-        network.generators.loc[excluded, "p_nom_extendable"] = False
-        network.generators.loc[excluded, "p_nom_max"] = 0.
-    return network
+        raise ValueError(f"Unknown PV policy {policy!r}")
+    return plant.restrict_pv(network, {"both": "both", "fixed-only": "fixed", "tracking-only": "tracking"}[policy])
 
 
 def validate_result(result, quantity, land, *, constrained):
@@ -201,18 +172,20 @@ def solve_point(site, quantity, directory, *, constrained):
     record = {"site": site["id"], "latitude": lat, "longitude": lon,
               "target_Mtpa": quantity, "constrained": constrained, "started_utc": start}
     record["solver_attempts"] = []
-    try:
-        status, result = run_location_with_retry(
-            lat, lon, STATE["weather"], STATE["interest"], STATE["tech"], STATE["meta"],
-            STATE["land_lookup"], network, aggregation_count=1, time_step=1.,
-            max_snapshots=None, quiet=True, fail_fast=True,
+    inputs = RunInputs(
+        settings=RunSettings(
+            time_step=1.0,
             land_constraint="in_solve" if constrained else "after_solve",
             capacity_rule="solved_quantity" if constrained else "scaled_reference_design",
-            land_allocation=STATE.get("land_allocation", "exclusive"), allow_conservative_union_fallback=False,
+            land_allocation=STATE.get("land_allocation", "exclusive"),
             temporal_accounting_mode="snapshot_weighted", ramp_limit_basis="per_hour",
             include_site_costs=True,
-            attempts=record["solver_attempts"],
-        )
+        ),
+        tech_inputs=STATE["tech"], tech_meta=STATE["meta"], overrides=STATE["interest"],
+        land=STATE["land_lookup"], base_network=network, weather=STATE["weather"],
+    )
+    try:
+        result = run_location_with_retry(inputs, lat, lon, attempts=record["solver_attempts"])
     except RuntimeError as error:
         if not constrained or not is_proven_infeasible(error):
             raise
@@ -221,11 +194,8 @@ def solve_point(site, quantity, directory, *, constrained):
         write_json(directory / "status.json", record)
         print(f"INFEASIBLE {site['id']} {quantity:.6g} Mt/year", flush=True)
         return record
-    if status != "done" or result is None:
-        raise ValueError("Missing solved point")
-    # _run_single_location returns internal component names; run_global's
-    # Data_store normally performs this conversion before exposing CSV results.
-    result = _apply_unit_suffixes(result)
+    # run_cell returns component names without units; surfaces add them when writing rows
+    result = plant.add_unit_suffixes(result)
     metrics = validate_result(result, quantity, STATE["land_lookup"][(lat, lon)], constrained=constrained)
     if STATE.get("pv_policy", "both") == "fixed-only" and abs(result["solar_tracking_mw"]) > 1e-8:
         raise ValueError("Tracking capacity in fixed-only experiment")
@@ -290,31 +260,31 @@ def main():
     config_path = args.experiment_config.resolve()
     if not config_path.is_relative_to(ROOT):
         raise ValueError("Experiment config must be in the pinned source release")
-    config = json.loads(config_path.read_text())
-    if config.get("pv_policy", "both") != args.pv_policy:
+    experiment = json.loads(config_path.read_text())
+    if experiment.get("pv_policy", "both") != args.pv_policy:
         raise ValueError("PV policy differs from experiment config")
-    if sha(args.land) != config["land_sha256"]:
+    if sha(args.land) != experiment["land_sha256"]:
         raise ValueError("Land differs from completed common-land pilot")
     land_qa = validate_land_campaign_input(args.land, expected_land_fraction=.02)
     tech_path = ROOT / TECH_YAML
-    tech = _load_tech_inputs(tech_path)
+    tech = technology.load_tech_inputs(tech_path)
     if not np.isclose(tech["solar_tracking"]["land_use_km2_per_mw"] / tech["solar"]["land_use_km2_per_mw"],
-                      config["tracking_footprint_ratio"], rtol=1e-9, atol=0):
+                      experiment["tracking_footprint_ratio"], rtol=1e-9, atol=0):
         raise ValueError("Changed tracking packing ratio")
-    land_allocation = config.get("land_allocation", "exclusive")
+    land_allocation = experiment.get("land_allocation", "exclusive")
     if land_allocation not in {"colocated", "exclusive"}:
         raise ValueError("Experiment config must declare land_allocation colocated or exclusive")
     if land_allocation == "colocated":
-        declared = float(config.get("wind_land_exclusive_fraction", -1))
+        declared = float(experiment.get("wind_land_exclusive_fraction", -1))
         if not np.isclose(declared, float(tech["wind"].get("land_use_exclusive_fraction", 0.03)), rtol=1e-9, atol=0):
             raise ValueError("wind_land_exclusive_fraction in the config differs from the technology YAML")
     previous = json.loads((args.weather_run / "manifest.json").read_text())
     previous_inputs = {Path(f["path"]).name: f["sha256"] for f in previous["inputs"]}
     bathymetry = validate_bathymetry_input(
-        data_paths.BATHYMETRY_FILE, previous_inputs["model_bathymetry.nc"])
-    plant = ROOT / PLANT_DIR
+        config.BATHYMETRY_FILE, previous_inputs["model_bathymetry.nc"])
+    plant_dir = ROOT / PLANT_DIR
     files = [*tech_yaml_dependencies(tech_path, ROOT), ROOT / "inputs/amelired_interest_inputs_2050.csv",
-             *sorted(plant.glob("*.csv")), bathymetry]
+             *sorted(plant_dir.glob("*.csv")), bathymetry]
     tech_yaml_changed = []
     for path in files:
         if path.name == "generators.csv" or sha(path) == previous_inputs[path.name]:
@@ -322,13 +292,13 @@ def main():
         # The technology overlay may carry revised land-use parameters (tracking footprint
         # ratio, wind exclusive fraction) when the experiment config pins its exact hash; the
         # plant bundle CSVs that hold the solver's costs must still match the reference run.
-        if path.name == TECH_YAML.name and config.get("tech_yaml_sha256") == sha(path):
+        if path.name == TECH_YAML.name and experiment.get("tech_yaml_sha256") == sha(path):
             tech_yaml_changed.append({"path": str(path.resolve()), "sha256": sha(path),
                                       "reference_sha256": previous_inputs[path.name],
                                       "note": "land-use parameters revised; pinned by experiment config"})
             continue
         raise ValueError(f"Changed controlled input: {path.name}")
-    generators = pd.read_csv(plant / "generators.csv").set_index("name")
+    generators = pd.read_csv(plant_dir / "generators.csv").set_index("name")
     if not generators.loc[["wind", "solar", "solar_tracking"], "p_nom_extendable"].all():
         raise ValueError("Pilot must permit wind and both PV options (the policy disables one at run time)")
     if generators.loc["grid", "p_nom_extendable"] or generators.loc["grid", "p_nom"] != 0:
@@ -339,7 +309,7 @@ def main():
         if sha(path) != entry["sha256"]:
             raise ValueError(f"Weather hash failure: {path}")
         weather_files.append({"path": str(path.resolve()), "sha256": entry["sha256"]})
-    manifest = {"source_release": release, "experiment": config, "land_qa": land_qa,
+    manifest = {"source_release": release, "experiment": experiment, "land_qa": land_qa,
                 "pv_policy": args.pv_policy, "tech_yaml_changed_from_reference": tech_yaml_changed,
                 "solver_acceptance": "status ok AND termination optimal; physical QA also required",
                 "numerical_retry_options": ROBUST_GUROBI_OPTIONS,
@@ -349,26 +319,26 @@ def main():
                 "protocol": "One 1 Mt/year unconstrained control per site, then the configured specified-quantity, full-year hourly shared-land solves; only proven solver infeasibility is recorded as infeasible. No grid backstop. No post-solve capacity scaling for constrained points. PV policy is explicitly recorded; fixed-only disables tracking capacity before every solve."}
     if args.preflight_only:
         # Exercise the real loader so missing run-time dependencies cannot pass.
-        weather = lt.all_locations(str(args.weather_run / "weather_used"), cache_resources=True)
-        weather.close()
+        weather.ProfileStack(args.weather_run / "weather_used").close()
         print(json.dumps({"preflight_pass": True, "source_release": release,
                           "pv_policy": args.pv_policy,
-                          "cases": len(config["sites"])+sum(len(s["quantities_Mtpa"]) for s in config["sites"])}, indent=2))
+                          "cases": len(experiment["sites"])+sum(len(s["quantities_Mtpa"]) for s in experiment["sites"])}, indent=2))
         return
     args.output.mkdir(parents=True, exist_ok=False)
     write_json(args.output / "manifest.json", manifest)
-    land = _apply_spatial_solar_density_from_tech_config(_load_land_table(args.land), tech)
-    STATE.update(config=config, output=args.output, pv_policy=args.pv_policy, tech=tech, meta=_load_tech_meta(tech_path),
-                 land_allocation=land_allocation,
-                 land_lookup=_build_land_lookup(land),
-                 interest=_build_interest_lookup(_load_interest_table(ROOT / "inputs/amelired_interest_inputs_2050.csv")))
-    STATE["weather"] = lt.all_locations(str(args.weather_run / "weather_used"), cache_resources=True)
-    STATE["base"] = plant_main.generate_network(8760, str(plant), aggregation_count=1, time_step=1.,
-                                                temporal_accounting_mode="snapshot_weighted")
+    land_table = land.load_land_table(args.land, tech)
+    STATE.update(config=experiment, output=args.output, pv_policy=args.pv_policy, tech=tech,
+                 meta=technology.load_tech_meta(tech_path), land_allocation=land_allocation,
+                 land_lookup=land.index_land_table(land_table),
+                 interest=technology.index_override_table(
+                     technology.load_override_table(ROOT / "inputs/amelired_interest_inputs_2050.csv")))
+    STATE["weather"] = weather.ProfileStack(args.weather_run / "weather_used")
+    STATE["base"] = plant.build_network(8760, plant_dir, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
+    technology.apply_link_efficiencies(STATE["base"], tech)
     apply_pv_policy(STATE["base"], args.pv_policy)
     try:
         with ProcessPoolExecutor(max_workers=3, mp_context=multiprocessing.get_context("fork")) as pool:
-            summaries = list(pool.map(run_site, config["sites"]))
+            summaries = list(pool.map(run_site, experiment["sites"]))
     finally:
         STATE["weather"].close()
     rows = [point for s in summaries for point in s["points"]]

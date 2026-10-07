@@ -540,7 +540,7 @@ def plot_lcoa_heatmap_mpl(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render a global LCOA heatmap from run_global outputs.")
+    parser = argparse.ArgumentParser(description="Render a global LCOA heatmap from a surface result table.")
     parser.add_argument("csv", type=str, help="Path to the aggregated global results CSV.")
     parser.add_argument("--output", type=str, default=None, help="Optional HTML file for saving the figure.")
     parser.add_argument(

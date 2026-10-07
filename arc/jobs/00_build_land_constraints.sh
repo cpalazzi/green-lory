@@ -75,7 +75,6 @@ SKIP_SLOPE_EXCLUSION="${ARC_SKIP_SLOPE_EXCLUSION:-0}"
 INCLUDE_OFFSHORE_WIND="${ARC_INCLUDE_OFFSHORE_WIND:-1}"
 # center: the (lat, lon) label is the cell centre, matching the weather nodes and the legacy
 # land step; southwest: label = south-west corner (the pre-September-2026 convention).
-CELL_ANCHOR="${ARC_CELL_ANCHOR:-center}"
 PROTECTED_AREA_0="${ARC_PROTECTED_AREA_0:-data/WDPA_Feb2026_Public_shp_0/WDPA_Feb2026_Public_shp-polygons.shp}"
 PROTECTED_AREA_1="${ARC_PROTECTED_AREA_1:-data/WDPA_Feb2026_Public_shp_1/WDPA_Feb2026_Public_shp-polygons.shp}"
 PROTECTED_AREA_2="${ARC_PROTECTED_AREA_2:-data/WDPA_Feb2026_Public_shp_2/WDPA_Feb2026_Public_shp-polygons.shp}"
@@ -122,7 +121,6 @@ echo "Source frac: ${SOURCE_LAND_COMPETITION_FRACTION:-<auto>}" | tee -a "$LOGFI
 echo "Slope skip:  $SKIP_SLOPE_EXCLUSION" | tee -a "$LOGFILE"
 echo "Max slope:   $MAX_SLOPE_DEGREES" | tee -a "$LOGFILE"
 echo "Offshore:    $INCLUDE_OFFSHORE_WIND" | tee -a "$LOGFILE"
-echo "Anchor:      $CELL_ANCHOR" | tee -a "$LOGFILE"
 if [[ -z "$BASE_LAND_CSV" ]]; then
   echo "Land cover:  $LAND_COVER" | tee -a "$LOGFILE"
   if [[ "$SKIP_SLOPE_EXCLUSION" != "1" ]]; then
@@ -135,8 +133,7 @@ fi
 echo "Output:      $OUTPUT_CSV" | tee -a "$LOGFILE"
 
 cmd=(
-  "$ARC_PYTHON"
-  model/land_processing.py
+  "$ARC_PYTHON" -m model.land_table
   --output "$OUTPUT_CSV"
   --land-competition-fraction "$LAND_COMPETITION_FRACTION"
 )
@@ -153,7 +150,6 @@ if [[ -n "$BASE_LAND_CSV" ]]; then
 else
   cmd+=(
     --land-cover "$LAND_COVER"
-    --cell-anchor "$CELL_ANCHOR"
     --protected-area "$PROTECTED_AREA_0"
     --protected-area "$PROTECTED_AREA_1"
     --protected-area "$PROTECTED_AREA_2"

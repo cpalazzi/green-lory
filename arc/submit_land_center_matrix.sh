@@ -1,6 +1,6 @@
 #!/bin/bash
-# Submit one heavy 100 % land build (MODIS + WDPA + >15 degree slope, cells anchored per
-# ARC_CELL_ANCHOR) and the cheap derived land-share tables that rescale it.
+# Submit one heavy 100 % land build (MODIS + WDPA + >15 degree slope, centred cells) and the
+# cheap derived land-share tables that rescale it.
 #
 # Run on ARC from inside a pinned release directory:
 #   ARC_CAMPAIGN_DIR=/data/.../green-lory-campaigns/land_center_20260923_v1 \
@@ -17,8 +17,7 @@ set -euo pipefail
 DEFAULT_REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARC_REPO_DIR="${ARC_REPO_DIR:-$DEFAULT_REPO_DIR}"
 ARC_CAMPAIGN_DIR="${ARC_CAMPAIGN_DIR:?set ARC_CAMPAIGN_DIR to the immutable output directory}"
-ARC_CELL_ANCHOR="${ARC_CELL_ANCHOR:-center}"
-ARC_LAND_TAG_PREFIX="${ARC_LAND_TAG_PREFIX:-$ARC_CELL_ANCHOR}"
+ARC_LAND_TAG_PREFIX="${ARC_LAND_TAG_PREFIX:-center}"
 ARC_DERIVED_SHARES="${ARC_DERIVED_SHARES:-0.02 0.20}"
 ARC_INCLUDE_OFFSHORE_WIND="${ARC_INCLUDE_OFFSHORE_WIND:-1}"
 ARC_MAX_SLOPE_DEGREES="${ARC_MAX_SLOPE_DEGREES:-15}"
@@ -38,7 +37,7 @@ required=(
   data/WDPA_Feb2026_Public_shp_2/WDPA_Feb2026_Public_shp-polygons.shp
   data/model_bathymetry.nc
   arc/jobs/00_build_land_constraints.sh
-  model/land_processing.py
+  model/land_table.py
 )
 for path in "${required[@]}"; do
   if [[ ! -f "$path" ]]; then
@@ -78,7 +77,7 @@ submit() {
   printf '%s\t%s\n' "$job_id" "$cluster"
 }
 
-base_export="ALL,ARC_REPO_DIR=${ARC_REPO_DIR},ARC_INCLUDE_OFFSHORE_WIND=${ARC_INCLUDE_OFFSHORE_WIND},ARC_LAND_LOG_DIR=${ARC_CAMPAIGN_DIR}/logs,ARC_ALLOW_LAND_OUTPUT_OVERWRITE=0,ARC_CELL_ANCHOR=${ARC_CELL_ANCHOR}"
+base_export="ALL,ARC_REPO_DIR=${ARC_REPO_DIR},ARC_INCLUDE_OFFSHORE_WIND=${ARC_INCLUDE_OFFSHORE_WIND},ARC_LAND_LOG_DIR=${ARC_CAMPAIGN_DIR}/logs,ARC_ALLOW_LAND_OUTPUT_OVERWRITE=0"
 
 heavy_name="glr-land-${ARC_LAND_TAG_PREFIX}-100pct"
 read -r heavy_job heavy_cluster < <(submit "$heavy_name" "$heavy_csv" \

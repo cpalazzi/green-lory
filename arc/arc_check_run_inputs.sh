@@ -24,7 +24,7 @@ echo
 
 missing=()
 for f in \
-  "model/run_global.py" \
+  "model/surface.py" \
   "$TECH_YAML" \
   "$LAND_CSV" \
   "data/countries.geojson"

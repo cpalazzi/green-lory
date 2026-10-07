@@ -111,7 +111,7 @@ LEGACY_EQUIPMENT_TO_TECH = {
 
 
 def ordinary_annuity(rate: float, years: float) -> float:
-    """Capital recovery factor with end-of-year payments, as model/run_global.py computes it."""
+    """Capital recovery factor with end-of-year payments, as model/technology.py computes it."""
     if abs(rate) < 1e-12:
         return 1.0 / years
     growth = (1.0 + rate) ** years
