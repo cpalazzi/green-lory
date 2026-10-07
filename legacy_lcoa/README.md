@@ -78,8 +78,9 @@ python legacy_lcoa/build_legacy_supplier_table.py --rule stated_method --anchor 
 ```
 
 The network step consumes `gpo_export/contract.json` through
-`python -m networks.replay --supplier-contract` (`../networks/replay.py`; ARC:
-`../arc/submit_network_run.sh --contract <contract.json>`).
+the green-porpoise replay, `python -m replay.run --supplier-contract` (`replay/` of the
+green-porpoise repository, linked as `../green-porpoise/`; ARC: `replay/arc/submit_network_run.sh
+--contract <contract.json>` there).
 
 ## Expected values
 

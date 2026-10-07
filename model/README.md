@@ -17,6 +17,7 @@ a run uses them:
 | `surface.py` | Running the plant over many cells, serially or in forked workers, with a numerical retry chain (`python -m model.surface --help`) |
 | `runs.py` | Run definitions (`../runs.yaml`) and the execution record (`../run_store.csv`); the `run_surface` arguments of a defined run |
 | `results.py` | Reading results by run id: surfaces, network suppliers, rows at the focal cells, coast against inland, maps |
+| `suppliers.py` | A QA-passed surface as a supplier table of the green-porpoise network model (`export`), and post-hoc land-share variants (`derive`); the network runs in the green-porpoise repository |
 | `cli.py` | The `green-lory` command: `list`, `show`, `table`, `status`, `path`, `run`, `map`, `shell` |
 
 `plants/ammonia_plant_1mt/` is the plant; its README lists what the bundle fixes and what each

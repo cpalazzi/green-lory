@@ -31,10 +31,9 @@ dependencies = [
 
 [project.optional-dependencies]
 gurobi = ["gurobipy"]
-networks = ["pyomo"]  # the original Pyomo engine of networks.replay
 
 [project.scripts]
 green-lory = "model.cli:main"
 
 [tool.setuptools]
-packages = ["model", "networks"]
+packages = ["model"]

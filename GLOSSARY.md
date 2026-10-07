@@ -23,7 +23,7 @@ runs, roles, network names, plant bundles and terms added 6 October 2026.
 | `derived` | No new solve: the parent run's LCOA and designs with another land share or capacity rule (`derived_from` names the parent) | post-processing script named in the entry |
 | `legacy_lcoa` | The frozen lcoa-opt plant model (Salmon 2023) at the archived supplier cells | `legacy_lcoa/run_legacy_cells.py` through `arc/jobs/08_legacy_global.sh` |
 | `supply_pilot` | Finite-site supply curves at the three focal cells: the plant re-solved at increasing ammonia quantities with land enforced inside the solve, giving cost against quantity | `reconciliation/supply_pilot/run_supply_pilot.py` through `arc/jobs/06_land_supply_pilot.sh` |
-| network | A green-porpoise shipping network built on one supplier table (the `networks` section) | `arc/submit_network_run.sh` |
+| network | A green-porpoise shipping network built on one supplier table (the `networks` section) | `replay/arc/submit_network_run.sh` in the green-porpoise repository (linked as `green-porpoise/`) |
 
 ## Roles
 

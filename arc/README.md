@@ -45,14 +45,17 @@ the verification job of `stage_release.sh`, the merge/QA jobs).
    `qa/validation.json` and `logs/`; the merge/QA job fails on missing or duplicated rows,
    unexpected coordinates, currency, finance or cost-scope mismatches. `--dry-run` checks the
    inputs and prints the plan (on the Mac it runs locally with `.venv/bin/python`).
-4. **Post-processing**: derived land shares and supplier contracts
-   (`python -m networks.contracts derive|export`, `../networks/contracts.py`);
+4. **Post-processing**: derived land shares and supplier tables for the network model
+   (`python -m model.suppliers derive|export`, `../model/suppliers.py`);
    `postprocess_keyruns_20260924.sh` is the sequence used for the key runs. It is a Slurm job
    (2 CPUs, 16 GB, 4 h): submit it with `KEYRUN_RELEASE=<release> KEYRUN_ID=<run id> sbatch
    arc/postprocess_keyruns_20260924.sh`, never run it on a login node.
-5. **Networks**: `submit_network_run.sh --name <id> --contract <contract.json>` runs
-   `jobs/03_replay_historical_network.sh` (`python -m networks.replay`; 4 CPUs, 64 GB, 2 h,
-   one-hour solver limit by default).
+5. **Networks** run from the green-porpoise repository (linked as `../green-porpoise/`):
+   stage a release of its `replay/` (`replay/arc/stage_release.sh`), then
+   `replay/arc/submit_network_run.sh --release <id> --name <run> --contract <contract.json>`
+   (4 CPUs, 64 GB, 2 h, one-hour solver limit by default; see `replay/README.md` there).
+   Networks before 7 October 2026 ran from green-lory releases (`20260914-v3`,
+   `20260916-network-tools-v1`), which still hold that code.
 6. **Legacy model**: `jobs/07_build_legacy_env.sh` (environment, once),
    `jobs/09_extract_weather_store.sh` (weather store, once), `jobs/08_legacy_global.sh`
    (16-shard array; `LEGACY_EXTRA_ARGS` adds harness options such as `--annuity green_lory`).
@@ -65,14 +68,13 @@ the verification job of `stage_release.sh`, the merge/QA jobs).
 | `stage_release.sh` | Stage, verify and lock a source release (run on the Mac) |
 | `submit_lory_sequence.sh` | Plant-surface campaigns by run id, in smoke, diagnostic and global stages |
 | `submit_land_center_matrix.sh` | Centred land build and derived shares |
-| `submit_network_run.sh` | One green-porpoise network from a supplier contract |
 | `postprocess_keyruns_20260924.sh` | Slurm job: derived 2 % surface, contracts and legacy key table of the 28 September key runs |
 | `release.py` | Inventory of a source release: `write` on the Mac, `verify` in a job |
 | `manifest.py` | Run manifest (source, inputs, resolved settings, cost scope, hashes): `write`, and `verify` that the inputs have not changed |
 | `qa.py` | Quality gates: `land` (a centred land table before a run) and `merge` (the shards of a run, merged and checked) |
 | `arc_check_run_inputs.sh` | Presence checks of a run's inputs, in the prepare job and each shard job |
 | `build-green-lory-env.sh`, `load_green_lory_env.sh` | Build the green-lory environment; load it in an interactive session |
-| `jobs/` | Slurm templates: `00` land build, `01` surface shard, `03` network, `06` supply pilot, `07` legacy environment, `08` legacy surface, `09` legacy weather store |
+| `jobs/` | Slurm templates: `00` land build, `01` surface shard, `06` supply pilot, `07` legacy environment, `08` legacy surface, `09` legacy weather store |
 
 ## Notes
 

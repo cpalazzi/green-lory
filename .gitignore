@@ -29,6 +29,8 @@
 # Never commit virtualenvs or Python caches
 .venv/
 references/
+# link to the green-porpoise repository (the network model and its replay); not tracked here
+/green-porpoise
 **/__pycache__/
 **/*.py[cod]
 .ipynb_checkpoints/

@@ -31,12 +31,12 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 
 | Path | Contents |
 |---|---|
-| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command), `results` (results by run id, tables, maps); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
+| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command), `results` (results by run id, tables, maps), `suppliers` (supplier tables for the network model); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
 | `inputs/` | technology and cost YAMLs, finance (WACC) override CSVs, cell lists |
 | `runs.yaml` | run definitions: every setting of every run and network we keep |
 | `run_store.csv` | the execution record: when, where and with what result each run ran |
 | `legacy_lcoa/` | the legacy-lcoa model reproduced end to end: frozen source, harness, land step, capacity rule, supplier table |
-| `networks/` | the green-porpoise shipping network: `replay` (the optimisation), `contracts` (supplier tables from surfaces), `compare` |
+| `green-porpoise/` | link to the green-porpoise repository (not tracked here): the shipping-network model, whose `replay/` runs the published network on green-lory's supplier tables |
 | `reconciliation/` | decision, comparison scripts, supply pilot, and the September reports in `archive/` |
 | `arc/` | ARC release staging, campaign wrappers, Slurm templates, QA tools |
 | `notebooks/` | `02_spatial_cost_inputs` (inputs of the spatial runs; replaced by `model/site_costs.py` in campaign step 3) |

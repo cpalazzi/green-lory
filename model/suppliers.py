@@ -1,4 +1,4 @@
-"""Supplier contracts: green-lory and legacy surfaces as supplier tables of the network model.
+"""Supplier tables: green-lory surfaces as supplier tables of the green-porpoise network model.
 
 - ``export``: a QA-passed surface to the green-porpoise supplier schema (``Index``, ``LCOA`` in
   USD2018, ``Max_capacity`` in Mt/yr of a 1 Mt reference plant, ``iso3``, ...), written as
@@ -12,27 +12,43 @@
   ``provenance.json`` with the parent's hash; ``export --derived-provenance`` checks it against
   the parent's QA report.
 
-    python -m networks.contracts derive --surface <merged csv> --multiplier 0.1 --parent-share 0.20 \
+    python -m model.suppliers derive --surface <merged csv> --multiplier 0.1 --parent-share 0.20 \
         --output-dir <new dir>
-    python -m networks.contracts export --surface <csv> --qa <validation.json> --manifest <manifest.json> \
+    python -m model.suppliers export --surface <csv> --qa <validation.json> --manifest <manifest.json> \
         --country-reference inputs/country_reference_20260928_v1.csv --minimum-capacity 1 --drop-unassigned \
         --output <new dir>
+
+The network itself runs in the green-porpoise repository (``replay/``; linked here, untracked,
+as ``green-porpoise/``), which reads ``contract.json`` and ``suppliers_USD2018.csv``.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .replay import digest, write_json
-
 CAPACITY = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
 EUR2020_PER_USD2018 = .9024
 ELECTRICITY_COSTS = [f"lcoa_tech_{technology}_eur_per_t" for technology in ("wind", "solar", "solar_tracking")]
 CAPACITY_PREFIX = "scaled_design_max_"  # every column the land share scales
+
+
+def digest(path):
+    h = hashlib.sha256()
+    with Path(path).open("rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def write_json(path, payload):
+    with Path(path).open("x", encoding="utf8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True, allow_nan=False)
+        f.write("\n")
 
 
 def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False):

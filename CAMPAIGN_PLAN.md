@@ -190,10 +190,12 @@ names are links, so staged releases resolve the same files.
 **Done 7 October** (commits eb6cfd9 to 05362ab), waiting for your review.
 
 - **Layout now:**
-  - `model/`, 12 modules: `config`, `technology`, `finance`, `weather`, `plant`, `accounting`,
-    `land`, `land_table`, `surface`, `runs`, `results`, `cli`, and one plant bundle,
+  - `model/`, 13 modules: `config`, `technology`, `finance`, `weather`, `plant`, `accounting`,
+    `land`, `land_table`, `surface`, `runs`, `results`, `suppliers`, `cli`, and one plant bundle,
     `model/plants/ammonia_plant_1mt/`;
-  - `networks/`, 3 modules: `replay`, `contracts`, `compare`;
+  - the network code (replay and comparison) moved to the green-porpoise repository on
+    7 October (`replay/`, commit 0d71f8d there), linked here untracked as `green-porpoise/`;
+    the supplier export stays here as `model/suppliers.py`;
   - `arc/`, 3 modules: `release`, `manifest`, `qa`, plus the wrappers and `jobs/`;
   - 15 test files, one per module.
 - **The `green-lory` command** (`pip install -e .`): `list`, `show`, `table`, `status`, `path`,
@@ -228,7 +230,7 @@ names are links, so staged releases resolve the same files.
   - `reconciliation/` keeps `focal_cells.py`, `coast_inland.py`, `compare_land_builds.py` and
     `supply_pilot/` until step 6 (they made the evidence behind `DECISION.md`; the comparison
     notebook replaces them);
-  - module count: 18 Python modules in `model/`, `networks/` and `arc/` now, plus 5 left in
+  - module count: 16 Python modules in `model/` and `arc/` now, plus 5 left in
     `reconciliation/` and `scripts/`.
 
 Target: one library in `model/`, one network package, a thin ARC layer. That is about 14 Python
@@ -324,7 +326,8 @@ All runs:
 | 2 % variants | derived | | | | C2, S2 |
 
 - **Order:** new land build (about 4-8 h on ARC) → C1 → C2 → S1 → S2, each after your go-ahead →
-  supplier contracts → networks at the 1 % tolerance.
+  supplier contracts → networks at the 1 % tolerance, run from a green-porpoise release
+  (`replay/arc/` there).
 - **Compute:** about 1 h on four 48-core jobs per hourly surface of about 17,000 cells (less at
   4 h), and 1-2 h per network.
 - Every run is defined in `runs.yaml` with a run-store row before submission.
@@ -362,7 +365,7 @@ noted below.
 
 - AEMO (2025). *2025 IASR Consultation Summary Report*, July 2025, published with the 2025 IASR.
   AEMO accepts basing the equipment cost factors on distance to ports rather than capital
-  cities (search the PDF for "nearest port"). In Zotero without a PDF.
+  cities (search the PDF for "nearest port").
   https://www.aemo.com.au/-/media/files/stakeholder_consultation/consultations/nem-consultations/2024/2025-iasr-scenarios/final-docs/2025-iasr-consultation-summary-report.pdf
 - Aurecon (Halder, P.) (2024). *2024 Energy Technology Costs and Technical Parameter Review*,
   revision 3, 6 December 2024, for AEMO; section 11 and Table 11-1 (location factors from
@@ -372,7 +375,7 @@ noted below.
   Contiguous United States: 2024 Edition*, NREL/TP-6A20-91900, revised June 2025; slope
   exclusions in Tables 7 (wind) and 9 (PV), transmission cost multipliers in Table 12.
 - Ma, J. et al. (2025). Simulation study of a 386.4 MW mountain photovoltaic power plant: a
-  case study. Scientific Reports. https://doi.org/10.1038/s41598-025-30742-7
+  case study. Scientific Reports 16, 1000. https://doi.org/10.1038/s41598-025-30742-7
 - Miceli, F. (2012). Maximum wind farm internal road gradient. Wind Farm BoP blog, 23 May
   2012. https://www.windfarmbop.com/?p=268 (not yet in Zotero).
 - Nextracker. NX Horizon datasheet: 15 % north-south slope tolerance. Not yet citable; the
@@ -389,5 +392,4 @@ noted below.
   shipping. Environmental Research: Infrastructure and Sustainability 4, 015001. The network
   model and its port set.
 - Weiss, D. J. et al. (2018). A global map of travel time to cities to assess inequalities in
-  accessibility in 2015. Nature 553, 333-336. https://doi.org/10.1038/nature25181. In Zotero
-  without a PDF.
+  accessibility in 2015. Nature 553, 333-336. https://doi.org/10.1038/nature25181

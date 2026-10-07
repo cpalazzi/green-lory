@@ -19,8 +19,9 @@ history keeps everything.
 | `archive/2026-09/` | The September reports, run log (`RUNS.md`), id grammar and land experiments, unedited; they name networks by letter (`../GLOSSARY.md` maps the letters) |
 | `archive/pre-reconciliation/` | The development log of March to June 2026 |
 
-The legacy model itself is in `../legacy_lcoa/`; the network replay, supplier contracts and
-network comparison are in `../networks/`, and the execution record is `../run_store.csv`.
+The legacy model itself is in `../legacy_lcoa/`; supplier tables for the network model are
+written by `../model/suppliers.py`; the network replay and comparison are in the green-porpoise
+repository (`replay/`, linked as `../green-porpoise/`); the execution record is `../run_store.csv`.
 
 ## Evidence
 

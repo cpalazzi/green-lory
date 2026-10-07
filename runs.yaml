@@ -151,7 +151,7 @@ runs:
     land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
     notes: >-
       No new solve: land does not enter the solve, so capacities scale with the share
-      (x 0.1, `python -m networks.contracts derive`, run by arc/postprocess_keyruns_20260924.sh).
+      (x 0.1, `python -m model.suppliers derive`, run by arc/postprocess_keyruns_20260924.sh).
 
   ll_xcost45_ameli_bflat_wnone_landarch_track_4h:
     role: legacy replication (accepted baseline)
@@ -218,8 +218,9 @@ runs:
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above
 # (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and
 # finds the cheapest way to supply the 2050 ammonia bunker demand from it. Every network uses
-# `network_defaults` unless its entry says otherwise. Submitted with arc/submit_network_run.sh
-# (job template arc/jobs/03_replay_historical_network.sh, model networks/replay.py).
+# `network_defaults` unless its entry says otherwise. The network code is in the green-porpoise
+# repository (replay/, linked here as green-porpoise/): submitted with replay/arc/submit_network_run.sh
+# there. The networks below ran from green-lory releases 20260914-v3 and 20260916-network-tools-v1.
 # `report_name` is the letter the September 2026 reports used (reconciliation/DECISION.md section 4);
 # GLOSSARY.md lists every letter, including the runs that were not kept.
 
