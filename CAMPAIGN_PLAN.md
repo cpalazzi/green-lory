@@ -355,6 +355,11 @@ All runs:
 - **D2, D3 and D7** were decided on 7 October (table above). D1, D4 to D6, D8 and D9 stand as
   recommended, following your approval of the campaign on 6 October.
 - **ARC access:** the socket was open on 7 October and step 1's move on ARC went through.
+- **ARC tooling checked on 7 October** with a smoke stage of the key run from release
+  `20261007-shakedown-v1`: release verification job 13396884, prepare jobs 13396930 (dry run) and
+  13396965, shard 13396992 (7.5 min) and merge/QA 13396993 (passed). The three cells match the
+  regression baseline to 1.2e-5 (LCOA), so the step-2 code and the new prepare-job flow work on
+  ARC. Outputs: `green-lory-campaigns/shakedown_20261007_v1/` (local copy under `results/campaigns/`).
 - **Still needed:** a go-ahead before each global run, and your review at the gates marked
   **Review** (after steps 2, 3 and 4).
 
