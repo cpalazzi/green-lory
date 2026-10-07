@@ -15,7 +15,7 @@ in `runs.yaml` still pins stay until that run is retired.
 | D1 | Base time resolution | **Hourly as the base; 4 h as a documented resolution case.** The 4-hour run is worth having as the bridge to the published method, but it should not be the base because it gives the coastal map: four-hour averaging flattens the solar peak and so hides the cost of buffering solar-only hydrogen, which is the mechanism that moved production inland (`reconciliation/DECISION.md` section 5). If 4 h and 1 h disagree, the paper reports 1 h and explains the difference. The 4 h step also explains only part of the shift: at the focal cells the explicit compressor added about twice as much as the hourly step, and both stay in a 4 h run of the improved plant, so it may still favour inland. |
 | D2 | Slope | **Decided 7 October:** a cost factor by slope class on the build part of PV and wind, slope from GEBCO, factors from NREL's terrain multipliers, the plant takes the flattest land first, land above 20° excluded (section 0a). The class bounds follow your question on 15 % grade; confirm at the step 3 review. |
 | D3 | Remoteness | **Decided 7 October:** two factors, as AEMO does: an equipment factor by distance to the nearest of all network ports (`data/ports/verschuur2024_ports.csv`), on the equipment part of the cost, and an installation factor by travel time to a city, on the build part, both fitted to the location factors behind AEMO's inputs and used worldwide (section 0a). |
-| D4 | Water | Keep desalination at the coast plus a pipeline inland, but replace the district-heating-pipe cost proxy with a water-pipeline reference and add the pumping energy for the elevation gain. |
+| D4 | Water | **Decided 7 October** (section 0b): desalination at the nearest water source plus a pipeline to the cell, with an official water-pipeline cost replacing the district-heating proxy; sea and permanent lakes are sources at the same 2 USD/m³; no pumping for the elevation gain; the 1° geometry is kept. |
 | D5 | Finance sensitivity | **Ameli low-carbon (current) WACC**: Australia 6.1 %, Middle East 6.8 %, Central and South America 9.2 %, Africa 11.8 %. It would favour Australia over Chile and North Africa. The reduced series is 5.1 % almost everywhere and moves LCOA by under 1 % against the flat 5 %. |
 | D6 | Network tolerance | **1 %** (your instruction): the solver stops at a 1 % gap and results are accepted at 1 %. |
 | D7 | Weather | The 2019 legacy stack for every run (your instruction), in `data/weather_data/salmon2022_pv_wind_2019_hourly_1deg/`: hourly 2019 output per unit of capacity for fixed PV, tracking PV and wind on a 1° grid, as used by Salmon and Bañares-Alcántara (2022). The comparison with our own ERA5 cutouts is deferred. |
@@ -161,6 +161,41 @@ Decided 7 October: the NREL factors, the flattest land first, and no land above 
   - GEBCO is still finer than the ETOPO1 grid (1 arc-minute) on which Salmon and
     Bañares-Alcántara (2022) applied their 15° exclusion.
 
+## 0b. Water: decisions of 7 October
+
+The spatial water price (USD/m³) is a source price plus the pipeline from the nearest water
+source to the cell, added to the LCOA after the solve at 1.5 m³ per tonne of ammonia. Decided:
+
+- **Pipeline cost**: an official water-pipeline cost replaces the district-heating proxy (the DEA
+  heat-transmission line, scaled through an equivalent thermal capacity of the water flow,
+  2.8 USD/m³ per 100 km at a remoteness factor of 1). Candidates, to be proposed with values at
+  the step-3 review:
+  - the Texas Water Development Board's Unified Costing Model (2018): planning-level unit costs
+    of transmission pipelines by diameter, ground type and urbanisation, with pump stations,
+    30 % engineering and contingency and O&M of 1 % (pipes) and 2.5 % (pumps) a year; sized
+    for the plant's own flow;
+  - Zhou and Tol (2005): 0.06 USD/m³ per 100 km horizontally and 0.05 USD/m³ per 100 m of lift,
+    from large transfers; a check on the scale effect, since a 1 Mt/yr plant needs only
+    1.5 million m³ a year.
+  The installation part of the pipeline keeps the cell's build factor, which stands for terrain
+  along the route. Friction pumping is part of any such transmission cost.
+- **No pumping for the elevation gain**: lifting 1.5 m³ by 500 m takes about 3 kWh, about
+  0.2 USD per tonne of ammonia.
+- **Sources**: the sea and permanent lakes and reservoirs. Ephemeral and salt-pan lakes are not
+  sources. With the present rule (any cell at least 10 % water in the 2022 land cover),
+  Kati Thanda–Lake Eyre, a salt lake dry in most years, is the nearest source for 87 of
+  Australia's 696 land cells, all in the centre, up to 420 km closer than the sea. Proposed
+  test of permanence: the Global Lakes and Wetlands Database v2 classes (freshwater and saline
+  lakes and reservoirs count; salt pans and intermittent water do not), or, if that is
+  impractical, the water class in most years of the MODIS record; failing both, a named list of
+  ephemeral salt lakes.
+- **Same source price for sea and lake**, 2 USD/m³ (coastal desalination). Lake water could be
+  treated more cheaply, but charging the desalination price is a deliberate shadow price that
+  protects freshwater for other uses; the paper says so.
+- **Geometry**: distances between 1° cell centres, and a cell that holds a source pays no
+  pipeline, though a plant in it may sit 50 km from the water; a stated limitation of the 1°
+  model.
+
 ## 1. Weather data layout (small)
 
 **Done 7 October.** The focal cells load identical profiles from the new folder (SHA-256 of the
@@ -290,7 +325,8 @@ the legacy harness at its focal cells. **Review** of the new layout before step 
   - the GeoNames gazetteer for Australia, to locate the 75 sites.
 - The land build computes the land area in each slope class per cell from GEBCO, as it now
   computes the > 15° share. The slope ban goes; the class factors of D2 replace it.
-- Water follows D4. I propose its values with references for you to approve.
+- Water follows D4 and section 0b. I propose the pipeline values with references, and the
+  permanence test for lakes, for you to approve.
 - Write the "cost mechanisms" table in the model documentation: mechanism, module and function,
   input, reference.
 - **Check:** unit tests per factor; maps of each factor for Australia and Chile. **Review.**
