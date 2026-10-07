@@ -38,7 +38,9 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
    `--dry-run` validates inputs and prints the commands.
 4. **Post-processing**: derived land shares (`../reconciliation/derive_land_share_surface.py`)
    and supplier contracts (`../reconciliation/export_lory_surface.py`);
-   `postprocess_keyruns_20260924.sh` is the sequence used for the key runs.
+   `postprocess_keyruns_20260924.sh` is the sequence used for the key runs. It is a Slurm job
+   (2 CPUs, 16 GB, 4 h): submit it with `KEYRUN_RELEASE=<release> KEYRUN_ID=<run id> sbatch
+   arc/postprocess_keyruns_20260924.sh`, never run it on a login node.
 5. **Networks**: `submit_network_run.sh --name <id> --contract <contract.json>` runs
    `jobs/03_replay_historical_network.sh` (4 CPUs, 64 GB, 2 h, one-hour solver limit by default).
 6. **Legacy model**: `jobs/07_build_legacy_env.sh` (environment, once),
@@ -55,7 +57,7 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
 | `submit_lory_sequence.sh` | Plant-surface campaigns by run id, in smoke, diagnostic and global stages |
 | `submit_land_center_matrix.sh` | Centred land build and derived shares |
 | `submit_network_run.sh` | One green-porpoise network from a supplier contract |
-| `postprocess_keyruns_20260924.sh` | Derived 2 % surface, contracts and legacy key table of the 28 September key runs |
+| `postprocess_keyruns_20260924.sh` | Slurm job: derived 2 % surface, contracts and legacy key table of the 28 September key runs |
 | `build_finance_overrides.py` | Per-cell interest-only override CSVs (uniform 5 %, Ameli by country) |
 | `write_campaign_manifest.py`, `write_campaign_submission.py` | Run manifest (source, inputs, resolved settings, hashes) and job ids |
 | `merge_and_qa_campaign.py` | Merge an explicit shard list and run the QA gates |

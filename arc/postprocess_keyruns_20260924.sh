@@ -1,11 +1,32 @@
 #!/bin/bash
-# Post-processing of the 24 Sep 2026 key runs, to be run ON ARC after the global QA jobs pass and
-# the legacy array has finished.  Every output goes to a new directory; nothing is overwritten.
+#SBATCH --job-name=postprocess-keyruns
+#SBATCH --partition=short
+#SBATCH --clusters=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=16G
+#SBATCH --time=04:00:00
+#SBATCH --output=postprocess-keyruns-%j.out
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=carlo.palazzi@eng.ox.ac.uk
+# Post-processing of the 24 Sep 2026 key runs, after the global QA jobs pass and the legacy array has
+# finished.  Every output goes to a new directory; nothing is overwritten.
 #   1. export the two green-lory surfaces as supplier contracts (1 Mt/yr cutoff declared);
 #   2. derive the 2 % land-share variant of the uniform-5 % surface and export it;
 #   3. build the legacy key-run supplier table (stated method on the centred 2 % land table,
 #      flat water 3.3245 USD2018/t) with its contract;
 #   4. submit the four green-porpoise runs with the settings of the September comparisons.
+# Steps 1-3 run Python over the whole surface, so this is a Slurm job; never run it on a login node.
+# Submit from the login node (sbatch passes these variables to the job):
+#   KEYRUN_RELEASE=<pinned release> KEYRUN_ID=20260928-v4 sbatch --output=<log dir>/%x-%j.out \
+#     arc/postprocess_keyruns_20260924.sh
+# Step 4 runs from the job when sbatch is available on the compute node; otherwise the job prints
+# the four submission commands to run on the login node.
+if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+  echo "Submit this script with sbatch; it must not run on a login node (see the header)." >&2
+  exit 2
+fi
 set -euo pipefail
 R="${KEYRUN_RELEASE:?KEYRUN_RELEASE must name the pinned release to run from}"
 RUN_ID="${KEYRUN_ID:?KEYRUN_ID must name the accepted global run id (20260928-v4)}"
@@ -65,9 +86,16 @@ fi
 if [[ "$SUBMIT_NETWORKS" == "1" ]]; then
   echo "== 4. green-porpoise runs"
   cd $NT
+  RUNS=()
   for name in gl_dea2050_wacc5_bflat_wflat_land20c_fixed gl_dea2050_ameli_bflat_wflat_land20c_fixed gl_dea2050_wacc5_bflat_wflat_land2c_fixed; do
-    bash arc/submit_network_run.sh --name "gpo_${name}_iso1000_1mt_v1" --contract "$EXPORTS/$name/contract.json" --clusters all 2>&1 | tail -2
+    RUNS+=("--name gpo_${name}_iso1000_1mt_v1 --contract $EXPORTS/$name/contract.json --clusters all")
   done
-  bash arc/submit_network_run.sh --name gpo_ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity_iso1000_1mt_v1 --contract "$LTAB/gpo_export/contract.json" --clusters all 2>&1 | tail -2
-  squeue -M all -u engs2523 -o "%.14i %.8P %.60j %.8T %.10M %R" | grep -v CLUSTER
+  RUNS+=("--name gpo_ll_way2050_ameli_bflat_wflat_landleg2c_track_4h_glannuity_iso1000_1mt_v1 --contract $LTAB/gpo_export/contract.json --clusters all")
+  if command -v sbatch >/dev/null 2>&1; then
+    for args in "${RUNS[@]}"; do bash arc/submit_network_run.sh $args 2>&1 | tail -2; done
+    squeue -M all -u engs2523 -o "%.14i %.8P %.60j %.8T %.10M %R" | grep -v CLUSTER
+  else
+    echo "sbatch is not available on this node. Submit the runs from the login node, in $NT:"
+    for args in "${RUNS[@]}"; do echo "  bash arc/submit_network_run.sh $args"; done
+  fi
 fi
