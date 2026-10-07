@@ -109,7 +109,15 @@ def test_land_build_reproduces_a_band_of_the_accepted_table(tmp_path):
     expected = pd.read_csv(LAND_BAND).set_index(["latitude", "longitude"]).sort_index()
     actual = pd.read_csv(output).set_index(["latitude", "longitude"]).sort_index()
     assert list(actual.index) == list(expected.index)
-    assert list(actual.columns) == list(expected.columns)
+    # the slope-class columns (7 October 2026) are the only additions to the accepted table
+    assert [column for column in actual.columns if column not in land_table.SLOPE_CLASS_COLUMNS] == list(expected.columns)
+    classes = actual[list(land_table.SLOPE_CLASS_COLUMNS)]
+    has_land = classes.sum(axis=1) > 0
+    np.testing.assert_allclose(classes[has_land].sum(axis=1), 100.0, atol=1e-9)
+    # land up to 15 degrees lies between the classes up to 14 and up to 20 degrees
+    up_to_14 = classes.iloc[:, :2].sum(axis=1)
+    assert (actual["slope_suitable_land_pct"] >= up_to_14 - 1e-9).all()
+    assert (actual["slope_suitable_land_pct"] <= up_to_14 + classes.iloc[:, 2] + 1e-9).all()
     for column in expected.columns:
         want, got = expected[column], actual[column]
         if pd.api.types.is_numeric_dtype(want):

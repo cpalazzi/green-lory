@@ -1,14 +1,15 @@
 #!/bin/bash
-# Submit one heavy 100 % land build (MODIS + WDPA + >15 degree slope, centred cells) and the
-# cheap derived land-share tables that rescale it.
+# Submit one heavy 100 % land build (MODIS + WDPA + slope limit and slope classes, centred
+# cells) and the cheap derived land-share tables that rescale it.
 #
 # Run on ARC from inside a pinned release directory:
 #   ARC_CAMPAIGN_DIR=/data/.../green-lory-campaigns/land_center_20260923_v1 \
 #   bash arc/submit_land_center_matrix.sh
 #
 # Outputs (never overwritten) land in $ARC_CAMPAIGN_DIR:
-#   max_capacities_<prefix>_100pct_slope15.csv
-#   max_capacities_<prefix>_<share>pct_slope15.csv   for each share in ARC_DERIVED_SHARES
+#   max_capacities_<prefix>_100pct_slope<limit>.csv
+#   max_capacities_<prefix>_<share>pct_slope<limit>.csv   for each share in ARC_DERIVED_SHARES
+# where <limit> is ARC_MAX_SLOPE_DEGREES (20 since 7 October 2026; the September build used 15).
 # Every sbatch line is appended to $ARC_CAMPAIGN_DIR/submissions.tsv.  The heavy job is
 # submitted with --clusters=all; the derived jobs depend on it and therefore go to the
 # cluster that accepted it (job ids and dependencies are per cluster).
@@ -20,7 +21,8 @@ ARC_CAMPAIGN_DIR="${ARC_CAMPAIGN_DIR:?set ARC_CAMPAIGN_DIR to the immutable outp
 ARC_LAND_TAG_PREFIX="${ARC_LAND_TAG_PREFIX:-center}"
 ARC_DERIVED_SHARES="${ARC_DERIVED_SHARES:-0.02 0.20}"
 ARC_INCLUDE_OFFSHORE_WIND="${ARC_INCLUDE_OFFSHORE_WIND:-1}"
-ARC_MAX_SLOPE_DEGREES="${ARC_MAX_SLOPE_DEGREES:-15}"
+ARC_MAX_SLOPE_DEGREES="${ARC_MAX_SLOPE_DEGREES:-20}"
+slope_tag="slope$(awk -v s="$ARC_MAX_SLOPE_DEGREES" 'BEGIN { printf "%g", s }')"
 ARC_HEAVY_MEM="${ARC_HEAVY_MEM:-128G}"
 ARC_HEAVY_TIME="${ARC_HEAVY_TIME:-12:00:00}"
 ARC_DERIVED_MEM="${ARC_DERIVED_MEM:-16G}"
@@ -48,7 +50,7 @@ done
 bash -n arc/jobs/00_build_land_constraints.sh
 
 mkdir -p "$ARC_CAMPAIGN_DIR/logs"
-heavy_tag="${ARC_LAND_TAG_PREFIX}_100pct_slope15"
+heavy_tag="${ARC_LAND_TAG_PREFIX}_100pct_${slope_tag}"
 heavy_csv="$ARC_CAMPAIGN_DIR/max_capacities_${heavy_tag}.csv"
 if [[ -e "$heavy_csv" ]]; then
   echo "ERROR: refusing to overwrite immutable land output: $heavy_csv" >&2
@@ -97,7 +99,7 @@ fi
 
 for share in $ARC_DERIVED_SHARES; do
   pct=$(awk -v s="$share" 'BEGIN { printf "%g", s * 100 }')
-  tag="${ARC_LAND_TAG_PREFIX}_${pct}pct_slope15"
+  tag="${ARC_LAND_TAG_PREFIX}_${pct}pct_${slope_tag}"
   csv="$ARC_CAMPAIGN_DIR/max_capacities_${tag}.csv"
   if [[ -e "$csv" ]]; then
     echo "ERROR: refusing to overwrite immutable land output: $csv" >&2

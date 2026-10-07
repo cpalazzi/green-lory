@@ -8,7 +8,9 @@ on an integer coordinate the builder
    suitability factor of each class for wind and for PV (Salmon and Banares-Alcantara 2022,
    Table 1; Verschuur et al. 2024);
 2. removes protected land (WDPA polygons) and, unless skipped, land steeper than
-   ``max_slope_degrees`` (slopes computed from GEBCO);
+   ``max_slope_degrees`` (slopes computed from GEBCO), and records the share of the cell's land
+   in each slope class (SLOPE_CLASSES), from which model/site_costs.py takes the slope factor
+   of the build cost;
 3. keeps a share of what remains (``land_competition_fraction``: 1.0 for the full build,
    0.2 or 0.02 for the derived tables);
 4. converts areas to power: 200 km2/GW for wind, and for fixed PV the row packing of a First
@@ -18,7 +20,7 @@ The union of wind and PV land is the classwise nested lower bound described in l
 
     python -m model.land_table --output <table.csv> --land-cover <MCD12C1.hdf> \
         --protected-area <WDPA_0.shp> --protected-area <WDPA_1.shp> --protected-area <WDPA_2.shp> \
-        --slope-raster <GEBCO.nc> --max-slope-degrees 15
+        --slope-raster <GEBCO.nc> --max-slope-degrees 20
     python -m model.land_table --base-csv <100 % table> --output <20 % table> --land-competition-fraction 0.2
 
 The full global build takes several hours (ARC job arc/jobs/00_build_land_constraints.sh); a
@@ -58,7 +60,21 @@ EQUAL_AREA_CRS = "EPSG:6933"
 MODIS_WATER_CLASS = 0
 WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
 DEFAULT_LAND_COMPETITION_FRACTION = 1.0
-DEFAULT_MAX_SLOPE_DEGREES = 15.0
+# Land above 20 degrees is excluded (decision of 7 October 2026; the tables of September 2026
+# excluded land above 15 degrees and were built with --max-slope-degrees 15)
+DEFAULT_MAX_SLOPE_DEGREES = 20.0
+
+# Slope classes of the land (column, upper bound in degrees, inclusive), as decided on
+# 7 October 2026 (CAMPAIGN_PLAN.md, section 0a): no cost uplift up to 8.5 degrees (15 % grade),
+# then 8.5 to 14 and 14 to 20 degrees; the factors are in model/site_costs.py. Each column is
+# the percentage of the cell's land (GEBCO elevation above zero) in the class.
+SLOPE_CLASSES = (
+    ("land_pct_slope_upto_8p5deg", 8.5),
+    ("land_pct_slope_8p5_to_14deg", 14.0),
+    ("land_pct_slope_14_to_20deg", 20.0),
+    ("land_pct_slope_above_20deg", float("inf")),
+)
+SLOPE_CLASS_COLUMNS = tuple(column for column, _ in SLOPE_CLASSES)
 
 # First Solar Series 6 (2018) module, packed in rows as in van de Ven et al. (2021)
 FIRST_SOLAR_MODULE_WIDTH_M = 1.21
@@ -116,6 +132,7 @@ FINAL_COLUMNS = [
     "protected_area_pct",
     "slope_suitable_land_pct",
     "steep_slope_pct",
+    *SLOPE_CLASS_COLUMNS,
     "land_exclusion_factor",
     "land_competition_fraction",
     "constrained_onshore_area_km2",
@@ -953,25 +970,25 @@ def _slope_suitable_land_pct_from_raster(
             slope = np.rad2deg(np.arctan(np.hypot(grad_x, grad_y)))
 
             land = elevations[center_mask, :n_lon] > 0
-            suitable = land & (slope[center_mask, :n_lon] <= max_slope_degrees)
-            land_counts = land.reshape(land.shape[0], -1, cols_per_cell).sum(axis=(0, 2))
-            suitable_counts = suitable.reshape(suitable.shape[0], -1, cols_per_cell).sum(axis=(0, 2))
-            suitable_pct = np.divide(
-                suitable_counts,
-                land_counts,
-                out=np.zeros_like(suitable_counts, dtype=float),
-                where=land_counts > 0,
-            )
-            suitable_pct *= 100.0
-            frames.append(
-                pd.DataFrame(
-                    {
-                        "latitude": cell_lat,
-                        "longitude": lon_cells,
-                        "slope_suitable_land_pct": suitable_pct,
-                    }
+            cell_slope = slope[center_mask, :n_lon]
+
+            def land_pct(mask: np.ndarray) -> np.ndarray:
+                counts = mask.reshape(mask.shape[0], -1, cols_per_cell).sum(axis=(0, 2))
+                return 100.0 * np.divide(
+                    counts, land_counts, out=np.zeros_like(counts, dtype=float), where=land_counts > 0
                 )
-            )
+
+            land_counts = land.reshape(land.shape[0], -1, cols_per_cell).sum(axis=(0, 2))
+            row = {
+                "latitude": cell_lat,
+                "longitude": lon_cells,
+                "slope_suitable_land_pct": land_pct(land & (cell_slope <= max_slope_degrees)),
+            }
+            lower_bound = -np.inf
+            for column, upper_bound in SLOPE_CLASSES:
+                row[column] = land_pct(land & (cell_slope > lower_bound) & (cell_slope <= upper_bound))
+                lower_bound = upper_bound
+            frames.append(pd.DataFrame(row))
 
             if lat_index == 1 or lat_index % 10 == 0 or lat_index == len(requested_lats):
                 elapsed = time.perf_counter() - stage_started
@@ -985,16 +1002,19 @@ def _slope_suitable_land_pct_from_raster(
                     _format_eta(eta),
                 )
 
-    output = df.drop(columns=["slope_suitable_land_pct", "steep_slope_pct"], errors="ignore")
+    output = df.drop(columns=["slope_suitable_land_pct", "steep_slope_pct", *SLOPE_CLASS_COLUMNS], errors="ignore")
     if frames:
         slope_df = pd.concat(frames, ignore_index=True)
         output = output.merge(slope_df, on=["latitude", "longitude"], how="left")
     else:
-        output["slope_suitable_land_pct"] = np.nan
-    output["slope_suitable_land_pct"] = (
-        output["slope_suitable_land_pct"].fillna(100.0).clip(0.0, 100.0)
-    )
+        for column in ("slope_suitable_land_pct", *SLOPE_CLASS_COLUMNS):
+            output[column] = np.nan
+    # Cells outside the latitude rows read count as flat
+    missing = output["slope_suitable_land_pct"].isna()
+    output["slope_suitable_land_pct"] = output["slope_suitable_land_pct"].fillna(100.0).clip(0.0, 100.0)
     output["steep_slope_pct"] = 100.0 - output["slope_suitable_land_pct"]
+    for index, column in enumerate(SLOPE_CLASS_COLUMNS):
+        output.loc[missing, column] = 100.0 if index == 0 else 0.0
     return output
 
 
@@ -1012,6 +1032,8 @@ def _apply_land_exclusions(availability: pd.DataFrame, cfg: LandAvailabilityConf
     if cfg.skip_slope_exclusion or cfg.slope_raster_path is None:
         output["slope_suitable_land_pct"] = 100.0
         output["steep_slope_pct"] = 0.0
+        for column in SLOPE_CLASS_COLUMNS:  # unknown without the terrain grid
+            output[column] = np.nan
     else:
         output = _slope_suitable_land_pct_from_raster(output, cfg.slope_raster_path, cfg.coarse_degree, cfg.max_slope_degrees)
 
