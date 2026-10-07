@@ -216,8 +216,9 @@ names are links, so staged releases resolve the same files.
     deferred to step 5, where the networks should also be submitted by id from `runs.yaml`.
   - New: `submit_lory_sequence.sh` and `stage_release.sh` no longer run Python on the login
     node. Every check and manifest runs in a short prepare or verification job, and the
-    login node only calls `sbatch`. Tested with a stand-in `sbatch` on the Mac; the first
-    real use will be the step-3 land build.
+    login node only calls `sbatch`. Tested with a stand-in `sbatch` on the Mac. The release
+    verification job first runs when the step-3 release is staged, the prepare job at the
+    first smoke run.
   - New: `python -m model.finance ameli` takes each cell's country as the surface does (the
     largest overlap of the 1° cell) and fills sea cells from the nearest land cell. For S2.
     The September file used the country at the cell centre and 5.1 % for sea cells; with the
