@@ -15,12 +15,17 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
 `squeue -M all` / `sacct -M all`. Partitions: `devel` (10 min), `short` (12 h), `medium` (48 h),
 `long`. Never submit a global surface without the user's confirmation.
 
+Nothing computational runs on a login node: the wrappers there only call `sbatch`, and every
+check, hash and manifest runs in a Slurm job (the prepare job of `submit_lory_sequence.sh`,
+the verification job of `stage_release.sh`, the merge/QA jobs).
+
 ## Workflow
 
 1. **Stage a release** from a committed checkout on the Mac, with the ARC SSH socket open:
    `bash arc/stage_release.sh 20261006-keyruns-v1`. It copies the Git-visible source and the
    generated finance overrides that `runs.yaml` pins (hash-checked), links the shared data,
-   verifies the inventory on ARC and makes the release read-only.
+   verifies the copy against the inventory in a short Slurm job and makes the release
+   read-only.
 2. **Land tables** (rarely): `submit_land_center_matrix.sh` runs `jobs/00_build_land_constraints.sh`
    for the centred 100 % build and derives the 2 % and 20 % tables
    (`green-lory-campaigns/land_center_20260923_v1/` is the accepted build).
@@ -32,10 +37,14 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
    ```
    then `--stage diagnostic` (the same three cells, full year) and, after review and
    confirmation, `--stage global` (four longitude shards, `--global-locations` to restrict the
-   cells). Each stage writes `manifest.json`, `submission.json`, `shards/`, `merged/`,
-   `qa/validation.json` and `logs/`; a merge/QA job runs after the shards and fails on missing
-   or duplicated rows, unexpected coordinates, currency, finance or cost-scope mismatches.
-   `--dry-run` validates inputs and prints the commands.
+   cells). The command first runs a prepare job (2 CPUs, 16 GB, up to 30 min) and waits for
+   it: every input check, the run directories and the manifests; its log is
+   `<results root>/logs/prepare-<run id>-<job>.out`. The login node then submits the shard and
+   merge/QA jobs. Each stage writes `manifest.json`, `submit.env`, `submission.json`
+   (job ids; `submission_scheduler.txt` holds the scheduler's view), `shards/`, `merged/`,
+   `qa/validation.json` and `logs/`; the merge/QA job fails on missing or duplicated rows,
+   unexpected coordinates, currency, finance or cost-scope mismatches. `--dry-run` checks the
+   inputs and prints the plan (on the Mac it runs locally with `.venv/bin/python`).
 4. **Post-processing**: derived land shares and supplier contracts
    (`python -m networks.contracts derive|export`, `../networks/contracts.py`);
    `postprocess_keyruns_20260924.sh` is the sequence used for the key runs. It is a Slurm job
@@ -58,9 +67,10 @@ Clusters `arc` and `htc`; submit with `--clusters=all` (the templates do) and qu
 | `submit_land_center_matrix.sh` | Centred land build and derived shares |
 | `submit_network_run.sh` | One green-porpoise network from a supplier contract |
 | `postprocess_keyruns_20260924.sh` | Slurm job: derived 2 % surface, contracts and legacy key table of the 28 September key runs |
-| `write_campaign_manifest.py`, `write_campaign_submission.py` | Run manifest (source, inputs, resolved settings, hashes) and job ids |
-| `merge_and_qa_campaign.py` | Merge an explicit shard list and run the QA gates |
-| `release_source_inventory.py`, `verify_campaign_manifest_inputs.py`, `validate_land_campaign_input.py`, `arc_check_run_inputs.sh` | Inventory and input checks (centred land tables only) |
+| `release.py` | Inventory of a source release: `write` on the Mac, `verify` in a job |
+| `manifest.py` | Run manifest (source, inputs, resolved settings, cost scope, hashes): `write`, and `verify` that the inputs have not changed |
+| `qa.py` | Quality gates: `land` (a centred land table before a run) and `merge` (the shards of a run, merged and checked) |
+| `arc_check_run_inputs.sh` | Presence checks of a run's inputs, in the prepare job and each shard job |
 | `build-green-lory-env.sh`, `load_green_lory_env.sh` | Build the green-lory environment; load it in an interactive session |
 | `jobs/` | Slurm templates: `00` land build, `01` surface shard, `03` network, `06` supply pilot, `07` legacy environment, `08` legacy surface, `09` legacy weather store |
 

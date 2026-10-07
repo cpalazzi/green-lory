@@ -1,9 +1,22 @@
-#!/usr/bin/env python3
-"""Merge explicit Green Lory shard CSVs and enforce campaign QA gates."""
+"""Quality gates of a campaign: the land table before a run, the merged surface after it.
+
+- ``land``: a centred land table is fit for a campaign: required columns, the expected uniform
+  land share, the classwise nested union area of PV and wind, aliases that agree, values in
+  range, one row per cell. ``arc/submit_lory_sequence.sh`` runs it in its prepare job.
+- ``merge``: the shard CSVs of a run, named explicitly (never found by wildcard), merged into
+  ``merged/global_run_results.csv``, then checked against the manifest: every expected cell
+  once, the run's settings and cost scope on every row, finite results, full-year results
+  where required. The report ``qa/validation.json`` is written whether the gate passes or
+  fails; only ``"status": "passed"`` makes a surface accepted.
+
+    python -m arc.qa land <land csv> --expected-land-fraction 0.2
+    python -m arc.qa merge --input <shard csv> [--input ...] --expected-input-count 4 ...
+"""
 
 from __future__ import annotations
 
 import argparse
+import csv
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -11,12 +24,354 @@ import math
 import re
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Iterable, Mapping, Sequence
 
 import pandas as pd
 
 
-REQUIRED_COLUMNS = (
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _coordinate_sha256(coordinates: Iterable[tuple[float, float]]) -> str:
+    payload = "\n".join(
+        f"{latitude:.8f},{longitude:.8f}"
+        for latitude, longitude in sorted(coordinates)
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+# --- the land table ------------------------------------------------------------------------------
+
+CLASSWISE_NESTED_UNION_AREA_COLUMN = (
+    "renewable_union_area_km2_classwise_nested_v1"
+)
+CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN = (
+    "renewable_union_availability_classwise_nested_v1"
+)
+GENERIC_UNION_AREA_COLUMN = "renewable_union_area_km2"
+GENERIC_UNION_AVAILABILITY_COLUMN = "renewable_union_availability"
+RENEWABLE_UNION_METHOD_COLUMN = "renewable_union_method"
+RENEWABLE_UNION_METHOD_VERSION_COLUMN = "renewable_union_method_version"
+EXPECTED_RENEWABLE_UNION_METHOD = "classwise_nested_overlap_lower_bound"
+EXPECTED_RENEWABLE_UNION_METHOD_VERSION = "v1"
+# Tables built before 23 Sep 2026 have no cell_anchor column and are offset by one degree.
+CELL_ANCHOR_COLUMN = "cell_anchor"
+EXPECTED_CELL_ANCHOR = "center"
+
+LAND_REQUIRED_COLUMNS = (
+    "latitude",
+    "longitude",
+    CELL_ANCHOR_COLUMN,
+    "land_competition_fraction",
+    "wind_onshore_area_km2",
+    "solar_area_km2",
+    CLASSWISE_NESTED_UNION_AREA_COLUMN,
+    GENERIC_UNION_AREA_COLUMN,
+    CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
+    GENERIC_UNION_AVAILABILITY_COLUMN,
+    RENEWABLE_UNION_METHOD_COLUMN,
+    RENEWABLE_UNION_METHOD_VERSION_COLUMN,
+    "max_power_solar_mw",
+    "max_power_wind_mw",
+    "max_capacity_mw",
+)
+
+COORDINATE_DECIMAL_PLACES = 8
+# Match the campaign runtime's alias contract: only CSV round-trip noise at the
+# absolute scale is tolerated; large values do not receive a looser allowance.
+ALIAS_REL_TOLERANCE = 0.0
+ALIAS_ABS_TOLERANCE = 1e-9
+FRACTION_REL_TOLERANCE = 1e-9
+FRACTION_ABS_TOLERANCE = 1e-12
+UNION_REL_TOLERANCE = 1e-9
+UNION_ABS_TOLERANCE_KM2 = 1e-9
+RANGE_ABS_TOLERANCE = 1e-12
+
+
+class LandCampaignInputError(ValueError):
+    """Raised when a land campaign input violates a scientific invariant."""
+
+
+def _number(row: Mapping[str, str], column: str, row_number: int) -> float:
+    raw_value = row.get(column)
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise LandCampaignInputError(
+            f"Row {row_number}: {column} must be numeric, found {raw_value!r}"
+        ) from exc
+    if not math.isfinite(value):
+        raise LandCampaignInputError(
+            f"Row {row_number}: {column} contains non-finite value {raw_value!r}"
+        )
+    return value
+
+
+def _is_area_or_capacity_column(column: str) -> bool:
+    return (
+        column == "area"
+        or column == CLASSWISE_NESTED_UNION_AREA_COLUMN
+        or column.endswith("_area_km2")
+        or column == "max_capacity_mw"
+        or (column.startswith("max_power_") and column.endswith("_mw"))
+    )
+
+
+def _is_availability_column(column: str) -> bool:
+    return (
+        column == "availability"
+        or column == CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN
+        or column.endswith("_availability")
+    )
+
+
+def _close(left: float, right: float, *, rel_tol: float, abs_tol: float) -> bool:
+    return math.isclose(left, right, rel_tol=rel_tol, abs_tol=abs_tol)
+
+
+def _union_tolerance(*values: float) -> float:
+    scale = max(1.0, *(abs(value) for value in values))
+    return UNION_ABS_TOLERANCE_KM2 + UNION_REL_TOLERANCE * scale
+
+
+def _canonical_coordinate(latitude: float, longitude: float) -> tuple[float, float]:
+    return (
+        round(latitude, COORDINATE_DECIMAL_PLACES),
+        round(longitude, COORDINATE_DECIMAL_PLACES),
+    )
+
+
+def _read_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    with path.open("r", newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = list(reader.fieldnames or [])
+        if not fieldnames:
+            raise LandCampaignInputError(f"Land table has no CSV header: {path}")
+        if len(fieldnames) != len(set(fieldnames)):
+            raise LandCampaignInputError(f"Land table has duplicate CSV columns: {path}")
+        missing = sorted(set(LAND_REQUIRED_COLUMNS) - set(fieldnames))
+        if missing:
+            raise LandCampaignInputError(
+                f"Land table is missing required columns: {', '.join(missing)}"
+            )
+
+        rows: list[dict[str, str]] = []
+        for row_number, row in enumerate(reader, start=2):
+            if None in row:
+                raise LandCampaignInputError(
+                    f"Row {row_number}: contains fields beyond the CSV header"
+                )
+            rows.append(row)
+
+    if not rows:
+        raise LandCampaignInputError(f"Land table contains no data rows: {path}")
+    return fieldnames, rows
+
+
+def validate_land_campaign_input(
+    path: str | Path,
+    *,
+    expected_land_fraction: float,
+) -> dict[str, object]:
+    """Validate ``path`` and return a compact, reproducible identity summary."""
+
+    csv_path = Path(path)
+    expected_fraction = float(expected_land_fraction)
+    if not math.isfinite(expected_fraction) or not 0.0 <= expected_fraction <= 1.0:
+        raise LandCampaignInputError(
+            "expected_land_fraction must be finite and between 0 and 1"
+        )
+
+    fieldnames, rows = _read_rows(csv_path)
+    numeric_area_and_capacity_columns = tuple(
+        column for column in fieldnames if _is_area_or_capacity_column(column)
+    )
+    availability_columns = tuple(
+        column for column in fieldnames if _is_availability_column(column)
+    )
+
+    coordinates: set[tuple[float, float]] = set()
+    fractions: list[float] = []
+
+    for row_number, row in enumerate(rows, start=2):
+        latitude = _number(row, "latitude", row_number)
+        longitude = _number(row, "longitude", row_number)
+        if not -90.0 <= latitude <= 90.0:
+            raise LandCampaignInputError(
+                f"Row {row_number}: latitude outside [-90, 90]: {latitude}"
+            )
+        if not -180.0 <= longitude <= 180.0:
+            raise LandCampaignInputError(
+                f"Row {row_number}: longitude outside [-180, 180]: {longitude}"
+            )
+        coordinate = _canonical_coordinate(latitude, longitude)
+        if coordinate in coordinates:
+            raise LandCampaignInputError(
+                "Duplicate coordinate after 8-decimal normalization: "
+                f"({coordinate[0]:.8f}, {coordinate[1]:.8f})"
+            )
+        coordinates.add(coordinate)
+
+        anchor = row.get(CELL_ANCHOR_COLUMN)
+        if anchor != EXPECTED_CELL_ANCHOR:
+            raise LandCampaignInputError(
+                f"Row {row_number}: expected {CELL_ANCHOR_COLUMN}="
+                f"{EXPECTED_CELL_ANCHOR!r}, found {anchor!r}"
+            )
+
+        fraction = _number(row, "land_competition_fraction", row_number)
+        if not -RANGE_ABS_TOLERANCE <= fraction <= 1.0 + RANGE_ABS_TOLERANCE:
+            raise LandCampaignInputError(
+                f"Row {row_number}: land_competition_fraction outside [0, 1]: "
+                f"{fraction}"
+            )
+        fractions.append(fraction)
+
+        method = row.get(RENEWABLE_UNION_METHOD_COLUMN)
+        if method != EXPECTED_RENEWABLE_UNION_METHOD:
+            raise LandCampaignInputError(
+                f"Row {row_number}: expected {RENEWABLE_UNION_METHOD_COLUMN}="
+                f"{EXPECTED_RENEWABLE_UNION_METHOD!r}, found {method!r}"
+            )
+        version = row.get(RENEWABLE_UNION_METHOD_VERSION_COLUMN)
+        if version != EXPECTED_RENEWABLE_UNION_METHOD_VERSION:
+            raise LandCampaignInputError(
+                f"Row {row_number}: expected {RENEWABLE_UNION_METHOD_VERSION_COLUMN}="
+                f"{EXPECTED_RENEWABLE_UNION_METHOD_VERSION!r}, found {version!r}"
+            )
+
+        numeric_values: dict[str, float] = {}
+        for column in numeric_area_and_capacity_columns:
+            value = _number(row, column, row_number)
+            if value < 0.0:
+                raise LandCampaignInputError(
+                    f"Row {row_number}: {column} must be nonnegative, found {value}"
+                )
+            numeric_values[column] = value
+
+        availability_values: dict[str, float] = {}
+        for column in availability_columns:
+            value = _number(row, column, row_number)
+            if not -RANGE_ABS_TOLERANCE <= value <= 1.0 + RANGE_ABS_TOLERANCE:
+                raise LandCampaignInputError(
+                    f"Row {row_number}: {column} outside [0, 1]: {value}"
+                )
+            availability_values[column] = value
+
+        versioned_area = numeric_values[CLASSWISE_NESTED_UNION_AREA_COLUMN]
+        generic_area = numeric_values[GENERIC_UNION_AREA_COLUMN]
+        if not _close(
+            versioned_area,
+            generic_area,
+            rel_tol=ALIAS_REL_TOLERANCE,
+            abs_tol=ALIAS_ABS_TOLERANCE,
+        ):
+            raise LandCampaignInputError(
+                f"Row {row_number}: compatibility alias {GENERIC_UNION_AREA_COLUMN} "
+                f"diverges from {CLASSWISE_NESTED_UNION_AREA_COLUMN}"
+            )
+
+        versioned_availability = availability_values[
+            CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN
+        ]
+        generic_availability = availability_values[GENERIC_UNION_AVAILABILITY_COLUMN]
+        if not _close(
+            versioned_availability,
+            generic_availability,
+            rel_tol=ALIAS_REL_TOLERANCE,
+            abs_tol=ALIAS_ABS_TOLERANCE,
+        ):
+            raise LandCampaignInputError(
+                f"Row {row_number}: compatibility alias "
+                f"{GENERIC_UNION_AVAILABILITY_COLUMN} diverges from "
+                f"{CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN}"
+            )
+
+        wind_area = numeric_values["wind_onshore_area_km2"]
+        solar_area = numeric_values["solar_area_km2"]
+        lower_bound = max(wind_area, solar_area)
+        upper_bound = wind_area + solar_area
+        tolerance = _union_tolerance(
+            versioned_area, wind_area, solar_area, lower_bound, upper_bound
+        )
+        if versioned_area < lower_bound - tolerance:
+            raise LandCampaignInputError(
+                f"Row {row_number}: versioned renewable union {versioned_area} km2 "
+                f"is below max(wind_onshore, solar)={lower_bound} km2"
+            )
+        if versioned_area > upper_bound + tolerance:
+            raise LandCampaignInputError(
+                f"Row {row_number}: versioned renewable union {versioned_area} km2 "
+                f"exceeds wind_onshore+solar={upper_bound} km2"
+            )
+
+    reference_fraction = fractions[0]
+    for row_offset, fraction in enumerate(fractions[1:], start=3):
+        if not _close(
+            fraction,
+            reference_fraction,
+            rel_tol=FRACTION_REL_TOLERANCE,
+            abs_tol=FRACTION_ABS_TOLERANCE,
+        ):
+            raise LandCampaignInputError(
+                "land_competition_fraction is not uniform: "
+                f"row 2 has {reference_fraction}, row {row_offset} has {fraction}"
+            )
+    if not _close(
+        reference_fraction,
+        expected_fraction,
+        rel_tol=FRACTION_REL_TOLERANCE,
+        abs_tol=FRACTION_ABS_TOLERANCE,
+    ):
+        raise LandCampaignInputError(
+            f"Expected land_competition_fraction={expected_fraction}, "
+            f"found {reference_fraction}"
+        )
+
+    return {
+        "cell_anchor": EXPECTED_CELL_ANCHOR,
+        "coordinate_sha256": _coordinate_sha256(coordinates),
+        "file": str(csv_path.expanduser().resolve()),
+        "file_sha256": _sha256(csv_path),
+        "land_competition_fraction": reference_fraction,
+        "renewable_union_method": EXPECTED_RENEWABLE_UNION_METHOD,
+        "renewable_union_method_version": EXPECTED_RENEWABLE_UNION_METHOD_VERSION,
+        "row_count": len(rows),
+        "status": "passed",
+    }
+
+
+def _fraction_argument(value: str) -> float:
+    try:
+        fraction = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be numeric") from exc
+    if not math.isfinite(fraction) or not 0.0 <= fraction <= 1.0:
+        raise argparse.ArgumentTypeError("must be finite and between 0 and 1")
+    return fraction
+
+
+def _land_command(args: argparse.Namespace) -> int:
+    try:
+        summary = validate_land_campaign_input(
+            args.land_csv,
+            expected_land_fraction=args.expected_land_fraction,
+        )
+    except (LandCampaignInputError, OSError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(summary, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+# --- the merged surface ---------------------------------------------------------------------
+
+SURFACE_REQUIRED_COLUMNS = (
     "latitude",
     "longitude",
     "country",
@@ -65,8 +420,7 @@ REQUIRED_COLUMNS = (
 )
 
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+def _add_merge_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input", action="append", required=True)
     parser.add_argument("--expected-input-count", type=int, required=True)
     parser.add_argument("--output", required=True)
@@ -83,15 +437,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-currency", default="EUR")
     parser.add_argument("--require-interest-overrides", action="store_true")
     parser.add_argument("--require-full-year", action="store_true")
-    return parser.parse_args()
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _coordinate_columns(frame: pd.DataFrame) -> tuple[str, str]:
@@ -110,11 +455,6 @@ def _coordinate_tuples(frame: pd.DataFrame) -> list[tuple[float, float]]:
         pd.to_numeric(frame[lon], errors="raise"),
     )
     return [(round(float(la), 8), round(float(lo), 8)) for la, lo in coordinates]
-
-
-def _coordinate_sha256(coordinates: set[tuple[float, float]]) -> str:
-    payload = "\n".join(f"{lat:.8f},{lon:.8f}" for lat, lon in sorted(coordinates))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _expected_coordinates(path: Path, kind: str) -> set[tuple[float, float]]:
@@ -317,7 +657,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         frame = pd.read_csv(path)
         if frame.empty:
             raise ValueError(f"Explicit shard contains zero rows: {path}")
-        missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
+        missing = [column for column in SURFACE_REQUIRED_COLUMNS if column not in frame.columns]
         if missing:
             raise ValueError(f"{path} is missing required columns: {', '.join(missing)}")
         frames.append(frame)
@@ -565,8 +905,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def main() -> None:
-    args = _parse_args()
+def merge_and_qa(args: argparse.Namespace) -> None:
     qa_path = Path(args.qa_output)
     try:
         report = _run(args)
@@ -591,5 +930,24 @@ def main() -> None:
     print(f"QA passed: {qa_path}")
 
 
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    land = commands.add_parser("land", help="check a land table before a campaign")
+    land.add_argument("land_csv", help="Land campaign CSV to validate")
+    land.add_argument(
+        "--expected-land-fraction",
+        required=True,
+        type=_fraction_argument,
+        help="Required uniform land_competition_fraction, for example 0.02",
+    )
+    _add_merge_arguments(commands.add_parser("merge", help="merge a run's shards and apply the QA gate"))
+    args = parser.parse_args(argv)
+    if args.command == "land":
+        return _land_command(args)
+    merge_and_qa(args)
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

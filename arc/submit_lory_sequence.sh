@@ -1,5 +1,8 @@
 #!/bin/bash
-# Submit the reconciled Green Lory campaign sequence without reusing mutable shard folders.
+# Submit green-lory surface runs (run ids of runs.yaml) in smoke, diagnostic or global stages,
+# each into a new run directory: shard folders are never reused, run directories never
+# overwritten. On ARC, every check and the run manifests run in a short prepare job; the login
+# node only calls sbatch.
 set -euo pipefail
 
 usage() {
@@ -29,8 +32,18 @@ Options:
   --diagnostic-locations <csv>
                         Cells for the smoke and diagnostic stages (default:
                         inputs/lory_reconciliation_diagnostic_cells.csv).
-  --dry-run             Validate local source inputs and print commands only.
+  --dry-run             Check the inputs and print the plan; submit nothing.
   -h, --help            Show this help.
+
+Where it runs:
+  ARC login node   Every check and the run manifests run in a prepare job (2 CPUs,
+                   16 GB, up to 30 minutes; this command waits for it). Its log is
+                   <results root>/logs/prepare-<run id>-<job id>.out. The login node
+                   itself only calls sbatch, for the shard and merge/QA jobs, and
+                   writes submission.json. With --dry-run the prepare job checks the
+                   inputs and prints the plan; only its log is written.
+  Mac              --dry-run only: the checks run here with .venv/bin/python
+                   (or $PYTHON).
 
 Runs:
   Every setting of a run is defined in runs.yaml; list them with
@@ -41,6 +54,7 @@ shards with a wildcard. Every QA/merge job receives its exact input paths.
 EOF
 }
 
+ORIGINAL_ARGS=("$@")
 CAMPAIGN_ID=""
 RUN_STAGE=""
 RUN_ID=""
@@ -55,6 +69,8 @@ MAIL_USER="${ARC_MAIL_USER:-carlo.palazzi@eng.ox.ac.uk}"
 MAIL_TYPE="BEGIN,END,FAIL"
 DRY_RUN=false
 REQUESTED_SCENARIOS=()
+PHASE=""      # internal: "prepare" inside the prepare job
+PLAN_FILE=""  # internal: where the prepare job lists the run directories it prepared
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -102,6 +118,14 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=true
       shift
       ;;
+    --phase)
+      PHASE="$2"
+      shift 2
+      ;;
+    --plan-file)
+      PLAN_FILE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -131,18 +155,32 @@ if [[ ! "$SMOKE_HOURS" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
-
-VALIDATION_PYTHON=""
-if command -v python3 >/dev/null 2>&1; then
-  VALIDATION_PYTHON="$(command -v python3)"
-elif command -v python >/dev/null 2>&1; then
-  VALIDATION_PYTHON="$(command -v python)"
-else
-  echo "Python is required to validate plant bundles" >&2
+# Where this runs decides what it may do:
+#   login    an ARC login node: the prepare job does the checks; here only sbatch
+#   prepare  inside the prepare job: checks, run directories, manifests
+#   local    anywhere without sbatch (the Mac): --dry-run only
+if [[ "$PHASE" == "prepare" ]]; then
+  if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+    echo "--phase prepare runs only inside the prepare job" >&2
+    exit 2
+  fi
+  REPO_ROOT="${ARC_REPO_DIR:?the prepare job needs ARC_REPO_DIR}"
+elif [[ -n "$PHASE" ]]; then
+  echo "Unknown --phase: $PHASE" >&2
   exit 2
+else
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  if command -v sbatch >/dev/null 2>&1 && [[ -z "${SLURM_JOB_ID:-}" ]]; then
+    PHASE="login"
+  else
+    PHASE="local"
+    if ! $DRY_RUN; then
+      echo "sbatch is unavailable here, or this is already a Slurm job: use --dry-run, or submit from an ARC login node" >&2
+      exit 2
+    fi
+  fi
 fi
+cd "$REPO_ROOT"
 
 USER_NAME="${USER:-$(id -un)}"
 ARC_GROUP="${ARC_GROUP:-engs-df-green-ammonia}"
@@ -151,6 +189,26 @@ ARC_ENV_PREFIX="${ARC_ENV_PREFIX:-${ARC_WORK_BASE}/envs/green-lory-env}"
 ARC_PYTHON="${ARC_PYTHON:-${ARC_ENV_PREFIX}/bin/python}"
 WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"
 DIAGNOSTIC_LOCATIONS="${DIAGNOSTIC_LOCATIONS_OVERRIDE:-inputs/lory_reconciliation_diagnostic_cells.csv}"
+
+# Python for the checks: never on the login node
+VALIDATION_PYTHON=""
+if [[ "$PHASE" == "prepare" ]]; then
+  VALIDATION_PYTHON="$ARC_PYTHON"
+  if [[ ! -x "$VALIDATION_PYTHON" ]]; then
+    echo "ARC Python not found or not executable: $VALIDATION_PYTHON" >&2
+    exit 2
+  fi
+elif [[ "$PHASE" == "local" ]]; then
+  VALIDATION_PYTHON="${PYTHON:-}"
+  if [[ -z "$VALIDATION_PYTHON" && -x "$REPO_ROOT/.venv/bin/python" ]]; then
+    VALIDATION_PYTHON="$REPO_ROOT/.venv/bin/python"
+  fi
+  VALIDATION_PYTHON="${VALIDATION_PYTHON:-$(command -v python3 || true)}"
+  if [[ -z "$VALIDATION_PYTHON" ]]; then
+    echo "Python is required for the checks; set PYTHON" >&2
+    exit 2
+  fi
+fi
 
 SOURCE_COMMIT="${ARC_SOURCE_COMMIT:-}"
 if [[ -z "$SOURCE_COMMIT" ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -165,6 +223,98 @@ if [[ ! "$RUN_ID" =~ ^[a-zA-Z0-9._-]+$ ]]; then
   exit 2
 fi
 RESULTS_ROOT="${RESULTS_ROOT:-results/campaigns/${CAMPAIGN_ID}}"
+
+for i in "${!REQUESTED_SCENARIOS[@]}"; do
+  for j in "${!REQUESTED_SCENARIOS[@]}"; do
+    if (( j >= i )); then
+      continue
+    fi
+    if [[ "${REQUESTED_SCENARIOS[$i]}" == "${REQUESTED_SCENARIOS[$j]}" ]]; then
+      echo "Scenario was requested more than once: ${REQUESTED_SCENARIOS[$i]}" >&2
+      exit 2
+    fi
+  done
+done
+
+print_command() {
+  printf '  '
+  printf '%q ' "$@"
+  printf '\n'
+}
+
+job_id_from_parsable() {
+  printf '%s\n' "${1%%;*}"
+}
+
+job_cluster_from_parsable() {
+  if [[ "$1" == *";"* ]]; then
+    printf '%s\n' "${1#*;}"
+  fi
+}
+
+render_shell_command() {
+  local rendered=""
+  local item quoted
+  for item in "$@"; do
+    printf -v quoted '%q' "$item"
+    rendered+="${quoted} "
+  done
+  printf '%s\n' "${rendered% }"
+}
+
+print_campaign_header() {
+  echo "Campaign:     $CAMPAIGN_ID"
+  echo "Run ID:       $RUN_ID"
+  echo "Stage:        $RUN_STAGE"
+  echo "Results root: $RESULTS_ROOT"
+  echo "Source:       $SOURCE_COMMIT (diff/tree marker: $SOURCE_DIFF_SHA256)"
+  if [[ -n "$REQUESTED_CLUSTER" ]]; then
+    echo "Cluster:      $REQUESTED_CLUSTER"
+  else
+    echo "Cluster:      first submitted shard selects; remaining jobs are pinned to it"
+  fi
+}
+
+print_scenario_summary() {
+  echo
+  echo "Scenario: $SCENARIO_ID"
+  echo "  class:       $SCENARIO_CLASS"
+  echo "  tech yaml:   $TECH_YAML"
+  echo "  plant dir:   $PLANT_DIR"
+  echo "  override:    $OVERRIDE_CSV"
+  echo "  land csv:    $LAND_CSV"
+  echo "  timestep:    ${TIME_STEP}h"
+  echo "  land:        $LAND_CONSTRAINT / $CAPACITY_RULE / $LAND_ALLOCATION"
+  echo "  temporal:    $TEMPORAL_ACCOUNTING_MODE / $RAMP_LIMIT_BASIS"
+  echo "  site costs:  $INCLUDE_SITE_COSTS"
+  echo "  locations:   ${LOCATIONS_CSV:-<all positive-capacity land cells>}"
+  echo "  snapshots:   ${MAX_SNAPSHOTS:-<full year>}"
+  echo "  simulated hours: $SIMULATED_HOURS"
+  echo "  run dir:     $RUN_DIR"
+}
+
+# Variables the login node needs to submit a prepared run (written by the prepare job)
+SUBMIT_ENV_VARIABLES=(
+  CAMPAIGN_ID RUN_ID RUN_STAGE SOURCE_COMMIT SOURCE_DIFF_SHA256
+  SCENARIO_ID SCENARIO_CLASS SCENARIO_DESCRIPTION SCENARIO_JOB_TOKEN
+  RUN_DIR MANIFEST_PATH MANIFEST_SHA256
+  TECH_YAML PLANT_DIR PV_POLICY OVERRIDE_CSV LAND_CSV WEATHER_DIR LOCATIONS_CSV
+  TIME_STEP MAX_SNAPSHOTS SIMULATED_HOURS LAND_CONSTRAINT CAPACITY_RULE LAND_ALLOCATION
+  TEMPORAL_ACCOUNTING_MODE RAMP_LIMIT_BASIS INCLUDE_SITE_COSTS
+  NUM_WORKERS THREADS_PER_WORKER SLURM_CPUS SLURM_MEMORY
+)
+
+write_submit_env() {
+  local path="$1" name
+  {
+    echo "# Written by the prepare job of arc/submit_lory_sequence.sh; read by its login-node step."
+    for name in "${SUBMIT_ENV_VARIABLES[@]}"; do
+      printf '%s=%q\n' "$name" "${!name}"
+    done
+  } > "$path"
+}
+
+# --- run in the prepare job, or locally for a dry run -------------------------------------------
 
 compute_source_diff_sha256() {
   "$VALIDATION_PYTHON" - "$REPO_ROOT" <<'PY'
@@ -200,28 +350,6 @@ for raw_path in sorted(path for path in untracked if path):
 print(digest.hexdigest())
 PY
 }
-
-SOURCE_DIFF_SHA256="${ARC_SOURCE_DIFF_SHA256:-}"
-if [[ -z "$SOURCE_DIFF_SHA256" ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  if [[ -n "$(git status --porcelain)" ]]; then
-    SOURCE_DIFF_SHA256=$(compute_source_diff_sha256)
-  else
-    SOURCE_DIFF_SHA256="clean"
-  fi
-fi
-SOURCE_DIFF_SHA256="${SOURCE_DIFF_SHA256:-unknown}"
-
-for i in "${!REQUESTED_SCENARIOS[@]}"; do
-  for j in "${!REQUESTED_SCENARIOS[@]}"; do
-    if (( j >= i )); then
-      continue
-    fi
-    if [[ "${REQUESTED_SCENARIOS[$i]}" == "${REQUESTED_SCENARIOS[$j]}" ]]; then
-      echo "Scenario was requested more than once: ${REQUESTED_SCENARIOS[$i]}" >&2
-      exit 2
-    fi
-  done
-done
 
 configure_scenario() {
   SCENARIO_ID="$1"
@@ -308,7 +436,7 @@ validate_explicit_union_area() {
   if [[ ! -f "$land_csv" ]]; then
     return 0
   fi
-  "$VALIDATION_PYTHON" arc/validate_land_campaign_input.py "$land_csv" \
+  "$VALIDATION_PYTHON" -m arc.qa land "$land_csv" \
     --expected-land-fraction "$EXPECTED_LAND_COMPETITION_FRACTION"
 }
 
@@ -338,7 +466,7 @@ validate_release_source_inventory() {
     echo "Release source inventory not found: $RELEASE_SOURCE_INVENTORY" >&2
     return 2
   fi
-  "$VALIDATION_PYTHON" arc/release_source_inventory.py verify \
+  "$VALIDATION_PYTHON" -m arc.release verify \
     --root "$REPO_ROOT" \
     --inventory "$RELEASE_SOURCE_INVENTORY"
 }
@@ -356,7 +484,7 @@ validate_cost_scope_and_override_coverage() {
 from pathlib import Path
 import sys
 
-from arc.write_campaign_manifest import (
+from arc.manifest import (
     build_flat_amelired_cost_scope,
     validate_override_coordinate_coverage,
 )
@@ -420,15 +548,6 @@ validate_scenario_sources() {
     return 0
   fi
 
-  if [[ ! -x "$ARC_PYTHON" ]]; then
-    echo "ARC Python not found or not executable: $ARC_PYTHON" >&2
-    return 2
-  fi
-  if ! command -v sbatch >/dev/null 2>&1; then
-    echo "sbatch is unavailable; run the non-dry submission on an ARC login node" >&2
-    return 2
-  fi
-
   env \
     ARC_PYTHON_BIN="$ARC_PYTHON" \
     ARC_TECH_YAML="$TECH_YAML" \
@@ -439,37 +558,11 @@ validate_scenario_sources() {
     bash arc/arc_check_run_inputs.sh "$LOCATIONS_CSV" >/dev/null
 }
 
-print_command() {
-  printf '  '
-  printf '%q ' "$@"
-  printf '\n'
-}
-
-job_id_from_parsable() {
-  printf '%s\n' "${1%%;*}"
-}
-
-job_cluster_from_parsable() {
-  if [[ "$1" == *";"* ]]; then
-    printf '%s\n' "${1#*;}"
-  fi
-}
-
-render_shell_command() {
-  local rendered=""
-  local item quoted
-  for item in "$@"; do
-    printf -v quoted '%q' "$item"
-    rendered+="${quoted} "
-  done
-  printf '%s\n' "${rendered% }"
-}
-
 manifest_command() {
   local manifest_python="$1"
   shift
   MANIFEST_COMMAND=(
-    "$manifest_python" arc/write_campaign_manifest.py
+    "$manifest_python" -m arc.manifest write
     --output "$MANIFEST_PATH"
     --campaign-id "$CAMPAIGN_ID"
     --run-id "$RUN_ID"
@@ -519,61 +612,9 @@ manifest_command() {
   done
 }
 
-# Validate every requested run before creating any directory or submitting any job.
-for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
-  configure_scenario "$requested_scenario"
-  if [[ -e "$RUN_DIR" ]]; then
-    echo "Refusing to overwrite existing immutable run directory: $RUN_DIR" >&2
-    exit 2
-  fi
-  validate_scenario_sources
-done
+# --- shard and merge/QA jobs: submitted from the login node, or printed for a dry run ----------
 
-echo "Campaign:     $CAMPAIGN_ID"
-echo "Run ID:       $RUN_ID"
-echo "Stage:        $RUN_STAGE"
-echo "Results root: $RESULTS_ROOT"
-echo "Source:       $SOURCE_COMMIT (diff/tree marker: $SOURCE_DIFF_SHA256)"
-if [[ -n "$REQUESTED_CLUSTER" ]]; then
-  echo "Cluster:      $REQUESTED_CLUSTER"
-else
-  echo "Cluster:      first submitted shard selects; remaining jobs are pinned to it"
-fi
-
-for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
-  configure_scenario "$requested_scenario"
-  echo
-  echo "Scenario: $SCENARIO_ID"
-  echo "  class:       $SCENARIO_CLASS"
-  echo "  tech yaml:   $TECH_YAML"
-  echo "  plant dir:   $PLANT_DIR"
-  echo "  override:    $OVERRIDE_CSV"
-  echo "  land csv:    $LAND_CSV"
-  echo "  timestep:    ${TIME_STEP}h"
-  echo "  land:        $LAND_CONSTRAINT / $CAPACITY_RULE / $LAND_ALLOCATION"
-  echo "  temporal:    $TEMPORAL_ACCOUNTING_MODE / $RAMP_LIMIT_BASIS"
-  echo "  site costs:  $INCLUDE_SITE_COSTS"
-  echo "  locations:   ${LOCATIONS_CSV:-<all positive-capacity land cells>}"
-  echo "  snapshots:   ${MAX_SNAPSHOTS:-<full year>}"
-  echo "  simulated hours: $SIMULATED_HOURS"
-  echo "  run dir:     $RUN_DIR"
-
-  if $DRY_RUN; then
-    manifest_command "$VALIDATION_PYTHON"
-    echo "  planned manifest command:"
-    print_command "${MANIFEST_COMMAND[@]}"
-  else
-    mkdir -p "$RUN_DIR/shards" "$RUN_DIR/merged" "$RUN_DIR/qa" "$RUN_DIR/logs"
-    manifest_command "$ARC_PYTHON"
-    "${MANIFEST_COMMAND[@]}"
-  fi
-
-  if $DRY_RUN; then
-    MANIFEST_SHA256="planned-byte-immutable-manifest-sha256"
-  else
-    MANIFEST_SHA256=$($ARC_PYTHON -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$MANIFEST_PATH")
-  fi
-
+submit_or_plan_jobs() {
   scenario_env=(
     "ARC_REPO_DIR=$REPO_ROOT"
     "ARC_CAMPAIGN_ID=$CAMPAIGN_ID"
@@ -681,7 +722,7 @@ for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
   merged_csv="$RUN_DIR/merged/global_run_results.csv"
   qa_json="$RUN_DIR/qa/validation.json"
   qa_command=(
-    "$ARC_PYTHON" arc/merge_and_qa_campaign.py
+    "$ARC_PYTHON" -m arc.qa merge
     --expected-input-count "${#explicit_inputs[@]}"
     --output "$merged_csv"
     --qa-output "$qa_json"
@@ -703,12 +744,12 @@ for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
     qa_command+=(--require-full-year)
   fi
   qa_source_verify=(
-    "$ARC_PYTHON" arc/release_source_inventory.py verify
+    "$ARC_PYTHON" -m arc.release verify
     --root "$REPO_ROOT"
     --inventory "$RELEASE_SOURCE_INVENTORY"
   )
   qa_input_verify=(
-    "$ARC_PYTHON" arc/verify_campaign_manifest_inputs.py
+    "$ARC_PYTHON" -m arc.manifest verify
     --manifest "$MANIFEST_PATH"
   )
   qa_wrap="cd $(printf '%q' "$REPO_ROOT") && $(render_shell_command "${qa_source_verify[@]}") && $(render_shell_command "${qa_input_verify[@]}") && $(render_shell_command "${qa_command[@]}")"
@@ -721,7 +762,7 @@ for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
       --mail-user="$MAIL_USER" --mail-type="$MAIL_TYPE" \
       --dependency="afterok:<exact-shard-job-ids>" --job-name="$qa_label" \
       --output="$RUN_DIR/logs/merge-qa-%j.out" --wrap="$qa_wrap"
-    continue
+    return 0
   fi
 
   dependencies="$(IFS=:; echo "${job_ids[*]}")"
@@ -748,30 +789,172 @@ for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
     exit 2
   fi
 
-  submission_path="$RUN_DIR/submission.json"
-  submission_command=(
-    "$ARC_PYTHON" arc/write_campaign_submission.py
-    --output "$submission_path"
-    --manifest "$MANIFEST_PATH"
-    --qa-job-id "$qa_job_id"
-    --mail-user "$MAIL_USER"
-    --mail-type "$MAIL_TYPE"
-  )
-  for job_id in "${job_ids[@]}"; do
-    submission_command+=(--job-id "$job_id")
-  done
-  if [[ -n "$pinned_cluster" ]]; then
-    submission_command+=(--cluster "$pinned_cluster")
-  fi
-  "${submission_command[@]}"
-
+  write_submission_record
   echo "  merge/QA job: $qa_job_id"
-  echo "  submission record: $submission_path"
+  echo "  submission record: $RUN_DIR/submission.json"
   echo "  merged output: $merged_csv"
   echo "  QA report: $qa_json"
+}
+
+# The mutable submission facts beside the byte-immutable manifest, written without Python:
+# job ids here, the scheduler's view of each job in submission_scheduler.txt.
+write_submission_record() {
+  local path="$RUN_DIR/submission.json"
+  if [[ -e "$path" ]]; then
+    echo "Refusing to overwrite submission record: $path" >&2
+    exit 2
+  fi
+  local text
+  for text in "$MANIFEST_PATH" "$MANIFEST_SHA256" "$MAIL_USER" "$MAIL_TYPE" "$pinned_cluster"; do
+    if [[ "$text" == *[\"\\]* ]]; then
+      echo "Cannot write $path: a value contains a quote or backslash: $text" >&2
+      exit 2
+    fi
+  done
+  local shard_ids="" id
+  for id in "${job_ids[@]}"; do
+    shard_ids+="\"$id\", "
+  done
+  local cluster_json="null"
+  if [[ -n "$pinned_cluster" ]]; then
+    cluster_json="\"$pinned_cluster\""
+  fi
+  cat > "$path.tmp" <<EOF
+{
+  "cluster": $cluster_json,
+  "manifest": "$MANIFEST_PATH",
+  "manifest_sha256": "$MANIFEST_SHA256",
+  "merge_qa_job_id": "$qa_job_id",
+  "requested_mail_type": "$MAIL_TYPE",
+  "requested_mail_user": "$MAIL_USER",
+  "scheduler_snapshots": "submission_scheduler.txt",
+  "schema_version": 2,
+  "shard_job_ids": [${shard_ids%, }],
+  "submitted_utc": "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)"
+}
+EOF
+  mv "$path.tmp" "$path"
+  local cluster_option=()
+  if [[ -n "$pinned_cluster" ]]; then
+    cluster_option=(-M "$pinned_cluster")
+  fi
+  for id in "${job_ids[@]}" "$qa_job_id"; do
+    scontrol "${cluster_option[@]}" --oneliner show job "$id" >> "$RUN_DIR/submission_scheduler.txt" 2>&1 || true
+  done
+}
+
+# --- login node: the prepare job, then sbatch only ------------------------------------------
+
+if [[ "$PHASE" == "login" ]]; then
+  SOURCE_DIFF_SHA256="computed in the prepare job"
+  prepare_log_dir="$RESULTS_ROOT/logs"
+  PLAN_FILE="$prepare_log_dir/prepare-${RUN_ID}.plan"
+  if [[ -e "$PLAN_FILE" ]]; then
+    echo "Refusing to reuse $PLAN_FILE: choose another --run-id" >&2
+    exit 2
+  fi
+  mkdir -p "$prepare_log_dir"
+  prepare_command=(
+    sbatch --wait --parsable
+    --partition=short --time=00:30:00 --cpus-per-task=2 --mem=16G
+    --mail-user="$MAIL_USER" --mail-type="$MAIL_TYPE"
+    --job-name="glr-prepare-${RUN_ID}"
+    --output="$prepare_log_dir/prepare-${RUN_ID}-%j.out"
+    arc/submit_lory_sequence.sh "${ORIGINAL_ARGS[@]}" --run-id "$RUN_ID"
+    --phase prepare --plan-file "$PLAN_FILE"
+  )
+  echo "Prepare job (checks and manifests on a compute node; waiting for it):"
+  print_command "${prepare_command[@]}"
+  prepare_status=0
+  raw_prepare_job_id="$(ARC_REPO_DIR="$REPO_ROOT" "${prepare_command[@]}")" || prepare_status=$?
+  prepare_log="$prepare_log_dir/prepare-${RUN_ID}-$(job_id_from_parsable "${raw_prepare_job_id%%$'\n'*}").out"
+  echo
+  if [[ -f "$prepare_log" ]]; then
+    cat "$prepare_log"
+  else
+    echo "Prepare log not found: $prepare_log" >&2
+  fi
+  if (( prepare_status != 0 )); then
+    echo "Prepare job failed (exit $prepare_status); nothing was submitted." >&2
+    exit 2
+  fi
+  if $DRY_RUN; then
+    exit 0
+  fi
+
+  prepared_run_dirs=()
+  while IFS= read -r prepared_run_dir; do
+    [[ -n "$prepared_run_dir" ]] && prepared_run_dirs+=("$prepared_run_dir")
+  done < "$PLAN_FILE"
+  if (( ${#prepared_run_dirs[@]} != ${#REQUESTED_SCENARIOS[@]} )); then
+    echo "The prepare job prepared ${#prepared_run_dirs[@]} run(s) for ${#REQUESTED_SCENARIOS[@]} scenario(s); nothing was submitted." >&2
+    exit 2
+  fi
+  echo
+  echo "Submitting from the login node:"
+  for prepared_run_dir in "${prepared_run_dirs[@]}"; do
+    # shellcheck source=/dev/null
+    source "$prepared_run_dir/submit.env"
+    echo "Scenario: $SCENARIO_ID ($RUN_DIR)"
+    submit_or_plan_jobs
+  done
+  exit 0
+fi
+
+# --- prepare job, or a local dry run: check every run before creating anything -------------------
+
+if [[ "$PHASE" == "prepare" ]] && ! $DRY_RUN; then
+  if [[ -z "$PLAN_FILE" || -e "$PLAN_FILE" ]]; then
+    echo "The prepare job needs a new --plan-file" >&2
+    exit 2
+  fi
+fi
+
+SOURCE_DIFF_SHA256="${ARC_SOURCE_DIFF_SHA256:-}"
+if [[ -z "$SOURCE_DIFF_SHA256" ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if [[ -n "$(git status --porcelain)" ]]; then
+    SOURCE_DIFF_SHA256=$(compute_source_diff_sha256)
+  else
+    SOURCE_DIFF_SHA256="clean"
+  fi
+fi
+SOURCE_DIFF_SHA256="${SOURCE_DIFF_SHA256:-unknown}"
+
+for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
+  configure_scenario "$requested_scenario"
+  if [[ -e "$RUN_DIR" ]]; then
+    echo "Refusing to overwrite existing immutable run directory: $RUN_DIR" >&2
+    exit 2
+  fi
+  validate_scenario_sources
+done
+
+print_campaign_header
+
+for requested_scenario in "${REQUESTED_SCENARIOS[@]}"; do
+  configure_scenario "$requested_scenario"
+  print_scenario_summary
+
+  if $DRY_RUN; then
+    manifest_command "$VALIDATION_PYTHON"
+    echo "  planned manifest command:"
+    print_command "${MANIFEST_COMMAND[@]}"
+    MANIFEST_SHA256="planned-byte-immutable-manifest-sha256"
+    submit_or_plan_jobs
+    continue
+  fi
+
+  # The prepare job: run directory, manifest, and what the login node needs to submit
+  mkdir -p "$RUN_DIR/shards" "$RUN_DIR/merged" "$RUN_DIR/qa" "$RUN_DIR/logs"
+  manifest_command "$ARC_PYTHON"
+  "${MANIFEST_COMMAND[@]}"
+  MANIFEST_SHA256=$("$ARC_PYTHON" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$MANIFEST_PATH")
+  write_submit_env "$RUN_DIR/submit.env"
+  printf '%s\n' "$RUN_DIR" >> "$PLAN_FILE"
+  echo "  prepared: manifest sha256 $MANIFEST_SHA256"
 done
 
 if $DRY_RUN; then
   echo
-  echo "DRY-RUN complete: no directories were created and no jobs were submitted."
+  echo "DRY-RUN complete: no run directories were created and no jobs were submitted."
 fi

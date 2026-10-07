@@ -1,10 +1,11 @@
+"""arc/release.py: the inventory of a source release and its verification."""
 import json
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
-from arc.release_source_inventory import verify_inventory, write_inventory
+from arc.release import verify_inventory, write_inventory
 
 
 class ReleaseSourceInventoryTest(unittest.TestCase):

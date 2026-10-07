@@ -7,9 +7,11 @@
 # (tracked plus untracked-but-not-ignored files, without results/, the spatial cost
 # CSVs and the weather data), the generated finance overrides that runs.yaml pins
 # (gitignored, so copied explicitly after checking their sha256), source_inventory.json
-# (arc/release_source_inventory.py), RELEASE_NOTES.md (commit, dirty state, extras),
-# and data/ links to the shared inputs in green-lory/data/. The release is verified
-# on ARC and made read-only. An existing release id is refused.
+# (arc/release.py), RELEASE_NOTES.md (commit, dirty state, extras), and data/ links to
+# the shared inputs in green-lory/data/. On ARC the copy is verified against the
+# inventory in a short Slurm job (log: release_verification-<job>.out in the release;
+# nothing computational runs on the login node), then made read-only. An existing
+# release id is refused.
 #
 # Submit from the release afterwards, e.g.
 #   cd <release> && ARC_RELEASE_INVENTORY=$PWD/source_inventory.json \
@@ -80,7 +82,7 @@ for run_id, run in load_runs().items():
 Path(sys.argv[1]).write_text("".join(f"{p}\n" for p in extras))
 PY
 
-"$PY" arc/release_source_inventory.py write --root "$REPO_ROOT" --output "$STAGE/source_inventory.json" \
+"$PY" -m arc.release write --root "$REPO_ROOT" --output "$STAGE/source_inventory.json" \
   --exclude-prefix inputs/spatial_cost_inputs --exclude-prefix data/weather_data/ >/dev/null
 "$PY" - "$STAGE/source_inventory.json" "$STAGE/files.txt" <<'PY'
 import json, sys
@@ -118,6 +120,10 @@ rsync -a -e "ssh -o ControlPath=$SOCKET -o BatchMode=yes" "$STAGE/source_invento
     test -e '$SHARED_DATA/'\$item || { echo \"missing shared input $SHARED_DATA/\$item\" >&2; exit 6; }
     ln -s '$SHARED_DATA/'\$item data/\$item
   done
-  '$ARC_PY' arc/release_source_inventory.py verify --root . --inventory source_inventory.json
+  sbatch --wait --partition=short --time=00:20:00 --cpus-per-task=1 --mem=4G \
+    --mail-user=carlo.palazzi@eng.ox.ac.uk --mail-type=BEGIN,END,FAIL \
+    --job-name=glr-verify-release --output='$RELEASE/release_verification-%j.out' \
+    --wrap=\"cd '$RELEASE' && '$ARC_PY' -m arc.release verify --root . --inventory source_inventory.json\"
+  cat '$RELEASE'/release_verification-*.out
   chmod -R a-w ."
 echo "staged and verified: $RELEASE"

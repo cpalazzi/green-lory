@@ -108,13 +108,13 @@ if [[ -n "$CAMPAIGN_RUN_DIR" ]]; then
     echo "ERROR: campaign run requires an existing ARC_RUN_MANIFEST" >&2
     exit 2
   fi
-  "$ARC_PYTHON" arc/verify_campaign_manifest_inputs.py \
+  "$ARC_PYTHON" -m arc.manifest verify \
     --manifest "$ARC_RUN_MANIFEST"
   if [[ -z "${ARC_RELEASE_INVENTORY:-}" ]]; then
     echo "ERROR: campaign run requires ARC_RELEASE_INVENTORY" >&2
     exit 2
   fi
-  "$ARC_PYTHON" arc/release_source_inventory.py verify \
+  "$ARC_PYTHON" -m arc.release verify \
     --root "$ARC_REPO_DIR" \
     --inventory "$ARC_RELEASE_INVENTORY"
 fi

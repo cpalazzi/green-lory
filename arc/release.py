@@ -1,9 +1,12 @@
-#!/usr/bin/env python3
-"""Write or verify a deterministic inventory of a staged source release.
+"""Source releases: a deterministic inventory of the files a release holds, and its check.
 
-The inventory is intentionally limited to Git-visible source files. Large
-ignored datasets and generated campaign artifacts are identified separately by
-run manifests and are not part of this source-tree digest.
+``arc/stage_release.sh`` writes the inventory on the Mac and verifies the copy on ARC in a
+short Slurm job; the merge/QA job of every run verifies it again. The inventory covers the
+Git-visible source files only: large ignored datasets and campaign outputs are identified by
+the run manifests (``arc/manifest.py``), not by this digest.
+
+    python -m arc.release write --root . --output source_inventory.json
+    python -m arc.release verify --root <release> --inventory <release>/source_inventory.json
 """
 
 from __future__ import annotations

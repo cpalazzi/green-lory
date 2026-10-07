@@ -16,8 +16,8 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from arc.release_source_inventory import _sha256 as sha, verify_inventory
-from arc.validate_land_campaign_input import validate_land_campaign_input
+from arc.qa import validate_land_campaign_input
+from arc.release import _sha256 as sha, verify_inventory
 from model import config, land, plant, technology, weather
 from model.surface import CellFailure, RunInputs, RunSettings, run_cell
 import yaml

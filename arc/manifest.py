@@ -1,5 +1,19 @@
-#!/usr/bin/env python3
-"""Write or update an immutable Green Lory campaign-run manifest."""
+"""Run manifests: what a campaign run uses, written before its shards start, checked after.
+
+A manifest (``<run dir>/manifest.json``) is byte-immutable. It records the source (commit,
+release inventory), the resolved settings of the run, its cost scope, and the identity of
+every input: sha256 of the technology YAML chain, the plant bundle, the finance (override)
+CSV, the land table and the cell list, and a listing (names, sizes, mtimes) of the weather
+files. ``arc/submit_lory_sequence.sh`` writes it in its prepare job; the merge/QA job verifies
+the inputs again before it accepts the shards.
+
+    python -m arc.manifest write --output <run dir>/manifest.json ...   (every option: --help)
+    python -m arc.manifest verify --manifest <run dir>/manifest.json
+
+The cost scope is the flat one of the key runs: finance from the override CSV (Ameli reduced
+WACC, ``amelired``, or a uniform rate, ``waccN``), uniform baseline water from the YAML, no
+build or remoteness multipliers, no land rent.
+"""
 
 from __future__ import annotations
 
@@ -34,8 +48,7 @@ def _zero_or_one(value: str) -> bool:
     raise argparse.ArgumentTypeError("expected 0 or 1")
 
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+def _add_write_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", required=True)
     parser.add_argument("--campaign-id", required=True)
     parser.add_argument("--run-id", required=True)
@@ -97,8 +110,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--source-diff-sha256", required=True)
     parser.add_argument("--release-source-inventory")
     parser.add_argument("--expected-currency", default="EUR")
-    return parser.parse_args()
 
+
+# --- writing ---------------------------------------------------------------------------------
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -504,8 +518,7 @@ def _immutable_projection(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def main() -> None:
-    args = _parse_args()
+def write_manifest(args: argparse.Namespace) -> None:
     now = datetime.now(timezone.utc).isoformat()
     output = Path(args.output)
 
@@ -604,6 +617,202 @@ def main() -> None:
     temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(output)
     print(f"Manifest: {output}")
+
+
+# --- verifying -------------------------------------------------------------------------------
+
+class ManifestInputError(ValueError):
+    """Raised when a manifest is malformed or a recorded input has changed."""
+
+
+def _mapping(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ManifestInputError(f"{label} must be a JSON object")
+    return value
+
+
+def _file_record_path(record: dict[str, Any], label: str) -> Path:
+    value = record.get("resolved_path")
+    if not isinstance(value, str) or not value:
+        raise ManifestInputError(f"{label}.resolved_path must be a non-empty string")
+    return Path(value)
+
+
+def _verify_file_record(record_value: Any, label: str) -> Path:
+    record = _mapping(record_value, label)
+    path = _file_record_path(record, label)
+    if not path.exists():
+        raise ManifestInputError(f"{label} is missing: {path}")
+    if not path.is_file():
+        raise ManifestInputError(f"{label} is not a regular file: {path}")
+
+    expected_size = record.get("size_bytes")
+    if not isinstance(expected_size, int) or isinstance(expected_size, bool):
+        raise ManifestInputError(f"{label}.size_bytes must be an integer")
+    actual_size = path.stat().st_size
+    if actual_size != expected_size:
+        raise ManifestInputError(
+            f"{label} size changed: expected {expected_size} bytes, "
+            f"found {actual_size} bytes at {path}"
+        )
+
+    expected_sha256 = record.get("sha256")
+    if not isinstance(expected_sha256, str) or len(expected_sha256) != 64:
+        raise ManifestInputError(f"{label}.sha256 must be a 64-character string")
+    actual_sha256 = _sha256(path)
+    if actual_sha256 != expected_sha256:
+        raise ManifestInputError(
+            f"{label} SHA-256 changed: expected {expected_sha256}, "
+            f"found {actual_sha256} at {path}"
+        )
+    return path
+
+
+def _weather_listing(path: Path) -> list[dict[str, Any]]:
+    files = []
+    for item in sorted(path.glob("*.nc")):
+        stat = item.stat()
+        files.append(
+            {
+                "name": item.name,
+                "size_bytes": stat.st_size,
+                "mtime_ns": stat.st_mtime_ns,
+            }
+        )
+    return files
+
+
+def _listing_sha256(files: list[dict[str, Any]]) -> str:
+    payload = json.dumps(files, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _verify_weather(record_value: Any) -> int:
+    label = "inputs.weather"
+    record = _mapping(record_value, label)
+    path = _file_record_path(record, label)
+    if not path.exists():
+        raise ManifestInputError(f"{label} directory is missing: {path}")
+    if not path.is_dir():
+        raise ManifestInputError(f"{label} is not a directory: {path}")
+
+    expected_count = record.get("file_count")
+    if not isinstance(expected_count, int) or isinstance(expected_count, bool):
+        raise ManifestInputError(f"{label}.file_count must be an integer")
+    expected_sha256 = record.get("listing_sha256")
+    if not isinstance(expected_sha256, str) or len(expected_sha256) != 64:
+        raise ManifestInputError(
+            f"{label}.listing_sha256 must be a 64-character string"
+        )
+
+    files = _weather_listing(path)
+    actual_sha256 = _listing_sha256(files)
+    if len(files) != expected_count or actual_sha256 != expected_sha256:
+        raise ManifestInputError(
+            f"{label} listing changed: expected {expected_count} NetCDF files "
+            f"with listing SHA-256 {expected_sha256}, found {len(files)} files "
+            f"with listing SHA-256 {actual_sha256} at {path}; identity uses "
+            "filename, size_bytes, and mtime_ns"
+        )
+    return len(files)
+
+
+def verify_manifest_inputs(manifest_path: Path) -> dict[str, int]:
+    """Verify all source-input identities recorded in ``manifest_path``."""
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ManifestInputError(f"manifest is missing: {manifest_path}") from exc
+    except json.JSONDecodeError as exc:
+        raise ManifestInputError(
+            f"manifest is not valid JSON: {manifest_path}: {exc}"
+        ) from exc
+    manifest = _mapping(manifest, "manifest")
+    inputs = _mapping(manifest.get("inputs"), "inputs")
+
+    verified_file_count = 0
+
+    tech = _mapping(inputs.get("tech_yaml"), "inputs.tech_yaml")
+    chain = tech.get("extends_chain")
+    if not isinstance(chain, list) or not chain:
+        raise ManifestInputError(
+            "inputs.tech_yaml.extends_chain must be a non-empty array"
+        )
+    for index, record in enumerate(chain):
+        _verify_file_record(record, f"inputs.tech_yaml.extends_chain[{index}]")
+        verified_file_count += 1
+
+    plant = _mapping(inputs.get("plant_bundle"), "inputs.plant_bundle")
+    plant_files = _mapping(plant.get("files"), "inputs.plant_bundle.files")
+    missing_records = [name for name in PLANT_FILES if name not in plant_files]
+    unexpected_records = [name for name in plant_files if name not in PLANT_FILES]
+    if missing_records or unexpected_records:
+        details = []
+        if missing_records:
+            details.append(f"missing records: {', '.join(missing_records)}")
+        if unexpected_records:
+            details.append(f"unexpected records: {', '.join(unexpected_records)}")
+        raise ManifestInputError(
+            "inputs.plant_bundle.files does not match the manifest schema ("
+            + "; ".join(details)
+            + ")"
+        )
+    for name in PLANT_FILES:
+        _verify_file_record(
+            plant_files[name], f"inputs.plant_bundle.files[{name!r}]"
+        )
+        verified_file_count += 1
+
+    for name in ("override_csv", "land_csv"):
+        _verify_file_record(inputs.get(name), f"inputs.{name}")
+        verified_file_count += 1
+
+    if "locations_csv" in inputs:
+        _verify_file_record(inputs["locations_csv"], "inputs.locations_csv")
+        verified_file_count += 1
+
+    source = manifest.get("source", {})
+    if source is not None:
+        source = _mapping(source, "source")
+        if "release_inventory" in source:
+            _verify_file_record(
+                source["release_inventory"], "source.release_inventory"
+            )
+            verified_file_count += 1
+
+    weather_file_count = _verify_weather(inputs.get("weather"))
+    return {
+        "byte_hashed_file_count": verified_file_count,
+        "weather_file_count": weather_file_count,
+    }
+
+
+def _verify_command(args: argparse.Namespace) -> None:
+    try:
+        result = verify_manifest_inputs(Path(args.manifest))
+    except (ManifestInputError, OSError) as exc:
+        raise SystemExit(f"Campaign input verification failed: {exc}") from exc
+    print(
+        "Campaign inputs verified: "
+        f"{result['byte_hashed_file_count']} byte-hashed files; "
+        f"{result['weather_file_count']} weather files"
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    _add_write_arguments(commands.add_parser("write", help="write the manifest of a new run directory"))
+    verify = commands.add_parser("verify", help="check that a manifest's inputs have not changed")
+    verify.add_argument("--manifest", required=True)
+    args = parser.parse_args(argv)
+    if args.command == "write":
+        write_manifest(args)
+    else:
+        _verify_command(args)
 
 
 if __name__ == "__main__":
