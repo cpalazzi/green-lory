@@ -30,6 +30,6 @@ fi
 cd "$ARC_RELEASE"
 date -u; hostname
 "$PY" -m model.weather_land ratios --weights inputs/weather/era5_point_weights_1deg.csv \
-  --stores "$STORES" --legacy-dir data/weather_data/salmon2022_pv_wind_2019_hourly_1deg --output "$ARC_OUTPUT"
+  --geography inputs/site_costs/cell_geography.csv --stores "$STORES" --legacy-dir data/weather_data/salmon2022_pv_wind_2019_hourly_1deg --output "$ARC_OUTPUT"
 sha256sum "$ARC_OUTPUT"
 date -u

@@ -112,10 +112,11 @@ def cell_profiles(stack: ProfileStack, lat: float, lon: float) -> pd.DataFrame:
     for resource in ("solar", "wind", "solar_tracking"):
         values = stack.resources[resource].sel(selection, method="nearest").values
         if factors is not None:
-            # the cell's land: wind by the wind factor (at most rated output), PV by the PV factor
+            # the cell's land: wind by the wind factor (at most rated output); PV by a PV factor
+            # only if the file has one (the current one does not)
             if resource == "wind":
                 values = np.minimum(values * factors["wind"], 1.0)
-            else:
+            elif "solar" in factors:
                 values = values * factors["solar"]
         if resource == "wind":
             values = values * WIND_WAKE_FACTOR
