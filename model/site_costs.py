@@ -218,7 +218,11 @@ def site_cost_table(
         raise ValueError("land_competition_fraction must be uniform within a land table")
     # onshore land above rounding noise (sea cells can carry 1e-14 % from the spherical weights)
     cells = land_table[land_table["onshore_land_pct"] > ONSHORE_LAND_PCT_MIN][["latitude", "longitude", *SLOPE_CLASS_COLUMNS]]
-    table = cells.merge(geography, on=["latitude", "longitude"], how="left", validate="one_to_one")
+    # the geography covers 55 S to 83 N (the lakes database); land cells beyond it (Antarctica) get
+    # no site costs, and runs refuse any cell without a row
+    in_range = cells["latitude"].between(geography["latitude"].min(), geography["latitude"].max())
+    beyond = int((~in_range).sum())
+    table = cells[in_range].merge(geography, on=["latitude", "longitude"], how="left", validate="one_to_one")
     uncovered = table["port_distance_km"].isna()
     if uncovered.any():
         examples = ", ".join(f"({lat:g}, {lon:g})" for lat, lon in table.loc[uncovered, ["latitude", "longitude"]].head(5).to_numpy())
@@ -249,6 +253,7 @@ def site_cost_table(
     out["water_cost_usd_per_m3"] = out["water_source_cost_usd_per_m3"] + out["water_pipeline_cost_usd_per_m3"]
     out["land_cost_usd_per_km2_year"] = 0.0
     parameters = {
+        "land_cells_beyond_the_geography": beyond,
         "remoteness": remoteness,
         "land_competition_fraction": float(shares[0]),
         "slope_class_factors": SLOPE_CLASS_FACTORS,

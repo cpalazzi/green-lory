@@ -1,0 +1,58 @@
+{
+  "written_by": "python -m model.site_costs",
+  "rows": 18039,
+  "sha256": "711f138477861c63ddc31166c5e30e71d1ad810ed6a14abc3a7b99aa72a8bbb6",
+  "currency": "USD2020",
+  "inputs": {
+    "land_table": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/results/campaigns/land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv",
+      "sha256": "0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb"
+    },
+    "tech_yaml": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml",
+      "sha256": "b6d1a5518f1481a3ea38f264035c1acb1e3c97460f2ffa9ada85f38bcf55b86d"
+    },
+    "cell_geography": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/cell_geography.csv",
+      "sha256": "2b3f3b4b20fbe84d3e5208d6d3e81c7c63ac570bdc064be39f6c34f9b5676846"
+    },
+    "remoteness_fit": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/remoteness_fit.json",
+      "sha256": "d5588c3e04536a8a7e3d9e0d8ddbe40f2272c6f3170ac4bd4546eb05071d25a2"
+    }
+  },
+  "parameters": {
+    "land_cells_beyond_the_geography": 1788,
+    "remoteness": {
+      "source": "ghd2025",
+      "equipment_a_per_1000_km": 0.20365413095631188,
+      "equipment_cap": 1.1,
+      "installation_city_size": "20k",
+      "installation_b_per_hour": 0.08553563896878519,
+      "installation_saturation_min": 240.0
+    },
+    "land_competition_fraction": 0.2,
+    "slope_class_factors": {
+      "land_pct_slope_upto_8p5deg": 1.0,
+      "land_pct_slope_8p5_to_14deg": 1.3,
+      "land_pct_slope_14_to_20deg": 1.6
+    },
+    "slope_techs": [
+      "solar",
+      "solar_tracking",
+      "wind"
+    ],
+    "water_source_usd_per_m3": 2.28439325,
+    "water_pipeline": {
+      "diameter_in": 12,
+      "velocity_m_per_s": 0.6518757799915128,
+      "friction_head_m_per_km": 1.7406003210061367,
+      "pipe_usd2020_per_km": 307356.9606189248,
+      "stations_usd2020_per_km": 55338.68299601866,
+      "capital_usd_per_m3_km": 0.017459994358878832,
+      "energy_usd_per_m3_km": 0.0005059344933057838,
+      "flow_m3_per_year": 1500000.0
+    },
+    "pipeline_materials_share": 0.3
+  }
+}
