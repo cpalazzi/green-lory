@@ -618,6 +618,71 @@ def _flat_cost_scope_expectations(
     }
 
 
+
+def _site_cost_scope_expectations(manifest: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
+    """Expectations of a site_costs_* scope: the results must carry the table's values per cell."""
+    scope = manifest["cost_scope"]
+    scope_id = str(scope.get("id"))
+    finance = scope.get("finance", {})
+    token = re.match(r"^site_costs_(amelired|ameli|wacc\d+(?:p\d+)?)_no_land_rent$", scope_id).group(1)
+    expected_mode = {"amelired": "ameli_reduced_wacc", "ameli": "ameli_wacc"}.get(token, "uniform_wacc")
+    if finance.get("mode") != expected_mode or finance.get("override_column") != "interest_rate":
+        raise ValueError(f"Manifest cost scope {scope_id} must declare finance mode {expected_mode} from interest_rate")
+    build = scope.get("spatial_build_and_remoteness", {})
+    water = scope.get("water", {})
+    if build.get("mode") != "site_cost_table" or water.get("mode") != "site_cost_table":
+        raise ValueError(f"Manifest cost scope {scope_id} must take build costs and water from the site-cost table")
+    land = scope.get("land_rent", {})
+    if land.get("mode") != "none_zero" or land.get("included_in_headline") is not False:
+        raise ValueError("Manifest must declare that no land-rent input is available")
+    record = manifest.get("inputs", {}).get("site_costs_csv")
+    if not isinstance(record, dict) or not record.get("resolved_path"):
+        raise ValueError(f"Manifest cost scope {scope_id} needs inputs.site_costs_csv")
+    include_site_costs = bool(execution.get("include_site_costs"))
+    if water.get("included_in_headline") is not include_site_costs:
+        raise ValueError("Manifest water headline inclusion contradicts execution.include_site_costs")
+    return {
+        "mode": "site_cost_table",
+        "site_costs_csv": Path(record["resolved_path"]),
+        "site_costs_sha256": record.get("sha256"),
+        "land_cost_usd_per_km2_year": 0.0,
+        "water_included_in_headline": include_site_costs,
+    }
+
+
+def _cost_scope_expectations(manifest: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
+    scope = manifest.get("cost_scope")
+    if isinstance(scope, dict) and str(scope.get("id", "")).startswith("site_costs_"):
+        return _site_cost_scope_expectations(manifest, execution)
+    return {"mode": "flat", **_flat_cost_scope_expectations(manifest, execution)}
+
+
+def _check_site_costs(combined: pd.DataFrame, expectations: dict[str, Any]) -> dict[str, Any]:
+    """Every cell carries the site-cost table's equipment multiplier and water price, and a
+    build multiplier between its installation factor and that times its slope factor."""
+    path = expectations["site_costs_csv"]
+    if expectations.get("site_costs_sha256") and _sha256(path) != expectations["site_costs_sha256"]:
+        raise ValueError(f"Site-cost table changed since the manifest was written: {path}")
+    table = pd.read_csv(path)
+    table["latitude"], table["longitude"] = table["latitude"].round(4), table["longitude"].round(4)
+    results = combined.assign(latitude=combined["latitude"].round(4), longitude=combined["longitude"].round(4))
+    merged = results.merge(table, on=["latitude", "longitude"], how="left", suffixes=("", "_table"), indicator=True)
+    if (merged["_merge"] != "both").any():
+        raise ValueError(f"{int((merged['_merge'] != 'both').sum())} result cells have no site-cost row")
+    if "equipment_cost_multiplier" not in combined.columns:
+        raise ValueError("Results with site costs must report equipment_cost_multiplier")
+    equipment = pd.to_numeric(merged["equipment_cost_multiplier"], errors="raise")
+    if not ((equipment - merged["equipment_cost_multiplier_table"]).abs() <= 1e-9).all():
+        raise ValueError("Result equipment multipliers differ from the site-cost table")
+    base_build = merged["installation_multiplier"] * merged["labour_multiplier"] * merged["depth_multiplier"]
+    build = pd.to_numeric(merged["build_cost_multiplier"], errors="raise")
+    if not ((build >= base_build - 1e-9) & (build <= base_build * merged["slope_multiplier"] + 1e-9)).all():
+        raise ValueError("Result build multipliers lie outside the site-cost table's range")
+    water = pd.to_numeric(merged["water_cost_usd_per_m3"], errors="raise")
+    if not ((water - merged["water_cost_usd_per_m3_table"]).abs() <= 1e-9 * merged["water_cost_usd_per_m3_table"].abs().clip(lower=1.0)).all():
+        raise ValueError("Result water prices differ from the site-cost table")
+    return {"site_cost_cells_checked": int(len(merged))}
+
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -644,7 +709,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
     if manifest.get("execution", {}).get("fail_fast") is not True:
         raise ValueError("Manifest does not record fail_fast=true")
     execution = manifest.get("execution", {})
-    cost_scope_expectations = _flat_cost_scope_expectations(manifest, execution)
+    cost_scope_expectations = _cost_scope_expectations(manifest, execution)
 
     frames: list[pd.DataFrame] = []
     input_records: list[dict[str, Any]] = []
@@ -739,16 +804,20 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
             "land_cost_pct",
         ),
     )
-    _require_constant_numeric(
-        combined,
-        "build_cost_multiplier",
-        cost_scope_expectations["build_cost_multiplier"],
-    )
-    _require_constant_numeric(
-        combined,
-        "water_cost_usd_per_m3",
-        cost_scope_expectations["water_cost_usd_per_m3"],
-    )
+    if cost_scope_expectations["mode"] == "site_cost_table":
+        site_cost_check = _check_site_costs(combined, cost_scope_expectations)
+    else:
+        site_cost_check = None
+        _require_constant_numeric(
+            combined,
+            "build_cost_multiplier",
+            cost_scope_expectations["build_cost_multiplier"],
+        )
+        _require_constant_numeric(
+            combined,
+            "water_cost_usd_per_m3",
+            cost_scope_expectations["water_cost_usd_per_m3"],
+        )
     _require_constant_numeric(
         combined,
         "land_cost_usd_per_km2_year",
@@ -761,7 +830,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
     if cost_scope_expectations["water_included_in_headline"]:
         if not (water_cost_percentages > 0.0).all():
             raise ValueError(
-                "Uniform baseline water is headline-active but water_cost_pct is not positive"
+                "Water is headline-active but water_cost_pct is not positive"
             )
     else:
         _require_constant_numeric(combined, "water_cost_pct", 0.0)
@@ -873,6 +942,8 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         "inputs": input_records,
         "output": str(output_path),
         "output_sha256": _sha256(output_path),
+        "cost_scope_mode": cost_scope_expectations["mode"],
+        **(site_cost_check or {}),
         "row_count": len(combined),
         "expected_row_count": len(expected_coordinates),
         "coordinate_sha256": _coordinate_sha256(actual_coordinates),

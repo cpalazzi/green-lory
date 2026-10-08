@@ -1,4 +1,5 @@
-"""arc/manifest.py: verifying a manifest's inputs, and the flat cost scopes of the key runs."""
+"""arc/manifest.py: verifying a manifest's inputs, the flat cost scopes of the key runs and the
+site-cost scopes of S1/S2."""
 import hashlib
 import io
 import json
@@ -10,6 +11,7 @@ from unittest.mock import patch
 from arc.qa import _flat_cost_scope_expectations
 
 from arc.manifest import (
+    build_cost_scope,
     build_flat_amelired_cost_scope,
     flat_finance_token,
     ManifestInputError,
@@ -229,6 +231,47 @@ class ManifestBuilderTest(unittest.TestCase):
             build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=AMELI, include_site_costs=True, cost_scope_id="flat_wacc5_uniform_baseline_water_no_land_rent")
         with self.assertRaises(ValueError):
             build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True)
+
+
+
+def _site_cost_table(path: Path, *, source_price=2.28439325, land_cost=0.0, slope=1.2) -> Path:
+    path.write_text(
+        "latitude,longitude,equipment_cost_multiplier,installation_multiplier,slope_multiplier,depth_multiplier,"
+        "labour_multiplier,water_source_cost_usd_per_m3,water_cost_usd_per_m3,land_cost_usd_per_km2_year\n"
+        f"-23,117,1.05,1.34,{slope},1,1,{source_price},7.2,{land_cost}\n"
+        f"-23,151,1.01,1.09,1,1,1,{source_price},{source_price},{land_cost}\n"
+    )
+    return path
+
+
+class SiteCostScopeTest(unittest.TestCase):
+    @unittest.skipUnless(UNIFORM.exists() and DEA_YAML.exists(), "campaign inputs not present")
+    def test_site_cost_scope_takes_finance_from_the_override_and_costs_from_the_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            table = _site_cost_table(Path(tmp) / "site_costs.csv")
+            scope = build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+                                     cost_scope_id="site_costs_wacc5_no_land_rent",
+                                     flat_water_model_currency_per_m3=2.0, site_costs_csv=table)
+            self.assertEqual(scope["finance"]["mode"], "uniform_wacc")
+            self.assertEqual(scope["spatial_build_and_remoteness"]["mode"], "site_cost_table")
+            self.assertEqual(scope["water"]["mode"], "site_cost_table")
+            self.assertAlmostEqual(scope["water"]["source_price_model_currency_per_m3"], 2.0, places=6)
+            with self.assertRaisesRegex(ValueError, "needs a site-cost table"):
+                build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+                                 cost_scope_id="site_costs_wacc5_no_land_rent")
+            with self.assertRaisesRegex(ValueError, "flat scope"):
+                build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+                                 cost_scope_id="flat_wacc5_uniform_baseline_water_no_land_rent", site_costs_csv=table)
+
+    @unittest.skipUnless(UNIFORM.exists() and DEA_YAML.exists(), "campaign inputs not present")
+    def test_site_cost_tables_must_match_the_yaml_and_carry_no_land_rent(self):
+        for kwargs, pattern in (({"source_price": 2.0}, "not the YAML baseline"), ({"land_cost": 5.0}, "zero land cost"),
+                                ({"slope": 0.9}, "at least 1")):
+            with self.subTest(kwargs=kwargs), tempfile.TemporaryDirectory() as tmp:
+                table = _site_cost_table(Path(tmp) / "site_costs.csv", **kwargs)
+                with self.assertRaisesRegex(ValueError, pattern):
+                    build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+                                     cost_scope_id="site_costs_wacc5_no_land_rent", site_costs_csv=table)
 
 
 if __name__ == "__main__":

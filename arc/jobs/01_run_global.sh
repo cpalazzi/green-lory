@@ -98,6 +98,7 @@ fi
 
 export ARC_TECH_YAML="${ARC_TECH_YAML:?ARC_TECH_YAML must name the technology YAML of the run}"
 export ARC_OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
+export ARC_SITE_COSTS_CSV="${ARC_SITE_COSTS_CSV:-}"
 export ARC_LAND_CSV="${ARC_LAND_CSV:?ARC_LAND_CSV must point at a centred land table (cell_anchor=center)}"
 export ARC_WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"
 
@@ -214,6 +215,7 @@ result = run_surface(
     tech_yaml=env("ARC_TECH_YAML"),
     plant_dir=env("ARC_PLANT_DIR") or None,
     override_csv=env("ARC_OVERRIDE_CSV") or None,
+    site_costs_csv=env("ARC_SITE_COSTS_CSV") or None,
     weather_dir=env("ARC_WEATHER_DIR") or None,
     settings=settings,
     output_csv=env("ARC_OUTPUT_CSV"),
