@@ -357,7 +357,11 @@ To decide at this review:
    60 EUR/t (+16 %) with GHD, 104 EUR/t (+27 %) with Aurecon; Australia +18 % or +31 %, Chile
    +10 % or +20 %. Recommended: GHD 2025, the newer table, with AEMO's port basis and without
    Aurecon's 2.5-fold residual; it is a draft, so the paper should cite it as such and give
-   Aurecon's as the upper bound.
+   Aurecon's as the upper bound. **Agreed in principle on 8 October**; the shape beyond the
+   calibration sites is still open: the fitted plateau after 4 hours rests on 5 of 110 sites,
+   the farthest 6.7 hours from a town of 20,000, while 41 % of the key runs' cells (56 % in
+   Australia) lie beyond that. A concave curve, 1 + c ln(1 + t / 2 h), fits as well (leave-one-
+   out RMSE 0.071 against 0.070) and keeps rising: 1.49 at 12 hours, 1.65 at 24 hours.
 2. **The slope factor is nearly inactive.** On GEBCO's 15-arc-second grid 94 % of the land from
    55 S to 9 S lies below 8.5 degrees, so with the 20 % share taken flattest first only 6 of
    2,806 cells pay a slope factor (at the full share 1,674 cells, up to 1.54). The slope decision
@@ -470,7 +474,6 @@ All runs:
      Australia unchanged, ships calling at 1,190 ports against 808) or as deposited;
   4. supplier-site storage in the corrected networks (step 5): drop it (recommended; the plant
      LCOA already holds its ammonia tank; about 1 USD/t, no change to the network);
-  5. Zotero: Lehner et al. (2025), GHD (2025) and Pekel et al. (2016) (see the references below).
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release
@@ -496,7 +499,7 @@ noted below.
   https://aemo.com.au/-/media/files/major-publications/isp/2025/aurecon-2024-energy-technology-costs-and-technical-parameter-review.pdf
 - GHD (2025). *2025 Energy Technology Cost and Technical Parameter Review*, draft report Rev C,
   28 November 2025, for AEMO (draft 2026 Forecasting Assumptions Update); section 8 and Tables
-  8.1 to 8.3 (location factors from Rawlinsons 2025). Not yet in Zotero.
+  8.1 to 8.3 (location factors from Rawlinsons 2025). Zotero key `ghd2025EnergyTechnology2025`.
   https://www.aemo.com.au/-/media/files/stakeholder_consultation/consultations/nem-consultations/2025/draft-2026-fau/ghd-2025-energy-technology-cost-and-technical-parameter-report.pdf
 - Lopez, A. et al. (2025). *Renewable Energy Technical Potential and Supply Curves for the
   Contiguous United States: 2024 Edition*, NREL/TP-6A20-91900, revised June 2025; slope
@@ -514,7 +517,7 @@ noted below.
   https://doi.org/10.1038/s41597-019-0265-5
 - Pekel, J.-F., Cottam, A., Gorelick, N. and Belward, A. S. (2016). High-resolution mapping of
   global surface water and its long-term changes. Nature 540, 418-422.
-  https://doi.org/10.1038/nature20584 (Global Surface Water v1.4, 1984-2021; not yet in Zotero).
+  https://doi.org/10.1038/nature20584 (Global Surface Water v1.4, 1984-2021).
 - Salmon, N. and Bañares-Alcántara, R. (2022). A global, spatially granular techno-economic
   analysis of offshore green ammonia production. Journal of Cleaner Production 367, 133045.
   https://doi.org/10.1016/j.jclepro.2022.133045
@@ -526,8 +529,7 @@ noted below.
   https://www.twdb.texas.gov/publications/reports/contracted_reports/doc/1800012227_UCM2018_User_Guide.pdf
 - Lehner, B. et al. (2025). Mapping the world's inland surface waters: an upgrade to the Global
   Lakes and Wetlands Database (GLWD v2). Earth System Science Data 17, 2277.
-  https://doi.org/10.5194/essd-17-2277-2025 (data: https://doi.org/10.6084/m9.figshare.28519994;
-  not yet in Zotero).
+  https://doi.org/10.5194/essd-17-2277-2025 (data: https://doi.org/10.6084/m9.figshare.28519994).
 - Weiss, D. J. et al. (2018). A global map of travel time to cities to assess inequalities in
   accessibility in 2015. Nature 553, 333-336. https://doi.org/10.1038/nature25181
 - Zhou, Y. and Tol, R. S. J. (2005). Evaluating the costs of desalination and water transport.
