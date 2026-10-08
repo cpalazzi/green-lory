@@ -406,19 +406,34 @@ notebook 02 (git history before 73689c6; placeholders, not sourced). Missing: of
 foundation costs by depth, where conversion happens (platform or shore) and the export link,
 exclusions (depth, shipping lanes, marine protected areas, ice), and an offshore power curve.
 
-Running and still to do in this step:
+Done and still to do in this step (8 October):
 
-- The global land build runs on ARC from release `20261008-land-slope20-v2` (commit afecb85,
-  protected land; verified by job 13441053): job 13441136 builds the 100 % table, 13441137 and
-  13441138 derive the 2 % and 20 % tables, into
-  `green-lory-campaigns/land_center_slope20_20261008_v2/`. The first build
-  (`20261008-land-slope20-v1`, jobs 13434202-4, old protected-area rule) was cancelled after 4 h
+- **Land table, October build** (release `20261008-land-slope20-v2`, commit afecb85; jobs 13441136
+  in 24 minutes, 13441137-8): `green-lory-campaigns/land_center_slope20_20261008_v2/`, local copy
+  under `results/campaigns/`. Against September: land-cover columns identical; inland protection
+  within 0.31 points; coastal cells wholly excluded by protection 573 to 26; land up to the slope
+  limit 95.3 % to 97.4 % of land; suitable onshore area +2.2 to +2.7 %; cells with suitable land
+  18,773 to 19,387. The run cells (`locations_onshore_suitable_center_20261008.csv`, same rule as
+  September's 16,509, `land_table.run_cells`): 16,885, none dropped. The first build (release
+  `20261008-land-slope20-v1`, jobs 13434202-4, old protected-area rule) was cancelled after 4 h
   at your request; its folder holds a CANCELLED.md note.
-- The weather land correction runs on ARC from release `20261008-weather-land-v1` (job
-  13441218) into `green-lory-campaigns/weather_land_correction_20261008_v1/`.
-- Then: compare the land table with the September one, write the site-cost table of the 20 %
-  table into `inputs/site_costs/` (GHD 2025 calibration), place the weather correction in the
-  shared weather folder, and draw the global maps.
+- **Site-cost table of the 20 % table** (GHD 2025): `inputs/site_costs/site_costs_center_20pct_slope20.csv`,
+  every run cell covered. In half the run cells the equipment and installation factors are at
+  their caps (1.10, 1.34); 27 cells pay a slope factor (at most 1.095); water 5.5 USD/m3 median
+  (90th percentile 15.6). World maps: `results/campaigns/site_costs_review_20261008/maps/`.
+- **Weather land correction**: the first factors (job 13441218, release
+  `20261008-weather-land-v1`) corrected PV wrongly, because the ERA5 stores hold no PV at sea,
+  and nearly removed the wind of some steep coasts (Atacama: ERA5 land capacity factor 0.003);
+  superseded (SUPERSEDED.md in its folder, the file removed from the weather folder). The
+  corrected version (wind only, calm bins, inland floor; commit 1bd8d0f) runs as job 13442443
+  from release `20261008-weather-land-v2` into `weather_land_correction_20261008_v2/`. Before the
+  safeguards, the correction cut the wind excess of mostly-sea cells over inland neighbours by
+  about two thirds (+0.231 to +0.074 capacity factor above 75 % sea).
+- **Open, for you: rivers as water sources.** Section 0b counts the sea, lakes and reservoirs;
+  large rivers (GLWD classes 04-05) are not sources, so the Amazon interior pays 20 USD/m3 or more
+  beside its river. Counting rivers that cover at least 1 % of a cell would bring 5,031 run cells
+  closer to water (Amazon median distance 556 to 111 km, Congo 398 to 157, Siberia 229 to 94;
+  Australia and Chile unchanged), at the same shadow price. Recommended.
 - Done for runs with site costs (commit d99ad1c): the `site_costs_<finance>_no_land_rent` cost
   scope in the manifest, the QA checks per cell, the wrapper and shard job passing the table.
 
