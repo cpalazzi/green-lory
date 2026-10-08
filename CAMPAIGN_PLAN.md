@@ -357,17 +357,50 @@ To decide at this review:
    60 EUR/t (+16 %) with GHD, 104 EUR/t (+27 %) with Aurecon; Australia +18 % or +31 %, Chile
    +10 % or +20 %. Recommended: GHD 2025, the newer table, with AEMO's port basis and without
    Aurecon's 2.5-fold residual; it is a draft, so the paper should cite it as such and give
-   Aurecon's as the upper bound. **Agreed in principle on 8 October**; the shape beyond the
-   calibration sites is still open: the fitted plateau after 4 hours rests on 5 of 110 sites,
-   the farthest 6.7 hours from a town of 20,000, while 41 % of the key runs' cells (56 % in
-   Australia) lie beyond that. A concave curve, 1 + c ln(1 + t / 2 h), fits as well (leave-one-
-   out RMSE 0.071 against 0.070) and keeps rising: 1.49 at 12 hours, 1.65 at 24 hours.
+   Aurecon's as the upper bound. **Decided 8 October: GHD 2025, fitted as its sites give it**
+   (installation rising to 1.34 at 4 hours from a town of 20,000, then flat). The plateau rests
+   on 5 of 110 sites, the farthest 6.7 hours out, while 41 % of the key runs' cells (56 % in
+   Australia) lie beyond that; a concave curve, 1 + c ln(1 + t / 2 h), fits as well (leave-one-
+   out RMSE 0.071 against 0.070) and would give 1.49 at 12 hours and 1.65 at 24 hours, a
+   possible sensitivity.
 2. **The slope factor is nearly inactive.** On GEBCO's 15-arc-second grid 94 % of the land from
    55 S to 9 S lies below 8.5 degrees, so with the 20 % share taken flattest first only 6 of
    2,806 cells pay a slope factor (at the full share 1,674 cells, up to 1.54). The slope decision
    then acts through land up to 20 degrees, not through cost. No change proposed: the classes
    were fixed before this was known, and the paper can say so.
 3. **The water source price** at 2 EUR2020/m3 (as the flat runs) rather than 2 USD.
+
+Offshore and coastal cells (review of 8 October). No campaign run places a plant at sea (the
+choice of 23 September stands: offshore cells stay out until their costs and exclusions exist),
+and the plant's capacity uses onshore land only. Three things reach the onshore runs anyway:
+
+- **Mostly-sea cells take a marine wind resource.** The 1-degree profiles behave like averages
+  over the whole cell: at equal sea share, cells centred at sea and on land have the same wind,
+  and it rises with the sea share. Against fully inland neighbours, the key run's LCOA is lower
+  by 0.1 % (cells up to 25 % sea), 2.5 % (25-50 %), 6.3 % (50-75 %) and 10.4 % (over 75 %), the
+  wind capacity factor higher by up to 0.23. 2,360 of the 16,509 cells are more than half sea;
+  they hold only 1.6 % of the capacity at 20 %, but 175 of the 265 cheapest cells that would meet
+  600 Mt/yr (32 Mt/yr between them). The plant sits on the land part and is costed as onshore.
+  Proposed: flag these cells in results and leave them out of cheapest-cell statistics and the
+  coast/inland comparison now; give them a land-only resource when the weather source (D7) is
+  revisited, from ERA5 at 0.25 degrees.
+- **Protected areas count their water against land.** WDPA areas of the coastal realm (part
+  land, part sea) are kept, and their whole area is divided by the cell's land: in 407 cells the
+  protected share exceeds the land share, and 519 coastal cells (281 between 50 S and 50 N; 25 in
+  Australia, 28 in Chile, 18 in Arabia) lose all their land, some rightly (south-west Tasmania,
+  K'gari) and some because of sea. Proposed: measure protected land only (the protected areas
+  within the lakes database's land mask) and rebuild the land table; the build running now has
+  the old rule.
+- **The wind stack's turbine is undocumented** and the stack comes from Salmon and
+  Banares-Alcantara's offshore study; ERA5 with an onshore turbine gave 26-38 % less wind at the
+  focal cells (D7, deferred).
+
+What exists for a later offshore implementation: profiles at sea, the land tables' offshore
+columns (MODIS water, lakes included, no exclusions), GEBCO depths, the port set, DEA's offshore
+turbine sheet, and the depth, port-distance and weather-window multipliers of the removed
+notebook 02 (git history before 73689c6; placeholders, not sourced). Missing: offshore wind and
+foundation costs by depth, where conversion happens (platform or shore) and the export link,
+exclusions (depth, shipping lanes, marine protected areas, ice), and an offshore power curve.
 
 Running and still to do in this step:
 
