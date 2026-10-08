@@ -44,6 +44,16 @@ Locations:
 Known open point: PV profiles occasionally exceed 1.0 (Atacama fixed 1.06,
 tracking 1.12); the AC/DC normalisation basis is undocumented.
 
+The profiles average the whole 1-degree cell, sea and lakes included (at equal sea share, cells
+centred at sea and on land have the same wind; it rises with the sea share). Runs from October
+2026 rescale the wind of cells with at least 1 % water to the cell's land with a factor file in
+`land_correction/` (`model/weather_land.py`): factors by cell, month and hour of day, the ratio
+of the land-weighted to the area-weighted mean of the cell's ERA5 wind capacity factors at 0.25
+degrees (the green-condor stores listed below), kept between the wind of the cell's fully
+inland neighbours and the uncorrected profile. PV is not corrected. The point weights are
+tracked in `../inputs/weather/era5_point_weights_1deg.csv`; the factors are computed on ARC by
+`../arc/jobs/10_weather_land_correction.sh`.
+
 ## Land and terrain inputs
 
 | File | Purpose | SHA-256 |
@@ -83,7 +93,7 @@ and is linked here (the file stays in that repository, which is also worked on):
 | Item | Location on ARC | Notes |
 |---|---|---|
 | ERA5 cutout 2019 | `/data/engs-df-green-ammonia/engs2523/green-condor/data/global_cutout_2019.nc` | about 290 GiB, 0.25 degree, 8,760 hours; 100 m wind, radiation, temperature, roughness |
-| atlite capacity factors | `/data/engs-df-green-ammonia/engs2523/green-condor/outputs/global_cf_2019_tiles_<start>_<end>.zarr` | 12 stores of 60 latitude rows each (0-59 ... 660-719), about 3.2 GB each; Vestas V112 3 MW onshore, NREL 5 MW offshore, CSi fixed PV; no tracking field. The unsuffixed `global_cf_2019.zarr` covers 85 rows only and is not a complete product |
+| atlite capacity factors | `/data/engs-df-green-ammonia/engs2523/green-condor/outputs/global_cf_2019_tiles_<start>_<end>.zarr` | 12 stores of 60 latitude rows each (0-59 ... 660-719), about 3.2 GB each; Vestas V112 3 MW onshore, NREL 5 MW offshore, CSi fixed PV; no tracking field. The unsuffixed `global_cf_2019.zarr` covers 85 rows only and is not a complete product. Read by the land correction of the profiles (zarr 3, so with `envs/green-condor-env`) |
 | Provenance | `green-lory/data/weather_data/archive/green-condor_global_cutout_2019/` on ARC | notebooks, readmes and scripts that produced the cutout, not the data |
 
 At the three focal cells these profiles give 7 to 9 % lower fixed-PV and 26 to
