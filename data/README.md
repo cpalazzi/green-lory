@@ -54,6 +54,10 @@ inland neighbours and the uncorrected profile. PV is not corrected. The point we
 tracked in `../inputs/weather/era5_point_weights_1deg.csv`; the factors are computed on ARC by
 `../arc/jobs/10_weather_land_correction.sh`.
 
+| File | What it is | SHA-256 |
+|---|---|---|
+| `land_correction/weather_land_correction_2019.nc` | Wind factors of the 10,971 cells with at least 1 % water (job 13442443, release `20261008-weather-land-v2`, campaign `green-lory-campaigns/weather_land_correction_20261008_v2/`); the inland floor binds in 1,182 cells. On ARC in `green-lory/data/weather_data/land_correction/` (read-only), so releases reach it through their `data/weather_data` link. A first version of 8 October (job 13441218) was withdrawn | `ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf` |
+
 ## Land and terrain inputs
 
 | File | Purpose | SHA-256 |

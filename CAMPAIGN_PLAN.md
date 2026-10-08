@@ -425,10 +425,14 @@ Done and still to do in this step (8 October):
   `20261008-weather-land-v1`) corrected PV wrongly, because the ERA5 stores hold no PV at sea,
   and nearly removed the wind of some steep coasts (Atacama: ERA5 land capacity factor 0.003);
   superseded (SUPERSEDED.md in its folder, the file removed from the weather folder). The
-  corrected version (wind only, calm bins, inland floor; commit 1bd8d0f) runs as job 13442443
-  from release `20261008-weather-land-v2` into `weather_land_correction_20261008_v2/`. Before the
-  safeguards, the correction cut the wind excess of mostly-sea cells over inland neighbours by
-  about two thirds (+0.231 to +0.074 capacity factor above 75 % sea).
+  corrected version (wind only, calm bins, inland floor; commit 1bd8d0f; job 13442443, release
+  `20261008-weather-land-v2`) is `data/weather_data/land_correction/weather_land_correction_2019.nc`
+  (on ARC too). It cuts the wind excess of coastal cells over their fully inland neighbours by
+  about two thirds (capacity factor above inland: +0.053 to +0.013 at 25-50 % sea, +0.148 to
+  +0.049 at 50-75 %, +0.231 to +0.075 above 75 %); the floor binds in 1,120 run cells (the
+  Atacama coast keeps its hinterland's wind instead of ERA5's near-zero). Key-run LCOA, full year:
+  Gladstone coast (23 S 151 E) 321 to 357 EUR/t, Perth coast 313 to 327, Ningaloo 328 to 331,
+  inland Pilbara unchanged. Campaign runs set `weather_land_correction` to this file.
 - **Open, for you: rivers as water sources.** Section 0b counts the sea, lakes and reservoirs;
   large rivers (GLWD classes 04-05) are not sources, so the Amazon interior pays 20 USD/m3 or more
   beside its river. Counting rivers that cover at least 1 % of a cell would bring 5,031 run cells
