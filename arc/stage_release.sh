@@ -8,10 +8,10 @@
 # CSVs and the weather data), the generated finance overrides that runs.yaml pins
 # (gitignored, so copied explicitly after checking their sha256), source_inventory.json
 # (arc/release.py), RELEASE_NOTES.md (commit, dirty state, extras), and data/ links to
-# the shared inputs in green-lory/data/. On ARC the copy is verified against the
-# inventory in a short Slurm job (log: release_verification-<job>.out in the release;
-# nothing computational runs on the login node), then made read-only. An existing
-# release id is refused.
+# the shared inputs in green-lory/data/ (DATA_LINKS: what surfaces and the land build read).
+# On ARC the copy is verified against the inventory in a short Slurm job (log:
+# release_verification-<job>.out in the release; nothing computational runs on the login
+# node), then made read-only. An existing release id is refused.
 #
 # Submit from the release afterwards, e.g.
 #   cd <release> && ARC_RELEASE_INVENTORY=$PWD/source_inventory.json \
@@ -45,6 +45,9 @@ SHARED_DATA="$BASE/green-lory/data"
 ARC_PY="$BASE/envs/green-lory-env/bin/python"
 PY="${PYTHON:-$REPO_ROOT/.venv/bin/python}"
 SSH=(ssh -o "ControlPath=$SOCKET" -o BatchMode=yes "$HOST")
+# Shared inputs linked into every release: what surfaces read, and the land build's inputs
+DATA_LINKS=(countries.geojson model_bathymetry.nc weather_data MCD12C1.A2022001.061.2023244164746.hdf
+  GEBCO_2025_sub_ice.nc WDPA_Feb2026_Public_shp_0 WDPA_Feb2026_Public_shp_1 WDPA_Feb2026_Public_shp_2)
 
 COMMIT="$(git rev-parse HEAD)"
 DIRTY="$(git status --porcelain)"
@@ -105,7 +108,7 @@ TREE="$("$PY" -c "import json,sys; print(json.load(open(sys.argv[1]))['tree_sha2
   echo "- source inventory tree sha256: $TREE ($(wc -l < "$STAGE/files.txt" | tr -d ' ') files incl. extras)"
   echo "- extras outside the inventory (sha256 checked against runs.yaml):"
   while read -r extra; do [[ -n "$extra" ]] && echo "  - $extra $(shasum -a 256 "$extra" | cut -d' ' -f1)"; done < "$STAGE/extras.txt"
-  echo "- data/ links: countries.geojson, model_bathymetry.nc, weather_data -> $SHARED_DATA"
+  echo "- data/ links: ${DATA_LINKS[*]} -> $SHARED_DATA"
 } > "$STAGE/RELEASE_NOTES.md"
 
 echo "release:   $RELEASE"
@@ -116,7 +119,7 @@ if (( DRY_RUN )); then cat "$STAGE/RELEASE_NOTES.md"; echo "(dry run, nothing co
 rsync -a --files-from="$STAGE/files.txt" -e "ssh -o ControlPath=$SOCKET -o BatchMode=yes" "$REPO_ROOT/" "$HOST:$RELEASE/"
 rsync -a -e "ssh -o ControlPath=$SOCKET -o BatchMode=yes" "$STAGE/source_inventory.json" "$STAGE/RELEASE_NOTES.md" "$HOST:$RELEASE/"
 "${SSH[@]}" "set -euo pipefail; cd '$RELEASE'; mkdir -p data
-  for item in countries.geojson model_bathymetry.nc weather_data; do
+  for item in ${DATA_LINKS[*]}; do
     test -e '$SHARED_DATA/'\$item || { echo \"missing shared input $SHARED_DATA/\$item\" >&2; exit 6; }
     ln -s '$SHARED_DATA/'\$item data/\$item
   done
