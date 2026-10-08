@@ -70,6 +70,8 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `plant_dir` | Plant bundle, see [Plant bundles](#plant-bundles) |
 | `pv_policy` | PV offered to the optimiser: `fixed` (fixed tilt only) or `both` (fixed and single-axis tracking) |
 | `finance_csv`, `finance_csv_sha256` | Interest-only override CSV: `interest_rate` per cell and technology (`--override-csv`); the hash pins the file |
+| `site_costs_csv`, `site_costs_csv_sha256` | Optional site-cost table of the run's land table (`green-lory site-costs`): equipment and build multipliers and the water price per cell (`--site-costs-csv`); runs without it are flat |
+| `weather_land_correction`, `weather_land_correction_sha256` | Optional factors that rescale the profiles of cells with water to their land (`model/weather_land.py`, `--weather-land-correction`); runs before October 2026 have none |
 | `time_step_h`, `temporal_accounting`, `ramp_limit_basis` | Weather step and the matching accounting options, see [Run options](#run-options) |
 | `site_costs_in_headline` | Whether water (and land rent, zero so far) enters the headline LCOA; false passes `--exclude-site-costs` |
 | `water_eur2020_per_m3` | Flat water price |
@@ -101,7 +103,8 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `--land-csv` | path | Land table from `model/land_table.py`; its `land_competition_fraction` column is the share of suitable land open to ammonia (2 % or 20 %). |
 | `--locations-csv` / `--global-locations` | path | Restricts the run to listed `lat,lon` cells (the key runs use onshore cells with suitable land). |
 | `--pv-policy` (`pv_policy` in `runs.yaml`) | `both`, `fixed`, `tracking` | Which PV the plant may build; `fixed` switches tracking PV off. |
-| `weather_dir` (`runs.yaml`) | path | The weather profile folder; every run uses `data/weather_data/salmon2022_pv_wind_2019_hourly_1deg`. |
+| `weather_dir` (`runs.yaml`) | path | The weather profile folder; every run uses `data/weather_data/salmon2022_pv_wind_2019_hourly_1deg`. Its profiles average the whole 1-degree cell, sea and lakes included. |
+| `--weather-land-correction` (`weather_land_correction`) | path | Factors by month and hour that rescale the profiles of cells with at least 1 % water to the cell's land, from ERA5 at 0.25 degrees. |
 
 ## Run identifiers
 
@@ -179,7 +182,7 @@ efficiencies and the tracking flag; the September reports name them.
 | `lcoa_eur_per_t` | Headline levelised cost of ammonia at the plant gate (EUR2020/t); includes water when `site_costs_in_headline` is true, never land rent so far. |
 | `lcoa_plant_eur_per_t` | The same without site costs. |
 | `water_cost_usd_per_m3`, `water_cost_pct` | Water price applied (USD2020, the currency of the spatial input files; the manifest records the EUR value) and its share of the headline. |
-| `build_cost_multiplier` | Multiplier on the build share of CAPEX (1.0 in flat runs). |
+| `build_cost_multiplier`, `equipment_cost_multiplier` | Capacity-weighted multipliers on the build and equipment shares of CAPEX (1.0 in flat runs). |
 | `interest_rate_<tech>` | WACC used per technology after overrides. |
 | `annual_ammonia_production_t` | Reference-design production (1 Mt/yr). |
 | `scaled_design_max_onshore_ammonia_capacity_t` [`paper_scaled_max_onshore_ammonia_capacity_t`] | Capacity of the scaled reference design on onshore land. |
@@ -195,7 +198,8 @@ efficiencies and the tracking flag; the September reports name them.
 |---|---|
 | `cell_anchor` | Always `center`: the cell labelled (lat, lon) covers lat ± 0.5, lon ± 0.5, like the weather nodes. Tables of September 2026 and earlier were labelled by the south-west corner or the north edge and are refused. |
 | `onshore_land_pct`, `area` | MODIS land fraction of the cell and the cell's spherical area (km²). |
-| `protected_area_pct`, `slope_suitable_land_pct`, `land_exclusion_factor` | WDPA share of the cell, share of land at or below 15 degrees, and their combined factor (multiplied by the land share in the 2 % / 20 % tables). |
+| `protected_area_pct`, `slope_suitable_land_pct`, `land_exclusion_factor` | Protected land as a share of the cell (WDPA polygons on the land-cover grid, water inside them left out; the whole protected area until 8 October 2026), share of land at or below the slope limit (20 degrees, 15 until October 2026), and their combined factor (multiplied by the land share in the 2 % / 20 % tables). |
+| `land_pct_slope_upto_8p5deg`, `_8p5_to_14deg`, `_14_to_20deg`, `_above_20deg` | Share of the cell's land in each slope class, from which the site costs take the slope factor. |
 | `solar_area_km2`, `wind_onshore_area_km2`, `renewable_union_area_classwise_nested_v1_km2` | Suitable area per technology after exclusions and share; the union is a classwise nested lower bound of the physical union. |
 | `solar_density_mw_per_km2`, `wind_density_mw_per_km2` | Latitude-packed First Solar fixed-tilt density (about 106 MW/km² at the equator) and 5 MW/km² wind. When the table has no `solar_density_method` column, `model/land.py` recomputes the PV density from the YAML instead (73.6 MW/km² at 23°); which rule to keep is open (`MODEL_CHOICES.md`). |
 

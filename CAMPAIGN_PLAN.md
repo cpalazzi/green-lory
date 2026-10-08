@@ -381,16 +381,20 @@ and the plant's capacity uses onshore land only. Three things reach the onshore 
   wind capacity factor higher by up to 0.23. 2,360 of the 16,509 cells are more than half sea;
   they hold only 1.6 % of the capacity at 20 %, but 175 of the 265 cheapest cells that would meet
   600 Mt/yr (32 Mt/yr between them). The plant sits on the land part and is costed as onshore.
-  Proposed: flag these cells in results and leave them out of cheapest-cell statistics and the
-  coast/inland comparison now; give them a land-only resource when the weather source (D7) is
-  revisited, from ERA5 at 0.25 degrees.
+  **Fixed (decided 8 October):** the profiles of cells with at least 1 % water are rescaled to
+  the cell's land, by month and hour of day, with the ratio of the land-weighted to the
+  area-weighted mean of the cell's ERA5 capacity factors at 0.25 degrees (`model/weather_land.py`;
+  the legacy stack stays the source, D7). Runs opt in with `weather_land_correction` in
+  `runs.yaml`; the September runs keep the profiles as they were.
 - **Protected areas count their water against land.** WDPA areas of the coastal realm (part
   land, part sea) are kept, and their whole area is divided by the cell's land: in 407 cells the
   protected share exceeds the land share, and 519 coastal cells (281 between 50 S and 50 N; 25 in
   Australia, 28 in Chile, 18 in Arabia) lose all their land, some rightly (south-west Tasmania,
-  K'gari) and some because of sea. Proposed: measure protected land only (the protected areas
-  within the lakes database's land mask) and rebuild the land table; the build running now has
-  the old rule.
+  K'gari) and some because of sea. **Fixed (decided 8 October, commit afecb85):** protected land
+  is measured on the land cover's grid (WDPA rasterised at 0.005 degrees, each 0.05-degree MODIS
+  pixel weighted by its land fraction). Inland cells move by at most 0.3 percentage points of
+  protection; between 55 S and 9 S the 69 coastal cells that had lost all their land keep some,
+  and coastal suitable land grows 2.8 % in Australia and 2.9 % in Chile.
 - **The wind stack's turbine is undocumented** and the stack comes from Salmon and
   Banares-Alcantara's offshore study; ERA5 with an onshore turbine gave 26-38 % less wind at the
   focal cells (D7, deferred).
@@ -404,13 +408,17 @@ exclusions (depth, shipping lanes, marine protected areas, ice), and an offshore
 
 Running and still to do in this step:
 
-- The global land build runs on ARC since 8 October from release `20261008-land-slope20-v1`
-  (commit 53faded, verified by job 13434113): job 13434202 builds the 100 % table, 13434203 and
-  13434204 derive the 2 % and 20 % tables, into
-  `green-lory-campaigns/land_center_slope20_20261008_v1/` (about 5.5 h, as in September).
-- Then: compare it with the September table (every column but the slope ones should match where
-  slope is not involved), write the site-cost table of the 20 % table into
-  `inputs/site_costs/` with your choice of calibration, and the global maps.
+- The global land build runs on ARC from release `20261008-land-slope20-v2` (commit afecb85,
+  protected land; verified by job 13441053): job 13441136 builds the 100 % table, 13441137 and
+  13441138 derive the 2 % and 20 % tables, into
+  `green-lory-campaigns/land_center_slope20_20261008_v2/`. The first build
+  (`20261008-land-slope20-v1`, jobs 13434202-4, old protected-area rule) was cancelled after 4 h
+  at your request; its folder holds a CANCELLED.md note.
+- The weather land correction runs on ARC from release `20261008-weather-land-v1` (job
+  13441218) into `green-lory-campaigns/weather_land_correction_20261008_v1/`.
+- Then: compare the land table with the September one, write the site-cost table of the 20 %
+  table into `inputs/site_costs/` (GHD 2025 calibration), place the weather correction in the
+  shared weather folder, and draw the global maps.
 - Done for runs with site costs (commit d99ad1c): the `site_costs_<finance>_no_land_rent` cost
   scope in the manifest, the QA checks per cell, the wrapper and shard job passing the table.
 
