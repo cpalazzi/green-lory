@@ -2,7 +2,7 @@
 
 Plan of 6 October 2026, decisions completed on 7 October. Status (8 October): steps 1 and 2
 done and signed off; step 3 built and at its **Review** (section 3: three points to decide), its
-global land build waiting for the ARC connection. Steps run in order; each ends with a check,
+global land build running on ARC. Steps run in order; each ends with a check,
 and the gates marked **Review** wait for you.
 
 Working rule (7 October): clean up as we go. Each step deletes what it supersedes, listed under
@@ -365,8 +365,17 @@ To decide at this review:
    were fixed before this was known, and the paper can say so.
 3. **The water source price** at 2 EUR2020/m3 (as the flat runs) rather than 2 USD.
 
-Still to do in this step: the global land build on ARC (needs the socket), the site-cost table
-of the 20 % table, and the manifest and QA checks for runs with site costs (before S1).
+Running and still to do in this step:
+
+- The global land build runs on ARC since 8 October from release `20261008-land-slope20-v1`
+  (commit 53faded, verified by job 13434113): job 13434202 builds the 100 % table, 13434203 and
+  13434204 derive the 2 % and 20 % tables, into
+  `green-lory-campaigns/land_center_slope20_20261008_v1/` (about 5.5 h, as in September).
+- Then: compare it with the September table (every column but the slope ones should match where
+  slope is not involved), write the site-cost table of the 20 % table into
+  `inputs/site_costs/` with your choice of calibration, and the global maps.
+- Done for runs with site costs (commit d99ad1c): the `site_costs_<finance>_no_land_rent` cost
+  scope in the manifest, the QA checks per cell, the wrapper and shard job passing the table.
 
 - `model/site_costs.py` produces one table per land build. For each cell and technology it gives
   the equipment multiplier (port), the build multiplier (installation x slope x depth x labour)
@@ -462,8 +471,8 @@ All runs:
   4. supplier-site storage in the corrected networks (step 5): drop it (recommended; the plant
      LCOA already holds its ammonia tank; about 1 USD/t, no change to the network);
   5. Zotero: Lehner et al. (2025), GHD (2025) and Pekel et al. (2016) (see the references below).
-- **ARC access:** the control socket closed on 7 October in the evening; the global land build
-  (step 3's first ARC job) waits for it to be reopened.
+- **ARC access:** the control socket closed on 7 October in the evening and was open again on
+  8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release
   `20261007-shakedown-v1`: release verification job 13396884, prepare jobs 13396930 (dry run) and
   13396965, shard 13396992 (7.5 min) and merge/QA 13396993 (passed). The three cells match the
