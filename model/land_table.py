@@ -1033,6 +1033,27 @@ def apply_land_competition_scenario(
     return output
 
 
+# The cells a campaign runs: onshore cells with suitable land (the 16,509 of the key runs of
+# September 2026 from the centred 100 % table)
+RUN_CELLS_MIN_LAND_PCT = 0.1
+RUN_CELLS_MIN_SUITABLE_KM2 = 1.0
+RUN_CELLS_SOUTH_LIMIT = -60.0
+
+
+def run_cells(full_table: pd.DataFrame) -> pd.DataFrame:
+    """Cells with at least 0.1 % land, 1 km2 of PV plus onshore wind area in the 100 % table, and
+    north of 60 S, as `lat, lon` (the `--global-locations` list of a campaign)."""
+    if not np.allclose(pd.to_numeric(full_table["land_competition_fraction"]), 1.0):
+        raise ValueError("The run cells are defined on the 100 % table")
+    keep = (
+        (full_table["onshore_land_pct"] >= RUN_CELLS_MIN_LAND_PCT)
+        & (full_table["solar_area_km2"] + full_table["wind_onshore_area_km2"] >= RUN_CELLS_MIN_SUITABLE_KM2)
+        & (full_table["latitude"] > RUN_CELLS_SOUTH_LIMIT)
+    )
+    cells = full_table.loc[keep, ["latitude", "longitude"]].rename(columns={"latitude": "lat", "longitude": "lon"})
+    return cells.sort_values(["lat", "lon"]).reset_index(drop=True)
+
+
 def write_land_competition_variant(
     base_csv: Path,
     output_csv: Path,

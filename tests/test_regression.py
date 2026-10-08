@@ -129,3 +129,16 @@ def test_land_build_reproduces_a_band_of_the_accepted_table(tmp_path):
                                        equal_nan=True, err_msg=column)
         else:
             assert list(got.fillna("").astype(str)) == list(want.fillna("").astype(str)), column
+
+
+def test_run_cells_reproduce_the_key_run_list():
+    from model.land_table import run_cells
+
+    folder = Path(__file__).parents[1] / "results" / "campaigns" / "land_center_20260923_v1"
+    full, listed = folder / "max_capacities_center_100pct_slope15.csv", folder / "locations_onshore_suitable_center_20260923.csv"
+    if not (full.exists() and listed.exists()):
+        pytest.skip("September land tables not present")
+    cells = run_cells(pd.read_csv(full))
+    expected = pd.read_csv(listed).sort_values(["lat", "lon"]).reset_index(drop=True)
+    pd.testing.assert_frame_equal(cells, expected[["lat", "lon"]], check_dtype=False)
+
