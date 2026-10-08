@@ -113,6 +113,8 @@ def _add_write_arguments(parser: argparse.ArgumentParser) -> None:
         "price of a flat run, the source price of a site-cost run; checked against the tech YAML.",
     )
     parser.add_argument("--site-costs-csv", default=None, help="Site-cost table of a site_costs_* scope.")
+    parser.add_argument("--weather-land-correction", default=None,
+                        help="Land correction of the weather profiles (model/weather_land.py), if the run uses one.")
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--source-diff-sha256", required=True)
     parser.add_argument("--release-source-inventory")
@@ -697,6 +699,8 @@ def write_manifest(args: argparse.Namespace) -> None:
             override_csv=site_costs_path, land_csv=land_csv_path, locations_csv=locations_csv_path,
         )
         inputs["site_costs_csv"] = site_record
+    if args.weather_land_correction:
+        inputs["weather_land_correction"] = _file_record(Path(args.weather_land_correction))
 
     cost_scope = build_cost_scope(
         tech_yaml=tech_yaml_path,
@@ -925,7 +929,7 @@ def verify_manifest_inputs(manifest_path: Path) -> dict[str, int]:
         _verify_file_record(inputs.get(name), f"inputs.{name}")
         verified_file_count += 1
 
-    for name in ("locations_csv", "site_costs_csv"):
+    for name in ("locations_csv", "site_costs_csv", "weather_land_correction"):
         if name in inputs:
             _verify_file_record(inputs[name], f"inputs.{name}")
             verified_file_count += 1

@@ -283,6 +283,7 @@ print_scenario_summary() {
   echo "  plant dir:   $PLANT_DIR"
   echo "  override:    $OVERRIDE_CSV"
   echo "  site costs table: ${SITE_COSTS_CSV:-<none: flat build costs and water>}"
+  echo "  weather land correction: ${WEATHER_LAND_CORRECTION:-<none: 1-degree profiles as they are>}"
   echo "  land csv:    $LAND_CSV"
   echo "  timestep:    ${TIME_STEP}h"
   echo "  land:        $LAND_CONSTRAINT / $CAPACITY_RULE / $LAND_ALLOCATION"
@@ -299,7 +300,7 @@ SUBMIT_ENV_VARIABLES=(
   CAMPAIGN_ID RUN_ID RUN_STAGE SOURCE_COMMIT SOURCE_DIFF_SHA256
   SCENARIO_ID SCENARIO_CLASS SCENARIO_DESCRIPTION SCENARIO_JOB_TOKEN
   RUN_DIR MANIFEST_PATH MANIFEST_SHA256
-  TECH_YAML PLANT_DIR PV_POLICY OVERRIDE_CSV SITE_COSTS_CSV LAND_CSV WEATHER_DIR LOCATIONS_CSV
+  TECH_YAML PLANT_DIR PV_POLICY OVERRIDE_CSV SITE_COSTS_CSV LAND_CSV WEATHER_DIR WEATHER_LAND_CORRECTION LOCATIONS_CSV
   TIME_STEP MAX_SNAPSHOTS SIMULATED_HOURS LAND_CONSTRAINT CAPACITY_RULE LAND_ALLOCATION
   TEMPORAL_ACCOUNTING_MODE RAMP_LIMIT_BASIS INCLUDE_SITE_COSTS
   NUM_WORKERS THREADS_PER_WORKER SLURM_CPUS SLURM_MEMORY
@@ -547,6 +548,15 @@ validate_scenario_sources() {
     [[ -f "$SITE_COSTS_CSV" ]] || { echo "Required site-cost table not found: $SITE_COSTS_CSV" >&2; return 2; }
     validate_pinned_sha256 "Site-cost table" "$SITE_COSTS_CSV" "$EXPECTED_SITE_COSTS_CSV_SHA256"
   fi
+  if [[ -n "$WEATHER_LAND_CORRECTION" ]]; then
+    if [[ -f "$WEATHER_LAND_CORRECTION" ]]; then
+      validate_pinned_sha256 "Weather land correction" "$WEATHER_LAND_CORRECTION" "$EXPECTED_WEATHER_LAND_CORRECTION_SHA256"
+    elif $DRY_RUN; then
+      echo "DRY-RUN NOTE: ARC-only weather land correction is not present locally: $WEATHER_LAND_CORRECTION"
+    else
+      echo "Required weather land correction not found: $WEATHER_LAND_CORRECTION" >&2; return 2
+    fi
+  fi
   validate_release_source_inventory
   validate_explicit_union_area "$LAND_CSV"
   validate_cost_scope_and_override_coverage
@@ -617,6 +627,9 @@ manifest_command() {
   if [[ -n "$SITE_COSTS_CSV" ]]; then
     MANIFEST_COMMAND+=(--site-costs-csv "$SITE_COSTS_CSV")
   fi
+  if [[ -n "$WEATHER_LAND_CORRECTION" ]]; then
+    MANIFEST_COMMAND+=(--weather-land-correction "$WEATHER_LAND_CORRECTION")
+  fi
   if [[ -n "$MAX_SNAPSHOTS" ]]; then
     MANIFEST_COMMAND+=(--max-snapshots "$MAX_SNAPSHOTS")
   fi
@@ -649,6 +662,7 @@ submit_or_plan_jobs() {
     "ARC_SITE_COSTS_CSV=$SITE_COSTS_CSV"
     "ARC_LAND_CSV=$LAND_CSV"
     "ARC_WEATHER_DIR=$WEATHER_DIR"
+    "ARC_WEATHER_LAND_CORRECTION=$WEATHER_LAND_CORRECTION"
     "ARC_LOCATIONS_CSV=$LOCATIONS_CSV"
     "ARC_TIME_STEP=$TIME_STEP"
     "ARC_MAX_SNAPSHOTS=$MAX_SNAPSHOTS"

@@ -123,6 +123,7 @@ def read_run_inputs(
     override_csv: str | Path | None = None,
     site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
+    weather_land_correction: str | Path | None = None,
     load_weather: bool = True,
 ) -> RunInputs:
     """Read a run's shared inputs. The base network has the run's snapshot count, the YAML's
@@ -133,7 +134,8 @@ def read_run_inputs(
     tech_inputs = technology.load_tech_inputs(tech_yaml)
     tech_meta = technology.load_tech_meta(tech_yaml)
     land_table = land.load_land_table(land_csv, tech_inputs)
-    profiles = weather.ProfileStack(weather_dir if weather_dir is not None else WEATHER_DIR) if load_weather else None
+    profiles = (weather.ProfileStack(weather_dir if weather_dir is not None else WEATHER_DIR,
+                                     land_correction=weather_land_correction) if load_weather else None)
 
     hours = len(profiles.resources["solar"]["time"]) if profiles is not None else 8760
     n_snapshots = settings.max_snapshots if settings.max_snapshots is not None else hours // int(settings.time_step)
@@ -498,6 +500,7 @@ def run_surface(
     override_csv: str | Path | None = None,
     site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
+    weather_land_correction: str | Path | None = None,
     settings: RunSettings = RunSettings(),
     output_csv: str | Path | None = None,
     quiet: bool = False,
@@ -520,6 +523,7 @@ def run_surface(
         inputs = read_run_inputs(
             settings, land_csv=land_csv, tech_yaml=tech_yaml, plant_dir=plant_dir,
             override_csv=override_csv, site_costs_csv=site_costs_csv, weather_dir=weather_dir,
+            weather_land_correction=weather_land_correction,
         )
         if locations is None:
             location_list = default_locations(inputs.land)
@@ -780,6 +784,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--override-csv", help="Per-cell finance table (interest rates; optionally build multipliers, water).")
     parser.add_argument("--site-costs-csv", help="Site-cost table (model/site_costs.py): multipliers and water price per cell.")
     parser.add_argument("--weather-dir", help="Weather profile folder (default the runs.yaml run_defaults folder).")
+    parser.add_argument("--weather-land-correction", help="Land correction of cells with water (model/weather_land.py).")
     parser.add_argument("--output-csv", default="results/surface.csv", help="Where to write the result table.")
     parser.add_argument("--quiet", action="store_true", help="Silence the solver and PyPSA logs.")
     parser.add_argument("--max-snapshots", type=int, help="Solve only the first N snapshots (quick checks).")
@@ -811,7 +816,7 @@ def main(argv: list[str] | None = None) -> int:
     frame = run_surface(
         locations, land_csv=args.land_csv, tech_yaml=args.tech_yaml, plant_dir=args.plant_dir,
         override_csv=args.override_csv, site_costs_csv=args.site_costs_csv, weather_dir=args.weather_dir,
-        settings=settings, output_csv=args.output_csv, quiet=args.quiet, threads_per_worker=args.threads_per_worker,
+        weather_land_correction=args.weather_land_correction, settings=settings, output_csv=args.output_csv, quiet=args.quiet, threads_per_worker=args.threads_per_worker,
         num_workers=args.num_workers, lon_min=args.lon_min, lon_max=args.lon_max, fail_fast=args.fail_fast,
     )
     print(f"Processed {len(frame)} locations. Results saved to {args.output_csv}.")

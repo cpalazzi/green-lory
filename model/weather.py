@@ -8,6 +8,11 @@ bands, which are stitched together on load.
     stack = ProfileStack(directory)          # loads the stack once
     frame = cell_profiles(stack, lat, lon)   # one cell's year, columns the plant expects
     frame = resample(frame, 4)               # 4-hour blocks for a coarser time step
+
+The profiles average the whole 1-degree cell, sea and lakes included. With a land correction
+(ProfileStack(directory, land_correction=<file>), model/weather_land.py) the profiles of cells
+with water are rescaled to the cell's land, by month and hour of day; runs set it in runs.yaml
+(`weather_land_correction`).
 """
 from __future__ import annotations
 
@@ -53,10 +58,11 @@ class ProfileStack:
     Pool workers inherit a loaded stack by fork, without copying it.
     """
 
-    def __init__(self, directory: str | Path, cache: bool = True):
+    def __init__(self, directory: str | Path, cache: bool = True, land_correction: str | Path | None = None):
         self.path = repo_path(directory)
         self._datasets: list[xr.Dataset] = []
         self.resources: dict[str, xr.DataArray] = {}
+        self.land_correction = None
         for name, (prefix, variable) in RESOURCES.items():
             files = resource_files(self.path, prefix)
             if not files:
@@ -69,6 +75,13 @@ class ProfileStack:
             data_array = dataset[variable].load() if cache else dataset[variable]
             self._datasets.append(dataset)
             self.resources[name] = data_array
+        if land_correction is not None:
+            from .weather_land import LandCorrection
+
+            self.land_correction = LandCorrection(repo_path(land_correction))
+            times = pd.DatetimeIndex(self.resources["wind"]["time"].values)
+            self._month, self._hour = times.month.to_numpy(), times.hour.to_numpy()
+            LOGGER.info("Land correction of %d cells with water from %s", len(self.land_correction.index), land_correction)
 
     def close(self) -> None:
         for dataset in self._datasets:
@@ -92,9 +105,18 @@ def cell_profiles(stack: ProfileStack, lat: float, lon: float) -> pd.DataFrame:
     generators.
     """
     selection = dict(latitude=lat, longitude=lon)
+    factors = None
+    if stack.land_correction is not None:
+        factors = stack.land_correction.factors(lat, lon, stack._month, stack._hour)
     columns: dict[str, np.ndarray] = {}
     for resource in ("solar", "wind", "solar_tracking"):
         values = stack.resources[resource].sel(selection, method="nearest").values
+        if factors is not None:
+            # the cell's land: wind by the wind factor (at most rated output), PV by the PV factor
+            if resource == "wind":
+                values = np.minimum(values * factors["wind"], 1.0)
+            else:
+                values = values * factors["solar"]
         if resource == "wind":
             values = values * WIND_WAKE_FACTOR
         columns[resource] = values

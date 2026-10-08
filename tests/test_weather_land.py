@@ -55,3 +55,29 @@ def test_correction_file_is_read_by_cell(tmp_path):
     factors = correction.factors(-23.0, 151.0, hours.month.to_numpy(), hours.hour.to_numpy())
     assert factors["wind"][3] == 0.5 and factors["wind"][27] == 0.5 and factors["wind"][4] == 1.0
     assert correction.factors(-23.0, 117.0, hours.month.to_numpy(), hours.hour.to_numpy()) is None
+
+
+def test_profiles_of_cells_with_water_are_rescaled(tmp_path):
+    from model import weather
+
+    times = pd.date_range("2019-01-01", periods=48, freq="h")
+    coords = {"time": times, "latitude": [-23, -22], "longitude": [150, 151]}
+    shape = (48, 2, 2)
+    for name, variable, value in (("Solar", "Solar", 0.5), ("SolarTracking", "Solar", 0.6), ("WindPowers", "Wind", 0.8)):
+        xr.Dataset({variable: (("time", "latitude", "longitude"), np.full(shape, value))}, coords=coords).to_netcdf(tmp_path / f"{name}.nc")
+    factor = np.ones((1, 2, 12, 24))
+    factor[0, 0] = 1.5   # wind on the land is stronger than the cell mean (capped at 1)
+    factor[0, 1] = 0.9
+    correction = tmp_path / "correction.nc"
+    xr.Dataset({"factor": (("cell", "tech", "month", "hour"), factor),
+                "latitude": ("cell", [-23.0]), "longitude": ("cell", [151.0])},
+               coords={"tech": ["wind", "solar"]}).to_netcdf(correction)
+
+    plain = weather.ProfileStack(tmp_path)
+    corrected = weather.ProfileStack(tmp_path, land_correction=correction)
+    coastal = weather.cell_profiles(corrected, -23, 151)
+    np.testing.assert_allclose(coastal["wind"], 1.0 * weather.WIND_WAKE_FACTOR)
+    np.testing.assert_allclose(coastal["solar"], 0.45)
+    np.testing.assert_allclose(coastal["solar_tracking"], 0.54)
+    inland = weather.cell_profiles(corrected, -23, 150)
+    pd.testing.assert_frame_equal(inland, weather.cell_profiles(plain, -23, 150))
