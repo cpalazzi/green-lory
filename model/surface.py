@@ -43,7 +43,7 @@ import pypsa
 from shapely.errors import GEOSException
 from shapely.geometry import box
 
-from . import accounting, land, plant, technology, weather
+from . import accounting, land, plant, site_costs, technology, weather
 from .config import COUNTRIES_GEOJSON, DEFAULT_PLANT_DIR, DEFAULT_TECH_YAML, WEATHER_DIR, repo_path
 
 LOGGER = logging.getLogger(__name__)
@@ -110,6 +110,8 @@ class RunInputs:
     land: dict
     base_network: pypsa.Network
     weather: weather.ProfileStack | None = None
+    # cells of the site-cost table, when the run has one (every cell run must be among them)
+    site_cost_cells: frozenset | None = None
 
 
 def read_run_inputs(
@@ -119,11 +121,13 @@ def read_run_inputs(
     tech_yaml: str | Path | None = None,
     plant_dir: str | Path | None = None,
     override_csv: str | Path | None = None,
+    site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
     load_weather: bool = True,
 ) -> RunInputs:
     """Read a run's shared inputs. The base network has the run's snapshot count, the YAML's
-    link efficiencies and the run's PV policy."""
+    link efficiencies and the run's PV policy; a site-cost table's multipliers and water price
+    join the finance table's interest rates in the overrides."""
     tech_yaml = repo_path(tech_yaml) if tech_yaml is not None else DEFAULT_TECH_YAML
     plant_dir = plant.check_plant_bundle(plant_dir if plant_dir is not None else DEFAULT_PLANT_DIR)
     tech_inputs = technology.load_tech_inputs(tech_yaml)
@@ -143,14 +147,21 @@ def read_run_inputs(
     plant.restrict_pv(base_network, settings.pv_policy)
     base_network._currency = str(tech_meta.get("currency", "USD")).strip().upper()
     base_network._ramp_limit_basis = settings.ramp_limit_basis
+    overrides = technology.index_override_table(technology.load_override_table(override_csv))
+    site_cost_cells = None
+    if site_costs_csv is not None:
+        site_overrides = site_costs.load_site_cost_overrides(site_costs_csv, tech_inputs)
+        overrides = site_costs.merge_overrides(overrides, site_overrides)
+        site_cost_cells = frozenset(site_overrides)
     return RunInputs(
         settings=settings,
         tech_inputs=tech_inputs,
         tech_meta=tech_meta,
-        overrides=technology.index_override_table(technology.load_override_table(override_csv)),
+        overrides=overrides,
         land=land.index_land_table(land_table),
         base_network=base_network,
         weather=profiles,
+        site_cost_cells=site_cost_cells,
     )
 
 
@@ -200,6 +211,8 @@ def run_cell(
         raise CellFailure("weather", f"Weather extraction failed at ({lat}, {lon}): {exc}") from exc
 
     try:
+        if inputs.site_cost_cells is not None and (round(float(lat), 4), round(float(lon), 4)) not in inputs.site_cost_cells:
+            raise ValueError("the run's site-cost table has no row for this cell")
         overrides = technology.cell_overrides(inputs.overrides, lat, lon)
         rates = technology.interest_rates(overrides)
         location_costs = overrides.get("__location__", {}) if overrides else {}
@@ -483,6 +496,7 @@ def run_surface(
     tech_yaml: str | Path | None = None,
     plant_dir: str | Path | None = None,
     override_csv: str | Path | None = None,
+    site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
     settings: RunSettings = RunSettings(),
     output_csv: str | Path | None = None,
@@ -505,7 +519,7 @@ def run_surface(
         started = time.perf_counter()
         inputs = read_run_inputs(
             settings, land_csv=land_csv, tech_yaml=tech_yaml, plant_dir=plant_dir,
-            override_csv=override_csv, weather_dir=weather_dir,
+            override_csv=override_csv, site_costs_csv=site_costs_csv, weather_dir=weather_dir,
         )
         if locations is None:
             location_list = default_locations(inputs.land)
@@ -627,7 +641,7 @@ def order_result_columns(df: pd.DataFrame) -> pd.DataFrame:
         "annual_ammonia_demand_mwh", "annual_ammonia_production_t", "gridless_ammonia_production_t",
         f"total_cost_{currency}_per_year", f"plant_objective_cost_{currency}_per_year",
         "site_costs_in_headline", "site_cost_source_currency", "site_cost_source_to_output_fx",
-        "build_cost_multiplier", "build_cost_pct", "tech_cost_pct", "om_cost_pct", "interest_pct",
+        "build_cost_multiplier", "equipment_cost_multiplier", "build_cost_pct", "tech_cost_pct", "om_cost_pct", "interest_pct",
         "water_cost_pct", "land_cost_pct", "other_cost_pct", "plant_cost_pct",
         "headline_cost_share_total_pct", "headline_cost_share_residual_pct",
         f"headline_cost_identity_residual_{currency}_per_year", "cost_percentage_basis",
@@ -763,7 +777,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, help="Run only the first N locations.")
     parser.add_argument("--tech-yaml", help=f"Technology YAML (default {DEFAULT_TECH_YAML.name}).")
     parser.add_argument("--plant-dir", help=f"Plant bundle (default {DEFAULT_PLANT_DIR.name}).")
-    parser.add_argument("--override-csv", help="Per-cell override table (interest rates, build multipliers, water).")
+    parser.add_argument("--override-csv", help="Per-cell finance table (interest rates; optionally build multipliers, water).")
+    parser.add_argument("--site-costs-csv", help="Site-cost table (model/site_costs.py): multipliers and water price per cell.")
     parser.add_argument("--weather-dir", help="Weather profile folder (default the runs.yaml run_defaults folder).")
     parser.add_argument("--output-csv", default="results/surface.csv", help="Where to write the result table.")
     parser.add_argument("--quiet", action="store_true", help="Silence the solver and PyPSA logs.")
@@ -795,8 +810,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     frame = run_surface(
         locations, land_csv=args.land_csv, tech_yaml=args.tech_yaml, plant_dir=args.plant_dir,
-        override_csv=args.override_csv, weather_dir=args.weather_dir, settings=settings,
-        output_csv=args.output_csv, quiet=args.quiet, threads_per_worker=args.threads_per_worker,
+        override_csv=args.override_csv, site_costs_csv=args.site_costs_csv, weather_dir=args.weather_dir,
+        settings=settings, output_csv=args.output_csv, quiet=args.quiet, threads_per_worker=args.threads_per_worker,
         num_workers=args.num_workers, lon_min=args.lon_min, lon_max=args.lon_max, fail_fast=args.fail_fast,
     )
     print(f"Processed {len(frame)} locations. Results saved to {args.output_csv}.")

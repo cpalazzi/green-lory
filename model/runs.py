@@ -53,7 +53,12 @@ WRAPPER_VARIABLES = {
     "capacity_rule": "CAPACITY_RULE",
     "land_allocation": "LAND_ALLOCATION",
     "weather_dir": "WEATHER_DIR",
+    "site_costs_csv": "SITE_COSTS_CSV",
+    "site_costs_csv_sha256": "EXPECTED_SITE_COSTS_CSV_SHA256",
 }
+# Keys a green_lory run may leave out (the wrapper then gets an empty value): runs without site
+# costs use flat build costs and the YAML's uniform water price
+OPTIONAL_KEYS = ("site_costs_csv", "site_costs_csv_sha256")
 
 ALLOWED_VALUES = {
     "pv_policy": {"both", "fixed"},
@@ -81,6 +86,7 @@ TABLE_KEYS = (
     "capacity_rule",
     "land_allocation",
     "weather_dir",
+    "site_costs_csv",
 )
 
 
@@ -196,9 +202,11 @@ def describe_entry(
 
 
 def _validate_green_lory_run(run_id: str, run: Mapping[str, Any]) -> None:
-    missing = sorted(set(WRAPPER_VARIABLES) - set(run))
+    missing = sorted(set(WRAPPER_VARIABLES) - set(OPTIONAL_KEYS) - set(run))
     if missing:
         raise RunDefinitionError(f"Run {run_id} is missing {', '.join(missing)}")
+    if bool(run.get("site_costs_csv")) != bool(run.get("site_costs_csv_sha256")):
+        raise RunDefinitionError(f"Run {run_id}: site_costs_csv and site_costs_csv_sha256 go together")
     for key, allowed in ALLOWED_VALUES.items():
         if run[key] not in allowed:
             raise RunDefinitionError(f"Run {run_id}: {key}={run[key]!r} is not one of {sorted(allowed)}")
@@ -232,7 +240,7 @@ def shell_assignments(run_id: str, runs: Mapping[str, Mapping[str, Any]] | None 
             f"Run {run_id} has runner {run['runner']!r}; only green_lory runs are submitted by this wrapper"
         )
     lines = [
-        f"{variable}={shlex.quote(_shell_value(key, run[key]))}"
+        f"{variable}={shlex.quote(_shell_value(key, run[key]) if key in run else '')}"
         for key, variable in WRAPPER_VARIABLES.items()
     ]
     return "\n".join(lines)
@@ -295,7 +303,7 @@ def surface_arguments(run_id: str, *, campaigns_dir: str | Path = LOCAL_CAMPAIGN
                       runs: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """Keyword arguments of model.surface.run_surface for a green_lory run of runs.yaml.
 
-    Checks the pinned hashes of the land table and the finance file.
+    Checks the pinned hashes of the land table, the finance file and the site-cost table.
     """
     import hashlib
 
@@ -307,8 +315,11 @@ def surface_arguments(run_id: str, *, campaigns_dir: str | Path = LOCAL_CAMPAIGN
     run = runs[run_id]
     land_csv = Path(campaigns_dir) / run["land_table"]
     finance_csv = REPO_ROOT / run["finance_csv"]
-    for label, path, expected in (("land table", land_csv, run["land_table_sha256"]),
-                                  ("finance CSV", finance_csv, run["finance_csv_sha256"])):
+    site_costs_csv = REPO_ROOT / run["site_costs_csv"] if run.get("site_costs_csv") else None
+    pinned = [("land table", land_csv, run["land_table_sha256"]), ("finance CSV", finance_csv, run["finance_csv_sha256"])]
+    if site_costs_csv is not None:
+        pinned.append(("site-cost table", site_costs_csv, run["site_costs_csv_sha256"]))
+    for label, path, expected in pinned:
         actual = hashlib.sha256(path.read_bytes()).hexdigest()
         if actual != expected:
             raise RunDefinitionError(f"{run_id}: {label} {path} has sha256 {actual}; runs.yaml pins {expected}")
@@ -317,6 +328,7 @@ def surface_arguments(run_id: str, *, campaigns_dir: str | Path = LOCAL_CAMPAIGN
         "tech_yaml": REPO_ROOT / run["tech_yaml"],
         "plant_dir": REPO_ROOT / run["plant_dir"],
         "override_csv": finance_csv,
+        "site_costs_csv": site_costs_csv,
         "weather_dir": REPO_ROOT / run["weather_dir"],
         "settings": RunSettings(
             time_step=float(run["time_step_h"]),

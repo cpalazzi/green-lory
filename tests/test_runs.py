@@ -46,6 +46,9 @@ class RunDefinitionsTest(unittest.TestCase):
         self.assertEqual(values["FLAT_WATER_MODEL_PER_M3"], "2.0")
         self.assertEqual(values["EXPECTED_LAND_COMPETITION_FRACTION"], "0.20")
         self.assertEqual(values["LAND_ALLOCATION"], "colocated")
+        # a flat run has no site-cost table: the wrapper gets empty values
+        raw = _assignments(shell_assignments("gl_dea2050_wacc5_bflat_wflat_land20c_fixed"))
+        self.assertEqual((raw["SITE_COSTS_CSV"], raw["EXPECTED_SITE_COSTS_CSV_SHA256"]), ("''", "''"))
 
     def test_reconciling_run_keeps_the_legacy_accounting(self):
         values = _assignments(shell_assignments("rep_way2050_flat_amelired_4h_tracking_nominal_h2"))
@@ -67,6 +70,7 @@ class RunDefinitionsTest(unittest.TestCase):
             ({"land_allocation": "shared"}, "land_allocation"),
             ({"site_costs_in_headline": "yes"}, "true or false"),
             ({"time_step_h": 7}, "divide 8760"),
+            ({"site_costs_csv": "inputs/site_costs/x.csv"}, "go together"),
         ):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "runs.yaml"

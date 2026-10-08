@@ -1,3 +1,4 @@
+affine==3.0.1
 appnope==0.1.4
 asttokens==3.0.1
 attrs==25.4.0
@@ -88,6 +89,7 @@ pytz==2025.2
 PyYAML==6.0.3
 pyzmq==27.1.0
 RapidFuzz==3.14.3
+rasterio==1.5.2
 referencing==0.37.0
 requests==2.32.5
 rpds-py==0.30.0

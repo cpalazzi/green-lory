@@ -57,7 +57,7 @@ def cost_splits(
     """Shares of the plant cost (percent): equipment, installation, fixed O&M and interest.
 
     Principal is overnight cost over lifetime; interest is the rest of the annuity. Also
-    returns the capacity-weighted build_cost_multiplier actually applied.
+    returns the capacity-weighted build_cost_multiplier and equipment_cost_multiplier applied.
     """
     total_cost = float(network.objective) if network.objective else 0.0
     if total_cost <= 0:
@@ -66,6 +66,7 @@ def cost_splits(
     store_scale = store_cost_scale(time_step, temporal_accounting_mode)
     build_principal = tech_principal = interest = fixed_om = 0.0
     base_build_cost = weighted_build_cost = 0.0
+    base_tech_cost = weighted_tech_cost = 0.0
     for name, raw in tech_inputs.items():
         component_type = str(raw.get("component_type", "")).lower()
         capacity = _capacity_for_cost(network, component_type, name)
@@ -77,7 +78,8 @@ def cost_splits(
             continue
         params = overrides.get(name, {})
         multiplier = float(params.get("build_cost_multiplier", 1.0))
-        tech_total = float(tech_cost) * capacity
+        tech_total_base = float(tech_cost) * capacity
+        tech_total = tech_total_base * float(params.get("equipment_cost_multiplier", 1.0))
         build_total_base = float(build_cost) * capacity
         build_total = build_total_base * multiplier
         lifetime = float(raw.get("lifetime_years", 20.0))
@@ -95,8 +97,11 @@ def cost_splits(
         build_principal += build_total * scale / lifetime
         base_build_cost += build_total_base * scale
         weighted_build_cost += build_total * scale
+        base_tech_cost += tech_total_base * scale
+        weighted_tech_cost += tech_total * scale
     return {
         "build_cost_multiplier": weighted_build_cost / base_build_cost if base_build_cost > 0 else 1.0,
+        "equipment_cost_multiplier": weighted_tech_cost / base_tech_cost if base_tech_cost > 0 else 1.0,
         "build_cost_pct": build_principal / total_cost * 100.0,
         "tech_cost_pct": tech_principal / total_cost * 100.0,
         "om_cost_pct": fixed_om / total_cost * 100.0,

@@ -14,12 +14,14 @@ third port, `efficiency2`; the plant bundle supplies only the topology.
 
 Costs reach the network in two steps for each cell:
 1. apply_base_costs() annualises every YAML cost with the capital recovery factor plus fixed O&M.
-2. apply_cell_overrides() replaces the interest rate, and multiplies the installation part by
-   the cell's build_cost_multiplier, wherever the cell's override table gives a value.
+2. apply_cell_overrides() replaces the interest rate, multiplies the equipment part by the
+   cell's equipment_cost_multiplier and the installation part by its build_cost_multiplier,
+   wherever the cell's overrides give a value.
 
-The override table (columns lat, lon, tech, interest_rate and optionally
-build_cost_multiplier, water_cost_usd_per_m3, land_cost_usd_per_km2_year) is read once and
-indexed by cell (index_override_table, cell_overrides).
+The finance table (columns lat, lon, tech, interest_rate and optionally build_cost_multiplier,
+water_cost_usd_per_m3, land_cost_usd_per_km2_year) is read once and indexed by cell
+(index_override_table, cell_overrides); a site-cost table (model/site_costs.py) adds the
+multipliers and the water price.
 
 Links are rated on PyPSA's input side (bus0) while the YAML quotes output capacity, so link
 costs are multiplied by the link efficiency. In the legacy_scaled time accounting, store costs
@@ -235,15 +237,16 @@ def apply_cell_overrides(
 ) -> None:
     """Recompute the capital cost of each technology the cell overrides.
 
-    The overnight cost becomes tech_cost + build_cost x build_cost_multiplier, annualised at
-    the cell's interest rate. Called after apply_base_costs(); technologies without an
-    override row keep their base cost.
+    The overnight cost becomes tech_cost x equipment_cost_multiplier + build_cost x
+    build_cost_multiplier, annualised at the cell's interest rate (the YAML's where the cell
+    sets none). Called after apply_base_costs(); technologies without an override keep their
+    base cost.
     """
     if not overrides:
         return
     store_scale = store_cost_scale(time_step, temporal_accounting_mode)
     for tech, params in overrides.items():
-        if tech == "__location__" or params.get("interest_rate") is None:
+        if tech == "__location__" or not params:
             continue
         name = normalize_component_name(tech)
         raw = tech_inputs.get(name) if name is not None else None
@@ -259,10 +262,11 @@ def apply_cell_overrides(
                 f"Tech '{name}' must define tech_cost_per_{unit} and build_cost_per_{unit}; "
                 "unsplit overnight-cost inputs are no longer supported."
             )
-        overnight = float(tech_cost) + float(build_cost) * float(params.get("build_cost_multiplier", 1.0))
+        overnight = (float(tech_cost) * float(params.get("equipment_cost_multiplier", 1.0))
+                     + float(build_cost) * float(params.get("build_cost_multiplier", 1.0)))
         annual = annualised_capital_cost(
             overnight,
-            float(params["interest_rate"]),
+            float(params.get("interest_rate", raw.get("interest_rate", 0.07))),
             float(raw.get("lifetime_years", 20.0)),
             float(raw.get("fixed_om_fraction", 0.0)),
         )
@@ -300,7 +304,7 @@ def index_override_table(frame: pd.DataFrame) -> dict[tuple[float, float], dict[
     for _, row in frame.iterrows():
         entry = index.setdefault(_cell_key(row["lat"], row["lon"]), {})
         tech = entry.setdefault(row["tech"], {})
-        for column in ("interest_rate", "build_cost_multiplier"):
+        for column in ("interest_rate", "build_cost_multiplier", "equipment_cost_multiplier"):
             if column in row.index and pd.notna(row[column]):
                 tech[column] = float(row[column])
         location = entry.setdefault("__location__", {})

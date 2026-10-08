@@ -7,6 +7,7 @@
     green-lory path <id>                 where a run's output is
     green-lory run <id> --cell=-23,117   a defined run at a few cells, here on this machine
     green-lory map <id> --output m.html  a map of a run's result (LCOA by default; .png for a static map)
+    green-lory site-costs --land <table> --output <csv>   the site-cost table of a land build
     green-lory shell <id>                shell assignments for arc/submit_lory_sequence.sh
 
 `python -m model.cli ...` does the same without installing the package. Building land tables
@@ -98,6 +99,10 @@ def main(argv: list[str] | None = None) -> int:
     map_.add_argument("id")
     map_.add_argument("--column", default="auto", help="result column to show (default: the LCOA column)")
     map_.add_argument("--output", required=True, help=".html for an interactive map, .png or .pdf for a static one")
+    from . import site_costs
+
+    site = commands.add_parser("site-costs", help="the site-cost table of a land build (model/site_costs.py)")
+    site_costs.add_arguments(site)
     shell = commands.add_parser("shell", help="shell assignments for the ARC wrapper")
     shell.add_argument("id")
     args = parser.parse_args(argv)
@@ -107,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
             return _run(args)
         if args.command == "map":
             return _map(args)
+        if args.command == "site-costs":
+            from . import site_costs
+
+            return site_costs.run(args)
         definitions = runs.load_runs(args.runs)
         networks = runs.load_networks(args.runs)
         if args.command == "list":

@@ -42,9 +42,32 @@ COUNTRIES_GEOJSON = DATA_DIR / "countries.geojson"
 # The 1,377 ports of the green-porpoise shipping network (Verschuur et al. 2024)
 PORTS_CSV = DATA_DIR / "ports" / "verschuur2024_ports.csv"
 
+# Site-cost inputs (model/site_geography.py reads the rasters once; model/site_costs.py reads
+# the tables it writes to inputs/site_costs/)
+NELSON_TRAVEL_TIME_DIR = DATA_DIR / "accessibility" / "nelson2019_travel_time"
+GLWD_AREA_DIR = DATA_DIR / "water" / "glwd_v2" / "GLWD_v2_0_area_by_class_ha"
+GEONAMES_AU_FILE = DATA_DIR / "gazetteer" / "geonames_au" / "AU.txt"
+SITE_COSTS_DIR = INPUTS_DIR / "site_costs"
+
 # Defaults: the improved runs' YAML (DEA 2050 costs, co-located land use) and the plant bundle
 DEFAULT_TECH_YAML = INPUTS_DIR / "tech_config_ammonia_plant_2050_dea_colocated.yaml"
 DEFAULT_PLANT_DIR = PLANTS_DIR / "ammonia_plant_1mt"
+
+# Slope classes of the land tables (column, upper bound in degrees, inclusive), as decided on
+# 7 October 2026 (CAMPAIGN_PLAN.md, section 0a): no cost uplift up to 8.5 degrees (15 % grade),
+# then 8.5 to 14 and 14 to 20 degrees; land above 20 degrees is excluded. Each column is the
+# percentage of a cell's land (GEBCO elevation above zero) in the class. model/land_table.py
+# fills them; model/site_costs.py holds the cost factor of each class.
+SLOPE_CLASSES = (
+    ("land_pct_slope_upto_8p5deg", 8.5),
+    ("land_pct_slope_8p5_to_14deg", 14.0),
+    ("land_pct_slope_14_to_20deg", 20.0),
+    ("land_pct_slope_above_20deg", float("inf")),
+)
+SLOPE_CLASS_COLUMNS = tuple(column for column, _ in SLOPE_CLASSES)
+
+# Mean Earth radius for areas and great-circle distances
+EARTH_RADIUS_KM = 6371.0
 
 # Higher heating values used to convert energy flows to tonnes
 HYDROGEN_HHV_MWH_PER_T = 39.4

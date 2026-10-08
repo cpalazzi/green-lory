@@ -1,9 +1,9 @@
 # Plan: rationalised green-lory and the 2026 campaign
 
-Plan of 6 October 2026, decisions completed on 7 October. Status (7 October, evening): steps 1
-and 2 done and checked on ARC; water decided (section 0b); step 3 waits on the open decisions
-listed under "Decisions and access". Steps run in order; each ends with a check, and the gates
-marked **Review** wait for you.
+Plan of 6 October 2026, decisions completed on 7 October. Status (8 October): steps 1 and 2
+done and signed off; step 3 built and at its **Review** (section 3: three points to decide), its
+global land build waiting for the ARC connection. Steps run in order; each ends with a check,
+and the gates marked **Review** wait for you.
 
 Working rule (7 October): clean up as we go. Each step deletes what it supersedes, listed under
 **Removes**, once its check has passed; git history keeps the code. Inputs that a run definition
@@ -75,7 +75,7 @@ Method (port set decided 7 October: all ports):
     (2018) friction surface, which covers off-road travel.
   - The present fallback (port distance × 4 plus an elevation uplift) goes, unless the raster
     has gaps over cells we use.
-- **Calibration**: a, b, N and the saturation time are fitted once to Aurecon's 75 sites, located
+- **Calibration**: a, b, N and the saturation time are fitted once to Aurecon's 77 sites, located
   with the GeoNames gazetteer. The fit and its residuals are reported before any run, and nothing
   is fitted to the LCOA map. If the final 2025 IASR publishes port-based factors by REZ, they
   replace Aurecon's capital-based equipment factors.
@@ -94,7 +94,7 @@ Using Aurecon's factors globally is defensible if the paper says what they are:
 
 - The structure (equipment by port, installation by city) holds anywhere.
 - The magnitudes are Australian. Remote work there means fly-in fly-out crews and camps at high
-  wages, and all 75 sites are in the NEM states (Queensland, New South Wales, Victoria, South
+  wages, and all 77 sites are in the NEM states (Queensland, New South Wales, Victoria, South
   Australia, Tasmania).
 - Elsewhere the premium may be smaller (cheaper mobile labour) or similar (established mining
   regions such as the Atacama).
@@ -315,18 +315,71 @@ the legacy harness at its focal cells. **Review** of the new layout before step 
 
 ## 3. Site costs and slope (new behaviour)
 
+**Built 8 October; Review.** What exists (details in `inputs/site_costs/README.md` and the
+cost-mechanisms table of `model/README.md`):
+
+- `model/site_costs.py` (factors, the water price, the per-cell table, the overrides a run reads;
+  `green-lory site-costs`), `model/site_geography.py` (rasters to per-cell and per-site tables,
+  the fit), the equipment multiplier in `technology.apply_cell_overrides` and in the cost split,
+  `site_costs_csv` as an optional run setting (`runs.yaml`, hash-pinned), the land tables' slope
+  classes (`land_pct_slope_*`) with land up to 20 degrees. 16 new unit tests; the land-band
+  regression still matches the accepted table in every existing column.
+- Data: Nelson's travel-time rasters, GLWD v2, GeoNames, the network ports (`data/README.md`).
+- Maps for Australia and Chile and the effect on the key run's designs:
+  `results/campaigns/site_costs_review_20261008/` (local; from a local land build of 55 S to
+  9 S, `results/campaigns/land_slope20_local_20261007/`).
+
+Found on the way, and decided by the plan's rules:
+
+- **A newer AEMO table.** AEMO's 2025 consultation report says the consultants' updated values
+  base equipment factors on the nearest port. The newest table is GHD's 2025 review for the
+  2026 cycle (draft Rev C, 28 November 2025, Table 8.3, 110 sites): equipment 1.00/1.05/1.10 by
+  distance from a major port, installation from Rawlinsons' regional maps directly. Aurecon's
+  Table 11-1 has 77 sites, not 75.
+- **Kati Thanda-Lake Eyre** is GLWD class 02 (saline lake), so the permanence test of section 0b
+  was needed: a saline lake counts only where the JRC Global Surface Water layer shows water at
+  least half the time (1984-2021). Lake Eyre, Torrens, Gairdner and Frome, Makgadikgadi and
+  Salinas Grandes fail; the Caspian, Aral, Balkhash, Issyk-Kul, Great Salt Lake, Turkana and the
+  Tibetan lakes pass (109 of 134 cells). Without the test, 1,921 of the key runs' cells would
+  move a median 244 km closer to water.
+- **Water pipeline**: the Uniform Costing Model gives 1.80 USD2020/m3 per 100 km for one plant
+  (12-inch pipe, least yearly cost), against 2.8 for the district-heating proxy, which used a
+  10 % discount rate (1.57 at 5 %). Zhou and Tol's 0.06 is for transfers a hundred times larger.
+- **Water price basis**: the source price is the YAML's baseline, 2 EUR2020/m3 in the campaign
+  YAML (2.28 USD2020), the same as the flat runs' price (your EUR basis of 23 September), not
+  the 2 USD of section 0b.
+
+To decide at this review:
+
+1. **Which table calibrates remoteness.** Both fits choose the same form (travel time to a city
+   of 20,000, saturating at 4 hours) but differ in size: installation up to 1.34 (GHD 2025) or
+   1.80 (Aurecon 2024). With the key run's designs held fixed the site costs add a median
+   60 EUR/t (+16 %) with GHD, 104 EUR/t (+27 %) with Aurecon; Australia +18 % or +31 %, Chile
+   +10 % or +20 %. Recommended: GHD 2025, the newer table, with AEMO's port basis and without
+   Aurecon's 2.5-fold residual; it is a draft, so the paper should cite it as such and give
+   Aurecon's as the upper bound.
+2. **The slope factor is nearly inactive.** On GEBCO's 15-arc-second grid 94 % of the land from
+   55 S to 9 S lies below 8.5 degrees, so with the 20 % share taken flattest first only 6 of
+   2,806 cells pay a slope factor (at the full share 1,674 cells, up to 1.54). The slope decision
+   then acts through land up to 20 degrees, not through cost. No change proposed: the classes
+   were fixed before this was known, and the paper can say so.
+3. **The water source price** at 2 EUR2020/m3 (as the flat runs) rather than 2 USD.
+
+Still to do in this step: the global land build on ARC (needs the socket), the site-cost table
+of the 20 % table, and the manifest and QA checks for runs with site costs (before S1).
+
 - `model/site_costs.py` produces one table per land build. For each cell and technology it gives
   the equipment multiplier (port), the build multiplier (installation x slope x depth x labour)
   and the water price. Each factor is a named, documented function with its source;
   `green-lory site-costs --land <table>` writes it.
 - The plant applies the equipment multiplier to `tech_cost_per_mw`, next to the existing build
   multiplier on `build_cost_per_mw`.
-- Fit the remoteness factors to Aurecon's 75 sites (section 0a) with a small script. Keep the
+- Fit the remoteness factors to Aurecon's 77 sites (section 0a) with a small script. Keep the
   site table, its source and the fit report in `inputs/`.
 - New inputs, each with a recorded hash in `data/README.md`:
   - Nelson's city travel-time rasters;
   - the network port set, copied to `data/ports/`;
-  - the GeoNames gazetteer for Australia, to locate the 75 sites.
+  - the GeoNames gazetteer for Australia, to locate the 77 sites.
 - The land build computes the land area in each slope class per cell from GEBCO, as it now
   computes the > 15° share. The slope ban goes; the class factors of D2 replace it.
 - Water follows D4 and section 0b. I propose the pipeline values with references for you to
@@ -395,23 +448,22 @@ All runs:
 - **D2, D3, D4 and D7** were decided on 7 October (table above, sections 0a and 0b). D1, D5,
   D6 and D8 stand as recommended, following your approval of the campaign on 6 October; D9 is
   the step-4 literature check.
-- **Open, for you** (7 October):
-  1. sign-off of the step-2 layout (the **Review** gate);
-  2. the slope classes: no uplift below 8.5°, 1.3 for 8.5–14°, 1.6 for 14–20°, land above 20°
-     excluded, flattest land first (needed for the new land build, the first step-3 job);
-  3. S2 interest rates: each cell's country as the surface assigns it (largest overlap), sea
-     cells from the nearest land cell (`python -m model.finance ameli`);
-  4. network equations for the campaign: corrected (`legacy_gpo --corrected`, recommended;
-     the archived-table control A2c gives 261.64 USD/t against A2's 260.94, Australia
-     unchanged, ships calling at 1,190 ports against 808) or as deposited;
-  5. supplier-site storage in the corrected networks: drop it (recommended; the plant LCOA
-     already holds its ammonia tank; about 1 USD/t, no change to the network);
-  6. Zotero: Lehner et al. (2025), the lakes database.
-- **Open, for me** (step 3): the remoteness fit to Aurecon's 75 sites (Nelson rasters, GeoNames,
-  Aurecon Table 11-1) and the water-pipeline values (Uniform Costing Model unit costs), each for
-  your review; the lakes database and the class of Kati Thanda–Lake Eyre; `model/site_costs.py`;
-  the land build with slope classes; maps of each factor for Australia and Chile.
-- **ARC access:** the socket was open on 7 October and step 1's move on ARC went through.
+- **Signed off on 7 October:** the step-2 layout and all of step 3 as planned, with the slope
+  classes (no uplift below 8.5 degrees, 1.3 for 8.5-14, 1.6 for 14-20, land above 20 excluded,
+  flattest land first) and the global land build on ARC.
+- **Open, for you** (8 October):
+  1. the three step-3 points of section 3: the remoteness table (GHD 2025 recommended), the
+     nearly inactive slope factor (no change proposed), the water source price in EUR;
+  2. S2 interest rates (step 5): each cell's country as the surface assigns it (largest
+     overlap), sea cells from the nearest land cell (`python -m model.finance ameli`);
+  3. network equations for the campaign (step 5): corrected (`legacy_gpo --corrected`,
+     recommended; the archived-table control A2c gives 261.64 USD/t against A2's 260.94,
+     Australia unchanged, ships calling at 1,190 ports against 808) or as deposited;
+  4. supplier-site storage in the corrected networks (step 5): drop it (recommended; the plant
+     LCOA already holds its ammonia tank; about 1 USD/t, no change to the network);
+  5. Zotero: Lehner et al. (2025), GHD (2025) and Pekel et al. (2016) (see the references below).
+- **ARC access:** the control socket closed on 7 October in the evening; the global land build
+  (step 3's first ARC job) waits for it to be reopened.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release
   `20261007-shakedown-v1`: release verification job 13396884, prepare jobs 13396930 (dry run) and
   13396965, shard 13396992 (7.5 min) and merge/QA 13396993 (passed). The three cells match the
@@ -433,6 +485,10 @@ noted below.
   revision 3, 6 December 2024, for AEMO; section 11 and Table 11-1 (location factors from
   Rawlinsons 2024). Zotero key `prabirhalder2024EnergyTechnology2024`.
   https://aemo.com.au/-/media/files/major-publications/isp/2025/aurecon-2024-energy-technology-costs-and-technical-parameter-review.pdf
+- GHD (2025). *2025 Energy Technology Cost and Technical Parameter Review*, draft report Rev C,
+  28 November 2025, for AEMO (draft 2026 Forecasting Assumptions Update); section 8 and Tables
+  8.1 to 8.3 (location factors from Rawlinsons 2025). Not yet in Zotero.
+  https://www.aemo.com.au/-/media/files/stakeholder_consultation/consultations/nem-consultations/2025/draft-2026-fau/ghd-2025-energy-technology-cost-and-technical-parameter-report.pdf
 - Lopez, A. et al. (2025). *Renewable Energy Technical Potential and Supply Curves for the
   Contiguous United States: 2024 Edition*, NREL/TP-6A20-91900, revised June 2025; slope
   exclusions in Tables 7 (wind) and 9 (PV), transmission cost multipliers in Table 12.
@@ -447,6 +503,9 @@ noted below.
   https://doi.org/10.5109/7323274
 - Nelson, A. et al. (2019). A suite of global accessibility indicators. Scientific Data 6, 266.
   https://doi.org/10.1038/s41597-019-0265-5
+- Pekel, J.-F., Cottam, A., Gorelick, N. and Belward, A. S. (2016). High-resolution mapping of
+  global surface water and its long-term changes. Nature 540, 418-422.
+  https://doi.org/10.1038/nature20584 (Global Surface Water v1.4, 1984-2021; not yet in Zotero).
 - Salmon, N. and Bañares-Alcántara, R. (2022). A global, spatially granular techno-economic
   analysis of offshore green ammonia production. Journal of Cleaner Production 367, 133045.
   https://doi.org/10.1016/j.jclepro.2022.133045

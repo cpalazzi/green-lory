@@ -31,16 +31,14 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 
 | Path | Contents |
 |---|---|
-| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command), `results` (results by run id, tables, maps), `suppliers` (supplier tables for the network model); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
-| `inputs/` | technology and cost YAMLs, finance (WACC) override CSVs, cell lists |
+| `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `site_costs` and `site_geography` (location factors of the cost), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command), `results` (results by run id, tables, maps), `suppliers` (supplier tables for the network model); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
+| `inputs/` | technology and cost YAMLs, finance (WACC) override CSVs, cell lists, and `site_costs/` (the location-factor tables of AEMO's consultants, the per-cell geography and the remoteness fit) |
 | `runs.yaml` | run definitions: every setting of every run and network we keep |
 | `run_store.csv` | the execution record: when, where and with what result each run ran |
 | `legacy_lcoa/` | the legacy-lcoa model reproduced end to end: frozen source, harness, land step, capacity rule, supplier table |
 | `legacy_gpo/` | link to `legacy_gpo/` of the green-porpoise repository (not tracked here): the published shipping network of Verschuur et al. (2024), which runs on green-lory's supplier tables (`python -m legacy_gpo.run`) |
 | `reconciliation/` | decision, comparison scripts, supply pilot, and the September reports in `archive/` |
 | `arc/` | ARC release staging, campaign wrappers, Slurm templates, QA tools |
-| `notebooks/` | `02_spatial_cost_inputs` (inputs of the spatial runs; replaced by `model/site_costs.py` in campaign step 3) |
-| `scripts/` | `fetch_travel_time.py` (moves into `model/site_costs.py` in campaign step 3) |
 | `tests/` | `pytest` suite |
 | `data/` | large inputs; only the layout and README are tracked |
 | `results/` | local outputs; current evidence under `results/campaigns/` |

@@ -1,0 +1,6 @@
+state,capital,installation_factor_relative_to_melbourne,note
+VIC,Melbourne,1.00,
+SA,Adelaide,0.95,
+QLD,Brisbane,0.98,
+NSW,Sydney,1.06,
+TAS,Hobart,0.94,building price index only (no data for the other factors in Rawlinsons)

@@ -31,6 +31,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gurobi = ["gurobipy"]
+# model/site_geography.py: reading the rasters behind inputs/site_costs/ (runs do not need it)
+geography = ["rasterio>=1.4"]
 
 [project.scripts]
 green-lory = "model.cli:main"

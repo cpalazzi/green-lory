@@ -49,7 +49,7 @@ tracking 1.12); the AC/DC normalisation basis is undocumented.
 | File | Purpose | SHA-256 |
 |---|---|---|
 | `MCD12C1.A2022001.061.2023244164746.hdf` | MODIS land cover, Collection 6.1, year 2022, 0.05-degree class fractions, global (3600 x 7200 x 17). Used by the legacy land step (`legacy_lcoa/legacy_land_areas.py`) and by the green-lory land build (`model/land_processing.py`). Sufficient for the global legacy reproduction; the historical vintage is unknown | `5b12c573975da5cb1b119973411e119e6b749b88a0056c68668b9a261b3e56cc` |
-| `land/GEBCO_2025_sub_ice.nc` | GEBCO 2025 sub-ice bathymetry/topography, 7.5 GB (moved here from the pypsa-earth clone's `data/gebco/` on 16 September 2026; a symlink was left there). Slope (> 15 degree) exclusions in the green-lory land build; bathymetry and depth-based costs for the offshore implementation (open) | `40080250dd9932367461f0294195ef01b8ab78163c9f93d3b60a4f751ca3aa75` |
+| `land/GEBCO_2025_sub_ice.nc` | GEBCO 2025 sub-ice bathymetry/topography, 7.5 GB (moved here from the pypsa-earth clone's `data/gebco/` on 16 September 2026; a symlink was left there). Slope classes and the slope limit (20 degrees since 7 October 2026, 15 before) in the green-lory land build; bathymetry and depth-based costs for the offshore implementation (open) | `40080250dd9932367461f0294195ef01b8ab78163c9f93d3b60a4f751ca3aa75` |
 | `model_bathymetry.nc` | Coarse bathymetry used by the legacy model and the green-lory preflight (0.5 MB) | `6600d5980390d3fb623c2fd4dca2c131ac69df507b151b7420ec63cef9eaf697` |
 | `land/WDPA_Feb2026_Public_shp_{0,1,2}/` | World Database on Protected Areas, February 2026 shapefiles (1.9 + 2.6 + 1.9 GB); protected-area exclusions in the green-lory land build. Copied from `green-lory/data/` on ARC on 16 September 2026 (rsync, sizes verified) |
 | `countries.geojson` | Country boundaries for cell attribution and maps (`model/surface.py`). ARC copy at `green-lory/data/`; copied here on 6 October 2026 from `results/campaigns/verschuur_reconcile_20260907_v1/arc_received_20260914/` | `86057d2fad98ac537a66df1da995d2f7904c2c215457077853087d13fa412487` |
@@ -97,9 +97,27 @@ they have not been used in any accepted surface.
 |---|---|---|
 | `ports/verschuur2024_ports.csv` | The 1,377 ports of the green-porpoise shipping network (Verschuur et al. 2024, *Environ. Res.: Infrastruct. Sustain.* 4, 015001), with location, country and trade columns; 46 in Australia, 16 in Chile. Copied on 7 October 2026 from the archived project snapshot `../results/campaigns/verschuur_reconcile_20260907_v1/historical/git-0a63616/data/c_port_data.csv`, byte for byte. For the equipment (port-distance) factor of the site costs | `497b9bc9fdcb9b67af57c5834f1a068633b0776535e254ec644bc89750f13651` |
 
+## Site-cost inputs (`accessibility/`, `water/`, `gazetteer/`)
+
+Read once by `model/site_geography.py`, which writes the per-cell and per-site tables of
+`../inputs/site_costs/` (tracked); a run never reads these files. Downloaded on 7 October 2026;
+the figshare files were checked against figshare's MD5 sums.
+
+| File | Purpose | SHA-256 |
+|---|---|---|
+| `accessibility/nelson2019_travel_time/travel_time_to_cities_<k>.tif`, k = 1, 2, 3, 4, 5, 8, 10, 11, 12 | Nelson et al. (2019, *Scientific Data* 6, 266, doi:10.1038/s41597-019-0265-5): travel time (minutes) in 2015 to the nearest city of a population band (k = 1 to 9) or above a size (10: 20,000; 11: 50,000; 12: 5,000), 30 arc-seconds, on the Weiss et al. (2018) friction surface. figshare doi:10.6084/m9.figshare.7638134 (version 4), CC BY 4.0. `README.txt` and `metadata_v02.csv` beside them give the bands. Layers 6, 7 and 9 are not needed for the city sizes used | 1: `e8b49ec19ee5b50af7a9ace75a676284c9d4f2939ad31353f531100e1bba19a2`; 2: `8612dc288aedc02c9effa2c8165e255d91b803428230bb1d1d8dee4dc104947d`; 3: `c8b73856d5b9375ea4aefb54f320a14d1ea927de1f5c01a9f39ce9cbfca6dbf6`; 4: `17690d821b8f83fb065c6e0347c7518a8b43529cd83bd7a4f6dfd70323c97532`; 5: `0ff0dd92c84ba2736c5547dfe745abc03ab5f7ecd59fbaa09b4fa405ce7a2584`; 8: `16c2aac960a02fc5dcef1fa3dc18cc20a0595a6e3a117122622f7caf29decac8`; 10: `debe0105966c53ce8c7926d29f3a647c339c158b75f07b92a4597297b2a9e4e0`; 11: `80138115b0310b4d9cede0d8327f6ccbe74503433d19de73163f9323564b2add`; 12: `b0840a0cf12a49a2d6edfe078ecf067d318db734648f5332435a66b012743803` |
+| `water/glwd_v2/GLWD_v2_0_area_by_class_ha_tif.zip` | Global Lakes and Wetlands Database v2.0 (Lehner et al. 2025, *Earth System Science Data* 17, 2277, doi:10.5194/essd-17-2277-2025): area of each of 33 classes per 15 arc-second pixel. figshare doi:10.6084/m9.figshare.28519994, CC BY 4.0. Classes 00 to 06, 20, 21 and 32 are unzipped beside it (`GLWD_v2_0_area_by_class_ha/`) | `d35407f3d7a904b25557f7759d6a92dbdc08451a94d9fd28cfd3db8f31bd6ad5` |
+| `gazetteer/geonames_au/AU.zip` (`AU.txt` inside) | GeoNames gazetteer of Australia (https://download.geonames.org/export/dump/, CC BY 4.0), to place the sites of the AEMO location-factor tables. The dump is updated daily; this copy is of 7 October 2026 | zip `4b9d848097c2c3691d0bc9ade6b65253e50fae1814145a7a55ea758fa02659c0`; `AU.txt` `85697065e9b607379c7be42b84f5ac9476f0a823b6885c2fb31105e95ac71f38` |
+
+The permanence test of saline lakes reads the JRC Global Surface Water occurrence layer (Pekel
+et al. 2016, *Nature* 540, 418, doi:10.1038/nature20584; version 1.4, 1984-2021) remotely from
+`storage.googleapis.com/global-surface-water/downloads2021/occurrence/`, cell by cell; nothing
+is stored here, and the result per cell is `../inputs/site_costs/gsw_permanent_water.csv`.
+
 ## Other inputs referenced by scripts
 
-`port_locations.csv`, `travel_time_by_cell.csv` and `single_site_weather_data.csv` live on ARC
-under `green-lory/data/`; copy them here when running the corresponding notebooks locally. The
+`port_locations.csv`, `travel_time_by_cell.csv` and `single_site_weather_data.csv` on ARC under
+`green-lory/data/` were inputs of the spatial-cost notebook and a single-site notebook, both
+removed (October 2026); nothing reads them now. The
 DEA technology data sheets that the technology YAMLs cite are linked from Zotero in
 `../references/` (not tracked). Small tracked inputs are under `inputs/`.

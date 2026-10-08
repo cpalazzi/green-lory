@@ -1,0 +1,91 @@
+{
+  "written_by": "python -m model.site_geography",
+  "rows": 50040,
+  "sha256": "2b3f3b4b20fbe84d3e5208d6d3e81c7c63ac570bdc064be39f6c34f9b5676846",
+  "inputs": {
+    "ports": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/ports/verschuur2024_ports.csv",
+      "sha256": "497b9bc9fdcb9b67af57c5834f1a068633b0776535e254ec644bc89750f13651"
+    },
+    "gsw_permanent_water": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/gsw_permanent_water.csv",
+      "sha256": "d704b4bc2ce92536bdbbc343d90490cbdf7e2e74dc4465ff1246faf21d3237f9"
+    },
+    "nelson_cities_1": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_1.tif",
+      "sha256": "e8b49ec19ee5b50af7a9ace75a676284c9d4f2939ad31353f531100e1bba19a2"
+    },
+    "nelson_cities_2": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_2.tif",
+      "sha256": "8612dc288aedc02c9effa2c8165e255d91b803428230bb1d1d8dee4dc104947d"
+    },
+    "nelson_cities_3": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_3.tif",
+      "sha256": "c8b73856d5b9375ea4aefb54f320a14d1ea927de1f5c01a9f39ce9cbfca6dbf6"
+    },
+    "nelson_cities_4": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_4.tif",
+      "sha256": "17690d821b8f83fb065c6e0347c7518a8b43529cd83bd7a4f6dfd70323c97532"
+    },
+    "nelson_cities_5": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_5.tif",
+      "sha256": "0ff0dd92c84ba2736c5547dfe745abc03ab5f7ecd59fbaa09b4fa405ce7a2584"
+    },
+    "nelson_cities_8": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_8.tif",
+      "sha256": "16c2aac960a02fc5dcef1fa3dc18cc20a0595a6e3a117122622f7caf29decac8"
+    },
+    "nelson_cities_10": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_10.tif",
+      "sha256": "debe0105966c53ce8c7926d29f3a647c339c158b75f07b92a4597297b2a9e4e0"
+    },
+    "nelson_cities_11": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_11.tif",
+      "sha256": "80138115b0310b4d9cede0d8327f6ccbe74503433d19de73163f9323564b2add"
+    },
+    "nelson_cities_12": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_12.tif",
+      "sha256": "b0840a0cf12a49a2d6edfe078ecf067d318db734648f5332435a66b012743803"
+    },
+    "glwd_class_00": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_00_ha_x10.tif",
+      "sha256": "065e7c22201e3f00b66c97a857415868389bf1b373edad942f974a567bccdeb8"
+    },
+    "glwd_class_01": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_01_ha_x10.tif",
+      "sha256": "3b9ab0ca31a6c989eb2116ab81763edda0582716b4859c2695f9f0d790ac1174"
+    },
+    "glwd_class_02": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_02_ha_x10.tif",
+      "sha256": "2709ddb169005d8f1848bdd6dc73851d41c4609149cf85927d4aca4565d5a267"
+    },
+    "glwd_class_03": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_03_ha_x10.tif",
+      "sha256": "70b8ad05df5169a1c717ca160b4747d3309ce0ec58eb94329bdbe8fb1b501754"
+    },
+    "glwd_class_04": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_04_ha_x10.tif",
+      "sha256": "e7bac77476c0bd04a0a8aafe2b5775cb41a8995132804988d4cc330f61f03a80"
+    },
+    "glwd_class_05": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_05_ha_x10.tif",
+      "sha256": "1ff4a80071da15d11e95d6d93c2fc8d38fac6919646841e49b8da265c4ef9ece"
+    },
+    "glwd_class_06": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_06_ha_x10.tif",
+      "sha256": "dc885713db7a002b2ba912eed9aa22d875ced70b9187a663bcf858b4695f3a63"
+    },
+    "glwd_class_20": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_20_ha_x10.tif",
+      "sha256": "4955b9ea4cd80f8356a573356d1c8d75a28734ce472659654d64a748a2076e33"
+    },
+    "glwd_class_21": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_21_ha_x10.tif",
+      "sha256": "026007768b6ddf0f2d58a2eae4e7ba8d250ef6c33d78762c04ce45d678b2b1cf"
+    },
+    "glwd_class_32": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/water/glwd_v2/GLWD_v2_0_area_by_class_ha/GLWD_v2_0_class_32_ha_x10.tif",
+      "sha256": "54d85433baf9e576fe5a42c93181c6a3050a46ad1a0f215a54c4ce489405ae6e"
+    }
+  }
+}

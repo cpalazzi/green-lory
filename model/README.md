@@ -13,12 +13,14 @@ a run uses them:
 | `plant.py` | One plant at one cell: the PyPSA network from the plant bundle, its constraints (Haber-Bosch ramps, battery coupling, land in the solve), the Gurobi solve and its acceptance check, the plant results |
 | `accounting.py` | After the solve: cost splits (equipment, installation, O&M, interest), water and land costs in the headline, grid-use classification |
 | `land.py` | Land budgets per cell (co-located or exclusive wind and PV land), the capacity rules (`scaled_reference_design`, `solved_quantity`), loading and checking land tables |
-| `land_table.py` | Building land tables from MODIS land cover, WDPA protected areas and GEBCO slope (`python -m model.land_table --help`) |
+| `land_table.py` | Building land tables from MODIS land cover, WDPA protected areas and GEBCO slope classes (`python -m model.land_table --help`) |
+| `site_costs.py` | Every location factor of the cost in one table per land build: equipment (port), installation (city), slope, water (`green-lory site-costs`; the cost mechanisms below) |
+| `site_geography.py` | The per-cell and per-site inputs of the site costs, read once from global rasters, and the remoteness fit (`python -m model.site_geography --help`) |
 | `surface.py` | Running the plant over many cells, serially or in forked workers, with a numerical retry chain (`python -m model.surface --help`) |
 | `runs.py` | Run definitions (`../runs.yaml`) and the execution record (`../run_store.csv`); the `run_surface` arguments of a defined run |
 | `results.py` | Reading results by run id: surfaces, network suppliers, rows at the focal cells, coast against inland, maps |
 | `suppliers.py` | A QA-passed surface as a supplier table of the green-porpoise network model (`export`), and post-hoc land-share variants (`derive`); the network runs in the green-porpoise repository |
-| `cli.py` | The `green-lory` command: `list`, `show`, `table`, `status`, `path`, `run`, `map`, `shell` |
+| `cli.py` | The `green-lory` command: `list`, `show`, `table`, `status`, `path`, `run`, `map`, `site-costs`, `shell` |
 
 `plants/ammonia_plant_1mt/` is the plant; its README lists what the bundle fixes and what each
 run sets from its YAML. Runs are data: `../runs.yaml` gives every setting of every run by id,
@@ -31,76 +33,36 @@ modelling choices in `../MODEL_CHOICES.md`.
 1. Copy the base network: the plant bundle with the YAML's link efficiencies and the run's PV
    policy, read once per run.
 2. Set the costs: every YAML cost annualised at its default interest rate
-   (`technology.apply_base_costs`), then the cell's overrides: its interest rates, and the
-   installation part times its build-cost multiplier (`technology.apply_cell_overrides`).
+   (`technology.apply_base_costs`), then the cell's overrides: its interest rates, and, in runs
+   with site costs, the equipment part times its equipment multiplier and the installation
+   part times its build multiplier (`technology.apply_cell_overrides`; see the cost mechanisms
+   below).
 3. Read the cell's land row. With `after_solve` (all campaign runs) the land does not limit the
    design; with `in_solve` it bounds wind and PV inside the optimisation.
 4. Solve the plant for the cell's year of weather (`plant.solve`).
 5. Complete the accounting: water and land costs, cost shares, grid use (`accounting.py`), and
    the capacity: the 1 Mt/yr design scaled until it fills the cell's land (`land.py`).
 
-## Spatial cost inputs
+## Site costs: the cost mechanisms
 
-Moved here unchanged from the May 2026 README. These inputs are used only by the spatial
-runs (`bspat`, `wspat`), which are deferred until the remoteness and water inputs are reviewed;
-the key runs are flat.
+Runs with site costs (S1 and S2 of the campaign) read a site-cost table built for their land
+table (`green-lory site-costs --land <table> --output <csv>`, `site_costs.py`); flat runs (C1,
+C2) have none and use the YAML's uniform water price. Each technology's overnight cost is
+`tech_cost_per_mw` x equipment multiplier + `build_cost_per_mw` x build multiplier, annualised
+at the cell's interest rate; fixed O&M is a share of that cost, so it follows both multipliers
+(`technology.apply_cell_overrides`). The result rows report the capacity-weighted
+`equipment_cost_multiplier` and `build_cost_multiplier` applied (`accounting.cost_splits`).
 
-Notebook 02 generates per-location, per-technology cost overrides in `inputs/spatial_cost_inputs.csv`. Campaign step 3 replaces this method (equipment by port, installation by city, slope classes; `../CAMPAIGN_PLAN.md` section 0a). The build cost multiplier adjusts only the **build/installation** portion of CAPEX — equipment costs are unchanged.
+| Mechanism | Acts on | Module and function | Input | Reference |
+|---|---|---|---|---|
+| Equipment (transport of plant and materials) | `tech_cost_per_mw`, every technology | `site_costs.equipment_multiplier`: 1 + a x great-circle distance to the nearest network port, capped | `../inputs/site_costs/cell_geography.csv` (`port_distance_km`), from `../data/ports/verschuur2024_ports.csv` | AEMO's equipment cost factors, fitted in `../inputs/site_costs/remoteness_fit.json` to GHD (2025) Table 8.3 or Aurecon (2024) Table 11-1; nearest-port basis as in AEMO (2025) |
+| Installation (labour, materials, mobilisation) | `build_cost_per_mw`, every technology | `site_costs.installation_multiplier`: 1 + b x min(travel time to the nearest city of at least N people, saturation) | `cell_geography.csv` (median over the cell's land), from Nelson et al. (2019) | AEMO's installation cost factors, same fit (N and the saturation by leave-one-out cross-validation) |
+| Slope | `build_cost_per_mw` of PV and wind | `site_costs.slope_multiplier`: 1.0 / 1.3 / 1.6 for land up to 8.5, 14 and 20 degrees, the plant's land share taken flattest first | the land table's `land_pct_slope_*` columns (`land_table.py`, from GEBCO) | Lopez et al. (2025), Table 12 (terrain multipliers); limits as decided on 7 October 2026 |
+| Depth | `build_cost_per_mw` | 1 for every onshore cell (offshore cells are not in the table) | | |
+| Labour level | `build_cost_per_mw` | 1 everywhere: no wage level by country; finance differences are the finance table's | | |
+| Water | the LCOA, after the solve, at 1.5 m3/t | `site_costs.site_cost_table`: source price + distance to the nearest source x pipeline cost per m3 and km (`site_costs.water_pipeline_cost`); the pipeline's materials (30 %) take the equipment multiplier, the rest the PV and wind build multiplier | `cell_geography.csv`: sea and permanent lakes and reservoirs (GLWD v2 classes 1, 2, 3, 6; saline lakes only where the JRC Global Surface Water shows water at least half the time), at least 10 % of a cell | Source price: the YAML's baseline, also a shadow price at lakes; pipeline: TWDB Uniform Costing Model (HDR and Freese and Nichols 2018); Lehner et al. (2025); Pekel et al. (2016) |
+| Land rent | the LCOA | 0 everywhere | | |
 
-### Composite multiplier
-
-```
-build_cost_multiplier = depth_mult × remoteness_mult × labour_mult
-```
-
-Each factor ≥ 1.0. A cell with shallow water, near a port, and baseline labour costs gets 1.0 × 1.0 × 1.0 = 1.0 (no markup).
-
-### Depth multiplier (offshore only)
-
-Piecewise-linear function of ocean depth, with separate curves for wind (foundation cost) and plant equipment (logistics):
-
-| Depth (m) | Wind | Plant | Regime |
-|-----------|------|-------|--------|
-| 0 | 1.3 | 1.1 | Shallow / fixed-bottom |
-| 60 | 1.8 | 1.3 | Fixed-bottom limit |
-| 300 | 2.5 | 1.8 | Floating (semi-sub / spar) |
-| 1500 | 3.5 | 2.5 | Deep floating |
-
-Returns 1.0 for onshore cells. Clamped at the last breakpoint beyond 1500 m.
-
-### Remoteness multiplier
-
-**Offshore cells**: linear function of great-circle distance to nearest major port (≥1 Mt/yr throughput). +25% per 1,000 km, extrapolating beyond 2,000 km.
-
-**Onshore cells with travel-time data**: linear function of travel time to nearest city (population ≥50k), from the MAP/Oxford Accessibility to Cities 2015 dataset. Same +25% per 2,000 min scaling. Pre-fetched via `scripts/fetch_travel_time.py` → `data/travel_time_by_cell.csv`.
-
-**Onshore cells without travel-time data** (~2,500 cells: Antarctica, Greenland interior, Arctic): fallback using distance-to-port with a 4× no-road premium, plus an elevation penalty above 1,000 m:
-
-```
-no_road_mult  = 1.0 + 4.0 × (port_remoteness − 1.0)
-elev_factor   = 1.0 + 0.2 × max(0, elevation_m − 1000) / 1000
-remoteness    = no_road_mult × elev_factor
-```
-
-### Labour multiplier
-
-Placeholder at 1.0 everywhere. Will accept a per-country index when available.
-
-### Other spatial inputs
-
-| Input | Current default | Notes |
-|-------|----------------|-------|
-| Interest rate | 10% (uniform) | Per-tech from YAML; awaiting per-country data |
-| Water cost | $2.00/m³ (uniform) | Added to LCOA post-solve |
-| Land cost | $0/km²/yr | Added to LCOA post-solve |
-
-### How the multiplier enters the model
-
-In `technology.apply_cell_overrides`, only the **build** portion of overnight cost is scaled:
-
-```
-effective_overnight = tech_cost + (build_cost × build_cost_multiplier)
-capital_cost = effective_overnight × (annuity + fixed_O&M_fraction)
-```
-
-This means equipment costs are location-invariant; only installation/logistics/civil works scale with geography.
+Inputs are built once from the rasters of `../data/README.md` by `site_geography.py`
+(`python -m model.site_geography cells | sites | fit`); `../inputs/site_costs/README.md`
+describes them and the fit.

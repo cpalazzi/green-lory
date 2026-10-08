@@ -51,12 +51,8 @@ references/
 # copies of the green-porpoise archive (legacy_gpo extract-archive) keep their own README
 /results/**/git-0a63616/**
 
-# Only the documented helper scripts are part of the supported interface.
-# Local diagnostics and Copilot scratch helpers under scripts/ stay ignored.
+# scripts/ (removed in campaign step 3, October 2026) may still hold local scratch
 /scripts/*
-!/scripts/README.md
-!/scripts/**/.gitkeep
-!/scripts/fetch_travel_time.py
 
 # Claude session ARC file-queue bridge (local operational scratch)
 arc_exchange/

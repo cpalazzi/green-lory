@@ -1,0 +1,59 @@
+{
+  "written_by": "python -m model.site_geography",
+  "rows": 187,
+  "sha256": "570d11774b64de8c0b880c847943d814f27777227db3e75fc647547415d609fb",
+  "inputs": {
+    "aurecon2024": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/aurecon2024_location_factors.csv",
+      "sha256": "599087cee65a96c014500c58a5f0aa96e899897eb056cd193fc602be5b83a469"
+    },
+    "ghd2025": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/ghd2025_location_factors.csv",
+      "sha256": "9766de4d8d9e3a27599139807584d810618d8c385ca0b5119b47cfb9700d97e2"
+    },
+    "gazetteer": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/gazetteer/geonames_au/AU.txt",
+      "sha256": "85697065e9b607379c7be42b84f5ac9476f0a823b6885c2fb31105e95ac71f38"
+    },
+    "ports": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/ports/verschuur2024_ports.csv",
+      "sha256": "497b9bc9fdcb9b67af57c5834f1a068633b0776535e254ec644bc89750f13651"
+    },
+    "nelson_cities_1": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_1.tif",
+      "sha256": "e8b49ec19ee5b50af7a9ace75a676284c9d4f2939ad31353f531100e1bba19a2"
+    },
+    "nelson_cities_2": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_2.tif",
+      "sha256": "8612dc288aedc02c9effa2c8165e255d91b803428230bb1d1d8dee4dc104947d"
+    },
+    "nelson_cities_3": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_3.tif",
+      "sha256": "c8b73856d5b9375ea4aefb54f320a14d1ea927de1f5c01a9f39ce9cbfca6dbf6"
+    },
+    "nelson_cities_4": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_4.tif",
+      "sha256": "17690d821b8f83fb065c6e0347c7518a8b43529cd83bd7a4f6dfd70323c97532"
+    },
+    "nelson_cities_5": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_5.tif",
+      "sha256": "0ff0dd92c84ba2736c5547dfe745abc03ab5f7ecd59fbaa09b4fa405ce7a2584"
+    },
+    "nelson_cities_8": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_8.tif",
+      "sha256": "16c2aac960a02fc5dcef1fa3dc18cc20a0595a6e3a117122622f7caf29decac8"
+    },
+    "nelson_cities_10": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_10.tif",
+      "sha256": "debe0105966c53ce8c7926d29f3a647c339c158b75f07b92a4597297b2a9e4e0"
+    },
+    "nelson_cities_11": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_11.tif",
+      "sha256": "80138115b0310b4d9cede0d8327f6ccbe74503433d19de73163f9323564b2add"
+    },
+    "nelson_cities_12": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/accessibility/nelson2019_travel_time/travel_time_to_cities_12.tif",
+      "sha256": "b0840a0cf12a49a2d6edfe078ecf067d318db734648f5332435a66b012743803"
+    }
+  }
+}

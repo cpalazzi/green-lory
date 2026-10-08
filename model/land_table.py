@@ -42,7 +42,7 @@ import xarray as xr
 from shapely.errors import GEOSException
 from shapely.geometry import MultiPolygon, box
 
-from .config import BATHYMETRY_FILE, LAND_COVER_FILE, repo_path
+from .config import BATHYMETRY_FILE, EARTH_RADIUS_KM, LAND_COVER_FILE, SLOPE_CLASS_COLUMNS, SLOPE_CLASSES, repo_path
 from .land import (
     CLASSWISE_NESTED_UNION_AREA_COLUMN,
     CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
@@ -55,7 +55,6 @@ from .land import (
 
 LOGGER = logging.getLogger(__name__)
 
-EARTH_RADIUS_KM = 6371.0
 EQUAL_AREA_CRS = "EPSG:6933"
 MODIS_WATER_CLASS = 0
 WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
@@ -63,18 +62,6 @@ DEFAULT_LAND_COMPETITION_FRACTION = 1.0
 # Land above 20 degrees is excluded (decision of 7 October 2026; the tables of September 2026
 # excluded land above 15 degrees and were built with --max-slope-degrees 15)
 DEFAULT_MAX_SLOPE_DEGREES = 20.0
-
-# Slope classes of the land (column, upper bound in degrees, inclusive), as decided on
-# 7 October 2026 (CAMPAIGN_PLAN.md, section 0a): no cost uplift up to 8.5 degrees (15 % grade),
-# then 8.5 to 14 and 14 to 20 degrees; the factors are in model/site_costs.py. Each column is
-# the percentage of the cell's land (GEBCO elevation above zero) in the class.
-SLOPE_CLASSES = (
-    ("land_pct_slope_upto_8p5deg", 8.5),
-    ("land_pct_slope_8p5_to_14deg", 14.0),
-    ("land_pct_slope_14_to_20deg", 20.0),
-    ("land_pct_slope_above_20deg", float("inf")),
-)
-SLOPE_CLASS_COLUMNS = tuple(column for column, _ in SLOPE_CLASSES)
 
 # First Solar Series 6 (2018) module, packed in rows as in van de Ven et al. (2021)
 FIRST_SOLAR_MODULE_WIDTH_M = 1.21
