@@ -16,7 +16,8 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import pytest
-from shapely.geometry import MultiPolygon
+import geopandas as gpd
+from shapely.geometry import box
 
 from model.land import (
     CLASSWISE_NESTED_UNION_AREA_COLUMN,
@@ -34,7 +35,8 @@ from model.land_table import (
     _apply_land_exclusions,
     _bin_coordinates,
     _cell_area_km2,
-    _cell_polygon,
+    _protected_land_pct,
+    _rasterise_polygons,
     _wrap_longitude_labels,
     apply_land_competition_scenario,
     build_land_availability_table,
@@ -115,12 +117,25 @@ def test_binning_and_longitude_wrap():
     np.testing.assert_array_equal(_wrap_longitude_labels([180.0, 179.0, -180.0]), [-180.0, 179.0, -180.0])
 
 
-def test_cell_polygons_and_dateline_split():
-    assert _cell_polygon(0.0, 179.0, 1.0).bounds == (178.5, -0.5, 179.5, 0.5)
-    straddling = _cell_polygon(0.0, -180.0, 1.0)
-    assert isinstance(straddling, MultiPolygon)
-    assert sorted(p.bounds for p in straddling.geoms) == [(-180.0, -0.5, -179.5, 0.5), (179.5, -0.5, 180.0, 0.5)]
-    assert straddling.area == pytest.approx(1.0)
+def test_polygons_are_rasterised_by_subpixel_centre():
+    # a 0.2 x 0.1 degree box on a 0.05-degree grid covering 0.5 S to 0.5 N from -180
+    mask = _rasterise_polygons([box(-179.9, 0.0, -179.7, 0.1)], 0.5, 20, 7200, 0.05)
+    assert mask.sum() == 4 * 2
+    assert mask[8:10, 2:6].all()
+
+
+def test_protected_land_leaves_out_protected_water(tmp_path):
+    # cell (0, 0): its west half is land, its east half water; a protected area covers the
+    # east half of the land and all the water
+    cube = _cube([(-0.5, -0.5, 0.5, 0.0)])
+    path = tmp_path / "wdpa.gpkg"
+    gpd.GeoDataFrame({"STATUS": ["Designated"], "REALM": ["Coastal"]},
+                     geometry=[box(-0.25, -0.5, 0.5, 0.5)], crs="EPSG:4326").to_file(path)
+    cells = pd.DataFrame({"latitude": [0.0], "longitude": [0.0]})
+    with mock.patch.dict(sys.modules, _fake_pyhdf(cube)):
+        result = _protected_land_pct(cells, (path,), Path("synthetic.hdf"), 1.0, FINE)
+    # a quarter of the cell is protected land (the old rule counted three quarters)
+    assert result["protected_area_pct"].iloc[0] == pytest.approx(25.0, abs=0.01)
 
 
 def test_cell_area_uses_the_centred_south_edge():
@@ -229,7 +244,7 @@ def test_union_survives_land_exclusions():
         result["protected_area_pct"] = 50.0
         return result
 
-    with mock.patch("model.land_table._protected_area_pct_from_vectors", side_effect=protected_half):
+    with mock.patch("model.land_table._protected_land_pct", side_effect=protected_half):
         result = _apply_land_exclusions(frame, _config(skip_slope_exclusion=True)).iloc[0]
     assert result["land_exclusion_factor"] == pytest.approx(0.5)
     assert result[CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN] == pytest.approx(0.2)

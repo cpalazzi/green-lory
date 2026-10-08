@@ -39,8 +39,6 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import xarray as xr
-from shapely.errors import GEOSException
-from shapely.geometry import MultiPolygon, box
 
 from .config import BATHYMETRY_FILE, EARTH_RADIUS_KM, LAND_COVER_FILE, SLOPE_CLASS_COLUMNS, SLOPE_CLASSES, repo_path
 from .land import (
@@ -55,7 +53,6 @@ from .land import (
 
 LOGGER = logging.getLogger(__name__)
 
-EQUAL_AREA_CRS = "EPSG:6933"
 MODIS_WATER_CLASS = 0
 WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
 DEFAULT_LAND_COMPETITION_FRACTION = 1.0
@@ -255,29 +252,10 @@ def _wrap_longitude_labels(values) -> np.ndarray:
     return np.where(values >= 180.0, values - 360.0, values)
 
 
-def _cell_polygon(lat: float, lon: float, coarse_degree: float):
-    """Polygon of one cell; the cell on the dateline becomes two boxes."""
-    offset = _half_cell(coarse_degree)
-    south, west = float(lat) - offset, float(lon) - offset
-    north, east = south + coarse_degree, west + coarse_degree
-    if west < -180.0:
-        return MultiPolygon([box(-180.0, south, east, north), box(west + 360.0, south, 180.0, north)])
-    if east > 180.0:
-        return MultiPolygon([box(west, south, 180.0, north), box(-180.0, south, east - 360.0, north)])
-    return box(west, south, east, north)
-
-
 def _cell_area_km2(latitudes: pd.Series, delta_deg: float) -> pd.Series:
     south = latitudes.to_numpy(dtype=float) - _half_cell(delta_deg)
     band_height = np.sin(np.deg2rad(south + delta_deg)) - np.sin(np.deg2rad(south))
     return pd.Series(np.abs((EARTH_RADIUS_KM ** 2) * np.deg2rad(delta_deg) * band_height), index=latitudes.index)
-
-
-def _cell_geometries(df: pd.DataFrame, coarse_degree: float) -> gpd.GeoDataFrame:
-    cells = df[["latitude", "longitude"]].drop_duplicates().reset_index(drop=True)
-    cells["cell_id"] = np.arange(len(cells), dtype=int)
-    cells["geometry"] = [_cell_polygon(lat, lon, coarse_degree) for lat, lon in zip(cells["latitude"], cells["longitude"])]
-    return gpd.GeoDataFrame(cells, geometry="geometry", crs="EPSG:4326")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -509,6 +487,13 @@ def _attach_bathymetry_depth(df: pd.DataFrame, bathymetry_path: Path) -> pd.Data
 # Protected areas
 # ---------------------------------------------------------------------------------------------
 
+# WDPA polygons are rasterised on a grid this many times finer than the land cover (0.005
+# degrees for MODIS's 0.05): a sub-pixel is protected when its centre lies inside a polygon.
+PROTECTED_SUBPIXELS = 10
+# Largest number of sub-pixel centres tested against one polygon at once
+_PROTECTED_POINT_BLOCK = 4_000_000
+
+
 def _valid_geometries(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     frame = frame[frame.geometry.notna() & ~frame.geometry.is_empty].copy()
     if frame.empty:
@@ -518,18 +503,6 @@ def _valid_geometries(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     except AttributeError:  # pragma: no cover - depends on shapely/geopandas version
         frame = frame.set_geometry(frame.geometry.buffer(0))
     return frame[frame.geometry.notna() & ~frame.geometry.is_empty]
-
-
-def _repair_geometry_series(geometries: gpd.GeoSeries) -> gpd.GeoSeries:
-    geometries = geometries[geometries.notna() & ~geometries.is_empty]
-    if geometries.empty:
-        return geometries
-    try:
-        repaired = geometries.make_valid()
-    except AttributeError:  # pragma: no cover - depends on shapely/geopandas version
-        repaired = geometries.buffer(0)
-    repaired = gpd.GeoSeries(repaired, index=geometries.index, crs=geometries.crs)
-    return repaired[repaired.notna() & ~repaired.is_empty]
 
 
 def _filter_protected_areas(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -551,301 +524,121 @@ def _filter_protected_areas(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return _valid_geometries(output)
 
 
-def _protected_area_checkpoint_path(output_csv: Path) -> Path:
-    return output_csv.with_name(f"{output_csv.stem}.protected_area_checkpoint.csv")
+def _rasterise_polygons(geometries, north: float, n_rows: int, n_cols: int, step: float) -> np.ndarray:
+    """Boolean grid (north-up, from -180 degrees) of the sub-pixels whose centre lies in a polygon."""
+    import shapely
+
+    mask = np.zeros((n_rows, n_cols), dtype=bool)
+    south = north - n_rows * step
+    for geometry in geometries:
+        min_x, min_y, max_x, max_y = geometry.bounds
+        min_y, max_y = max(min_y, south), min(max_y, north)
+        if max_y <= min_y:
+            continue
+        first_col = max(int(np.ceil((min_x + 180.0) / step - 0.5)), 0)
+        last_col = min(int(np.floor((max_x + 180.0) / step - 0.5)), n_cols - 1)
+        first_row = max(int(np.ceil((north - max_y) / step - 0.5)), 0)
+        last_row = min(int(np.floor((north - min_y) / step - 0.5)), n_rows - 1)
+        if last_col < first_col or last_row < first_row:
+            continue
+        shapely.prepare(geometry)
+        xs = -180.0 + step * (np.arange(first_col, last_col + 1) + 0.5)
+        rows_per_block = max(1, _PROTECTED_POINT_BLOCK // len(xs))
+        for block_start in range(first_row, last_row + 1, rows_per_block):
+            block_end = min(block_start + rows_per_block, last_row + 1)
+            ys = north - step * (np.arange(block_start, block_end) + 0.5)
+            grid_x, grid_y = np.meshgrid(xs, ys)
+            inside = shapely.contains_xy(geometry, grid_x, grid_y)
+            mask[block_start:block_end, first_col:last_col + 1] |= inside
+    return mask
 
 
-def _load_protected_area_checkpoint(
-    checkpoint_path: Path,
-    cells: gpd.GeoDataFrame,
-    cell_areas: pd.Series,
-) -> tuple[pd.Series, set[int]]:
-    protected_area_m2 = pd.Series(0.0, index=cell_areas.index)
-    if not checkpoint_path.exists():
-        return protected_area_m2, set()
-
-    cached = pd.read_csv(checkpoint_path)
-    required_columns = {"latitude", "longitude", "protected_area_pct"}
-    if not required_columns.issubset(cached.columns):
-        LOGGER.warning(
-            "Ignoring protected-area checkpoint %s because required columns are missing.",
-            checkpoint_path,
-        )
-        return protected_area_m2, set()
-
-    cached = cached[["latitude", "longitude", "protected_area_pct"]].copy()
-    cached["protected_area_pct"] = (
-        pd.to_numeric(cached["protected_area_pct"], errors="coerce")
-        .fillna(0.0)
-        .clip(0.0, 100.0)
-    )
-    cached = cached.drop_duplicates(subset=["latitude", "longitude"], keep="last")
-    cached = cells[["cell_id", "latitude", "longitude"]].merge(
-        cached,
-        on=["latitude", "longitude"],
-        how="inner",
-    )
-    if cached.empty:
-        return protected_area_m2, set()
-
-    cached_ids = cached["cell_id"].astype(int)
-    protected_area_m2.loc[cached_ids] = (
-        cell_areas.loc[cached_ids].to_numpy()
-        * cached["protected_area_pct"].to_numpy()
-        / 100.0
-    )
-    processed_cell_ids = set(cached_ids.tolist())
-    LOGGER.info(
-        "Loaded protected-area checkpoint %s for %d/%d cells.",
-        checkpoint_path,
-        len(processed_cell_ids),
-        len(cells),
-    )
-    return protected_area_m2, processed_cell_ids
-
-
-def _write_protected_area_checkpoint(
-    checkpoint_path: Path,
-    protected_area_m2: pd.Series,
-    cell_areas: pd.Series,
-    cells: gpd.GeoDataFrame,
-    processed_cell_ids: set[int],
-) -> None:
-    if not processed_cell_ids:
-        return
-
-    processed_index = pd.Index(sorted(processed_cell_ids), dtype=int, name="cell_id")
-    protected_fraction = (protected_area_m2.loc[processed_index] / cell_areas.loc[processed_index]).clip(0.0, 1.0)
-    checkpoint = (
-        protected_fraction.rename("protected_area_pct")
-        .reset_index()
-        .merge(cells[["cell_id", "latitude", "longitude"]], on="cell_id", how="left")
-    )
-    checkpoint["protected_area_pct"] *= 100.0
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    checkpoint[["latitude", "longitude", "protected_area_pct"]].sort_values(
-        ["latitude", "longitude"]
-    ).to_csv(checkpoint_path, index=False)
-
-
-def _geometry_union(geometries: gpd.GeoSeries):
-    try:
-        if hasattr(geometries, "union_all"):
-            return geometries.union_all()
-        return geometries.unary_union
-    except GEOSException:
-        repaired = _repair_geometry_series(geometries)
-        if repaired.empty:
-            return None
-        if hasattr(repaired, "union_all"):
-            return repaired.union_all()
-        return repaired.unary_union
-
-
-def _overlay_intersection_with_retry(
-    left: gpd.GeoDataFrame,
-    right: gpd.GeoDataFrame,
-) -> gpd.GeoDataFrame:
-    try:
-        return gpd.overlay(left, right, how="intersection", keep_geom_type=False)
-    except GEOSException:
-        repaired_left = _valid_geometries(left)
-        repaired_right = _valid_geometries(right)
-        if repaired_left.empty or repaired_right.empty:
-            return gpd.GeoDataFrame(columns=list(left.columns), geometry="geometry", crs=left.crs)
-        return gpd.overlay(
-            repaired_left,
-            repaired_right,
-            how="intersection",
-            keep_geom_type=False,
-        )
-
-
-def _protected_area_pct_from_vectors(
+def _protected_land_pct(
     df: pd.DataFrame,
     protected_area_paths: Tuple[Path, ...],
+    land_cover_path: Path,
     coarse_degree: float,
-    checkpoint_path: Path | None = None,
+    fine_degree: float,
 ) -> pd.DataFrame:
+    """Protected land as a percentage of each cell's area, measured on the land cover's grid.
+
+    Each land-cover pixel's protected share (WDPA polygons rasterised at fine_degree /
+    PROTECTED_SUBPIXELS) is weighted by the pixel's land fraction (one minus its MODIS water
+    fraction) and its spherical area. Water inside a protected area, the sea of a coastal park or
+    a lake, therefore does not count against the cell's land, and protected land never exceeds
+    the land the table counts. (Until October 2026 the whole protected area, water included, was
+    divided by the cell's land, which removed the land of hundreds of coastal cells.)
+    """
     output = df.copy()
     output["protected_area_pct"] = 0.0
     if not protected_area_paths:
         return output
-
     for path in protected_area_paths:
         if not path.exists():
             raise FileNotFoundError(f"Protected-area vector file not found: {path}")
+    from pyhdf.SD import SD, SDC
 
-    cells = _cell_geometries(output, coarse_degree)
-    cells_equal_area = cells.to_crs(EQUAL_AREA_CRS)
-    cell_areas = cells_equal_area.set_index("cell_id").geometry.area
-    if checkpoint_path is not None:
-        protected_area_m2, processed_cell_ids = _load_protected_area_checkpoint(
-            checkpoint_path,
-            cells,
-            cell_areas,
-        )
-    else:
-        protected_area_m2 = pd.Series(0.0, index=cell_areas.index)
-        processed_cell_ids = set()
-
-    def persist_checkpoint(cell_ids: set[int]) -> None:
-        if not cell_ids:
-            return
-        processed_cell_ids.update(cell_ids)
-        if checkpoint_path is not None:
-            _write_protected_area_checkpoint(
-                checkpoint_path,
-                protected_area_m2,
-                cell_areas,
-                cells,
-                processed_cell_ids,
-            )
-
-    lat_min = float(cells["latitude"].min())
-    lat_max = float(cells["latitude"].max() + coarse_degree)
+    group = int(round(coarse_degree / fine_degree))
+    half = group // 2
+    step = fine_degree / PROTECTED_SUBPIXELS
+    n_cols = int(round(360.0 / fine_degree))
+    labels = np.sort(output["latitude"].astype(float).unique())
     chunk_degree = max(coarse_degree, 5.0)
-    chunk_edges = np.arange(lat_min, lat_max + chunk_degree, chunk_degree)
-    chunk_pairs = list(zip(chunk_edges[:-1], chunk_edges[1:]))
-    LOGGER.info(
-        "Protected-area overlay: %d latitude chunks across %d WDPA source files.",
-        len(chunk_pairs),
-        len(protected_area_paths),
-    )
+    chunks = [labels[(labels >= edge) & (labels < edge + chunk_degree)]
+              for edge in np.arange(labels.min(), labels.max() + chunk_degree, chunk_degree)]
+    chunks = [chunk for chunk in chunks if len(chunk)]
+    LOGGER.info("Protected land: %d latitude chunks across %d WDPA source files.", len(chunks), len(protected_area_paths))
     stage_started = time.perf_counter()
+    results = []
+    sd = SD(str(land_cover_path), SDC.READ)
+    try:
+        sds = sd.select("Land_Cover_Type_1_Percent")
+        for index, chunk in enumerate(chunks, start=1):
+            chunk_started = time.perf_counter()
+            # the chunk's cells as a contiguous band of whole cells
+            cell_rows = np.arange(chunk.max(), chunk.min() - coarse_degree / 2, -coarse_degree)
+            north = float(chunk.max()) + _half_cell(coarse_degree)
+            south = float(chunk.min()) - _half_cell(coarse_degree)
+            first_row = int(round((90.0 - north) / fine_degree))
+            last_row = int(round((90.0 - south) / fine_degree))
+            water = np.asarray(sds[first_row:last_row, 0:n_cols, MODIS_WATER_CLASS:MODIS_WATER_CLASS + 1],
+                               dtype=float)[:, :, 0] / 100.0
 
-    for chunk_index, (chunk_start, chunk_end) in enumerate(chunk_pairs, start=1):
-        chunk_started = time.perf_counter()
-        chunk_cells = cells[
-            (cells["latitude"] >= chunk_start)
-            & (cells["latitude"] < chunk_end)
-        ]
-        if chunk_cells.empty:
+            geometries = []
+            for path in protected_area_paths:
+                protected = gpd.read_file(path, bbox=(-180.0, south, 180.0, north))
+                if protected.empty:
+                    continue
+                protected = protected.set_crs("EPSG:4326") if protected.crs is None else protected.to_crs("EPSG:4326")
+                geometries.extend(_filter_protected_areas(protected).geometry)
+            mask = _rasterise_polygons(geometries, north, (last_row - first_row) * PROTECTED_SUBPIXELS,
+                                       n_cols * PROTECTED_SUBPIXELS, step)
+            share = mask.reshape(last_row - first_row, PROTECTED_SUBPIXELS, n_cols, PROTECTED_SUBPIXELS).mean(axis=(1, 3))
+
+            row_north = north - fine_degree * np.arange(last_row - first_row)
+            pixel_km2 = (EARTH_RADIUS_KM ** 2) * np.deg2rad(fine_degree) * (
+                np.sin(np.deg2rad(row_north)) - np.sin(np.deg2rad(row_north - fine_degree)))
+            protected_land = share * (1.0 - water).clip(0.0, 1.0) * pixel_km2[:, None]
+            # coarse column b covers [b - 180.5, b - 179.5): roll by half a cell, as the land cover does
+            protected_land = np.roll(protected_land, half, axis=1)
+            per_cell = protected_land.reshape(len(cell_rows), group, -1, group).sum(axis=(1, 3))
+            areas = _cell_area_km2(pd.Series(cell_rows), coarse_degree).to_numpy()
+            lon_labels = -180.0 + coarse_degree * np.arange(per_cell.shape[1])
+            for row, lat in enumerate(cell_rows):
+                results.append(pd.DataFrame({"latitude": float(lat), "longitude": lon_labels,
+                                             "protected_area_pct": 100.0 * per_cell[row] / areas[row]}))
             elapsed = time.perf_counter() - stage_started
-            eta = (elapsed / chunk_index) * (len(chunk_pairs) - chunk_index)
             LOGGER.info(
-                "Protected-area chunk %d/%d lat [%.0f, %.0f): no cells, elapsed=%s, eta=%s",
-                chunk_index,
-                len(chunk_pairs),
-                chunk_start,
-                chunk_end,
-                _format_eta(elapsed),
-                _format_eta(eta),
+                "Protected-land chunk %d/%d lat [%.1f, %.1f): %d polygons, chunk=%s, elapsed=%s, eta=%s",
+                index, len(chunks), south, north, len(geometries),
+                _format_eta(time.perf_counter() - chunk_started), _format_eta(elapsed),
+                _format_eta(elapsed / index * (len(chunks) - index)),
             )
-            continue
+    finally:
+        sd.end()
 
-        chunk_cell_ids = set(chunk_cells["cell_id"].astype(int))
-        if chunk_cell_ids.issubset(processed_cell_ids):
-            elapsed = time.perf_counter() - stage_started
-            eta = (elapsed / chunk_index) * (len(chunk_pairs) - chunk_index)
-            LOGGER.info(
-                "Protected-area chunk %d/%d lat [%.0f, %.0f): restored from checkpoint, elapsed=%s, eta=%s",
-                chunk_index,
-                len(chunk_pairs),
-                chunk_start,
-                chunk_end,
-                _format_eta(elapsed),
-                _format_eta(eta),
-            )
-            continue
-
-        bbox = tuple(chunk_cells.total_bounds)
-        protected_frames: list[gpd.GeoDataFrame] = []
-        for path in protected_area_paths:
-            protected = gpd.read_file(path, bbox=bbox)
-            if protected.empty:
-                continue
-            if protected.crs is None:
-                protected = protected.set_crs("EPSG:4326")
-            else:
-                protected = protected.to_crs("EPSG:4326")
-            protected = _filter_protected_areas(protected)
-            if not protected.empty:
-                protected_frames.append(protected[["geometry"]])
-
-        if not protected_frames:
-            elapsed = time.perf_counter() - stage_started
-            eta = (elapsed / chunk_index) * (len(chunk_pairs) - chunk_index)
-            LOGGER.info(
-                "Protected-area chunk %d/%d lat [%.0f, %.0f): no WDPA intersections in bbox, elapsed=%s, eta=%s",
-                chunk_index,
-                len(chunk_pairs),
-                chunk_start,
-                chunk_end,
-                _format_eta(elapsed),
-                _format_eta(eta),
-            )
-            persist_checkpoint(chunk_cell_ids)
-            continue
-
-        protected = gpd.GeoDataFrame(
-            pd.concat(protected_frames, ignore_index=True),
-            geometry="geometry",
-            crs="EPSG:4326",
-        ).to_crs(EQUAL_AREA_CRS)
-        protected = _valid_geometries(protected)
-        protected_union = _geometry_union(protected.geometry)
-        if protected_union is None or protected_union.is_empty:
-            elapsed = time.perf_counter() - stage_started
-            eta = (elapsed / chunk_index) * (len(chunk_pairs) - chunk_index)
-            LOGGER.info(
-                "Protected-area chunk %d/%d lat [%.0f, %.0f): empty dissolved WDPA geometry, elapsed=%s, eta=%s",
-                chunk_index,
-                len(chunk_pairs),
-                chunk_start,
-                chunk_end,
-                _format_eta(elapsed),
-                _format_eta(eta),
-            )
-            persist_checkpoint(chunk_cell_ids)
-            continue
-
-        protected_union_frame = gpd.GeoDataFrame(
-            geometry=[protected_union],
-            crs=EQUAL_AREA_CRS,
-        )
-        chunk_cells_equal_area = cells_equal_area[
-            cells_equal_area["cell_id"].isin(chunk_cell_ids)
-        ][["cell_id", "geometry"]]
-        intersections = _overlay_intersection_with_retry(
-            chunk_cells_equal_area,
-            protected_union_frame,
-        )
-        if not intersections.empty:
-            areas = intersections.geometry.area.groupby(intersections["cell_id"]).sum()
-            protected_area_m2 = protected_area_m2.add(areas, fill_value=0.0)
-
-        persist_checkpoint(chunk_cell_ids)
-
-        elapsed = time.perf_counter() - stage_started
-        eta = (elapsed / chunk_index) * (len(chunk_pairs) - chunk_index)
-        LOGGER.info(
-            "Protected-area chunk %d/%d lat [%.0f, %.0f): %d cells, %d WDPA features, %d overlaps, chunk=%s, elapsed=%s, eta=%s",
-            chunk_index,
-            len(chunk_pairs),
-            chunk_start,
-            chunk_end,
-            len(chunk_cells_equal_area),
-            len(protected),
-            len(intersections),
-            _format_eta(time.perf_counter() - chunk_started),
-            _format_eta(elapsed),
-            _format_eta(eta),
-        )
-
-    protected_fraction = (protected_area_m2 / cell_areas).clip(0.0, 1.0)
-    protected_pct = (
-        protected_fraction.rename("protected_area_pct")
-        .reset_index()
-        .merge(cells[["cell_id", "latitude", "longitude"]], on="cell_id", how="left")
-    )
-    protected_pct["protected_area_pct"] *= 100.0
-
-    output = output.drop(columns=["protected_area_pct"], errors="ignore").merge(
-        protected_pct[["latitude", "longitude", "protected_area_pct"]],
-        on=["latitude", "longitude"],
-        how="left",
-    )
+    table = pd.concat(results, ignore_index=True)
+    output = output.drop(columns=["protected_area_pct"]).merge(table, on=["latitude", "longitude"], how="left")
     output["protected_area_pct"] = output["protected_area_pct"].fillna(0.0).clip(0.0, 100.0)
     return output
 
@@ -1010,11 +803,12 @@ def _slope_suitable_land_pct_from_raster(
 # ---------------------------------------------------------------------------------------------
 
 def _apply_land_exclusions(availability: pd.DataFrame, cfg: LandAvailabilityConfig) -> pd.DataFrame:
-    output = _protected_area_pct_from_vectors(
+    output = _protected_land_pct(
         availability.copy(),
         cfg.protected_area_paths,
+        cfg.land_cover_path,
         cfg.coarse_degree,
-        _protected_area_checkpoint_path(cfg.output_csv),
+        cfg.fine_degree,
     )
     if cfg.skip_slope_exclusion or cfg.slope_raster_path is None:
         output["slope_suitable_land_pct"] = 100.0
@@ -1307,10 +1101,6 @@ def write_land_availability_table(config: LandAvailabilityConfig) -> pd.DataFram
     df = build_land_availability_table(cfg)
     cfg.output_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(cfg.output_csv, index=False)
-    checkpoint_path = _protected_area_checkpoint_path(cfg.output_csv)
-    if checkpoint_path.exists():
-        checkpoint_path.unlink()
-        LOGGER.info("Removed protected-area checkpoint %s after successful run", checkpoint_path)
     LOGGER.info("Wrote %s rows to %s", len(df), cfg.output_csv)
     return df
 

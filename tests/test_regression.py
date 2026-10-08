@@ -6,9 +6,12 @@ improved key run and the reconciling run, over one week and over the full year. 
 before the step-2 restructuring; its full-year LCOA equals the accepted ARC surfaces to within
 5e-5 (the solver tolerance).
 
-The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells),
-against the same rows of the accepted centred 100 % table of 23 September 2026
-(tests/regression/land_center_100pct_lat_m24_m22.csv).
+The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells) with a
+15-degree slope limit, against tests/regression/land_center_100pct_lat_m24_m22.csv. That file
+held the rows of the accepted centred 100 % table of 23 September 2026 until 8 October 2026,
+when protected land replaced protected area (model/land_table.py, _protected_land_pct): inland
+cells moved by at most 0.18 percentage points of protection, coastal cells with protected
+water regained land (Ningaloo, 22 S 114 E: exclusion factor 0 to 0.58).
 
     python -m pytest -m slow tests/test_regression.py
 
@@ -109,8 +112,9 @@ def test_land_build_reproduces_a_band_of_the_accepted_table(tmp_path):
     expected = pd.read_csv(LAND_BAND).set_index(["latitude", "longitude"]).sort_index()
     actual = pd.read_csv(output).set_index(["latitude", "longitude"]).sort_index()
     assert list(actual.index) == list(expected.index)
-    # the slope-class columns (7 October 2026) are the only additions to the accepted table
-    assert [column for column in actual.columns if column not in land_table.SLOPE_CLASS_COLUMNS] == list(expected.columns)
+    assert list(actual.columns) == list(expected.columns)
+    # protected land never exceeds the land the table counts
+    assert (actual["protected_area_pct"] <= actual["onshore_land_pct"] + 1e-9).all()
     classes = actual[list(land_table.SLOPE_CLASS_COLUMNS)]
     has_land = classes.sum(axis=1) > 0
     np.testing.assert_allclose(classes[has_land].sum(axis=1), 100.0, atol=1e-9)
@@ -121,7 +125,6 @@ def test_land_build_reproduces_a_band_of_the_accepted_table(tmp_path):
     for column in expected.columns:
         want, got = expected[column], actual[column]
         if pd.api.types.is_numeric_dtype(want):
-            # geometry operations differ in the last digits between GEOS builds
             np.testing.assert_allclose(got.to_numpy(float), want.to_numpy(float), rtol=1e-9, atol=1e-9,
                                        equal_nan=True, err_msg=column)
         else:
