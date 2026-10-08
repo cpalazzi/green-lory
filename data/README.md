@@ -70,7 +70,22 @@ tracked in `../inputs/weather/era5_point_weights_1deg.csv`; the factors are comp
 | Native MODIS MCD12Q1 500 m tiles (2022, C6.1) | Resolution checks only; three tiles at `results/campaigns/land_reconcile_20260914_v1/sources/native-modis-c61-2022/`, twelve more listed in the download plan there. Not needed for the global reproduction |
 
 Generated land tables (`max_capacities_*.csv`) are campaign outputs, not inputs. The
-accepted ones are the centred build of 23 September 2026 on ARC,
+campaign runs (step 5) are to use the October build of 8 October 2026 (release
+`20261008-land-slope20-v2`): slope classes up to 20 degrees and protected land counted on land
+only. It is on ARC at
+`/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/land_center_slope20_20261008_v2/`, with
+local copies in `results/campaigns/land_center_slope20_20261008_v2/`, and awaits the step-3
+review:
+
+| File | SHA-256 |
+|---|---|
+| `max_capacities_center_100pct_slope20.csv` | `e4c76c78dd1950ce685e20d6d74b7092dc962403e05b735deec6d559007a863a` |
+| `max_capacities_center_20pct_slope20.csv` | `0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb` |
+| `max_capacities_center_2pct_slope20.csv` | `f22b9a40b145e0912af2ac3f76ad00fe81b5a1d6b450f3b410a1bd515812f7a4` |
+| `locations_onshore_suitable_center_20261008.csv` (the 16,885 run cells, `land_table.run_cells`) | `2299a04e692bd96f93bc2ab1d0d128b50177fb12c0baba5c0fe7e85718ed5a68` |
+
+The key runs of September used the centred build of 23 September 2026 (slope limit 15 degrees)
+on ARC,
 `/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/land_center_20260923_v1/`, with local
 copies in `results/campaigns/land_center_20260923_v1/`:
 
