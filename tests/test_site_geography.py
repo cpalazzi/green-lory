@@ -44,6 +44,7 @@ def _water_cells():
         "fresh_lake_km2": [0.0, 900.0, 0.0, 2_000.0],
         "saline_lake_km2": [0.0, 0.0, 3_000.0, 0.0],
         "reservoir_km2": [0.0, 0.0, 0.0, 0.0],
+        "large_river_km2": [0.0, 0.0, 0.0, 0.0],
         "other_permanent_water_km2": [0.0, 0.0, 0.0, 0.0],
     })
 
@@ -55,6 +56,17 @@ def test_water_sources_need_ten_percent_of_the_cell():
     np.testing.assert_allclose(sources.water_source_distance_km, [0.0, 111.19, 0.0, 0.0], atol=0.01)
     without_saline = geo.water_sources(_water_cells(), classes=("sea_km2", "fresh_lake_km2"))
     assert list(without_saline.water_source) == [True, False, False, True]
+
+
+def test_large_rivers_need_one_percent_of_the_cell():
+    cells = _water_cells()
+    cells["fresh_lake_km2"] = 0.0  # cells 2 and 4 now have no standing water
+    cells["large_river_km2"] = [0.0, 100.0, 0.0, 99.0]  # 1 % of the second cell, 0.99 % of the fourth
+    sources = geo.water_sources(cells)
+    assert list(sources.water_source) == [True, True, True, False]
+    assert list(sources.water_source_kind) == ["sea", "river", "lake", "lake"]  # the fourth's nearest is the saline lake
+    without_rivers = geo.water_sources(cells, river_classes=())
+    assert list(without_rivers.water_source) == [True, False, True, False]
 
 
 def _gazetteer():

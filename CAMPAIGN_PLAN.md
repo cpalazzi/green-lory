@@ -16,7 +16,7 @@ in `runs.yaml` still pins stay until that run is retired.
 | D1 | Base time resolution | **Hourly as the base; 4 h as a documented resolution case.** The 4-hour run is worth having as the bridge to the published method, but it should not be the base because it gives the coastal map: four-hour averaging flattens the solar peak and so hides the cost of buffering solar-only hydrogen, which is the mechanism that moved production inland (`reconciliation/DECISION.md` section 5). If 4 h and 1 h disagree, the paper reports 1 h and explains the difference. The 4 h step also explains only part of the shift: at the focal cells the explicit compressor added about twice as much as the hourly step, and both stay in a 4 h run of the improved plant, so it may still favour inland. |
 | D2 | Slope | **Decided 7 October:** a cost factor by slope class on the build part of PV and wind, slope from GEBCO, factors from NREL's terrain multipliers, the plant takes the flattest land first, land above 20° excluded (section 0a). The class bounds follow your question on 15 % grade; confirm at the step 3 review. |
 | D3 | Remoteness | **Decided 7 October:** two factors, as AEMO does: an equipment factor by distance to the nearest of all network ports (`data/ports/verschuur2024_ports.csv`), on the equipment part of the cost, and an installation factor by travel time to a city, on the build part, both fitted to the location factors behind AEMO's inputs and used worldwide (section 0a). |
-| D4 | Water | **Decided 7 October** (section 0b): desalination at the nearest water source plus a pipeline to the cell, with an official water-pipeline cost replacing the district-heating proxy; sea and permanent lakes are sources at the same 2 USD/m³; no pumping for the elevation gain; the 1° geometry is kept. |
+| D4 | Water | **Decided 7 October** (section 0b): desalination at the nearest water source plus a pipeline to the cell, with an official water-pipeline cost replacing the district-heating proxy; sea, permanent lakes and (decided 9 October) large rivers are sources at the same 2 USD/m³; no pumping for the elevation gain; the 1° geometry is kept. |
 | D5 | Finance sensitivity | **Ameli low-carbon (current) WACC**: Australia 6.1 %, Middle East 6.8 %, Central and South America 9.2 %, Africa 11.8 %. It would favour Australia over Chile and North Africa. The reduced series is 5.1 % almost everywhere and moves LCOA by under 1 % against the flat 5 %. |
 | D6 | Network tolerance | **1 %** (your instruction): the solver stops at a 1 % gap and results are accepted at 1 %. |
 | D7 | Weather | The 2019 legacy stack for every run (your instruction), in `data/weather_data/salmon2022_pv_wind_2019_hourly_1deg/`: hourly 2019 output per unit of capacity for fixed PV, tracking PV and wind on a 1° grid, as used by Salmon and Bañares-Alcántara (2022). The comparison with our own ERA5 cutouts is deferred. |
@@ -192,6 +192,9 @@ source to the cell, added to the LCOA after the solve at 1.5 m³ per tonne of am
   03 reservoir and 06 other permanent waterbody are sources; 20-21 ephemeral and 32 salt pan are
   not. To check in step 3: which class the database gives Kati Thanda–Lake Eyre (if saline
   lake, permanence needs a further test).
+  **Decided 9 October**: large rivers (GLWD 04 large river, 05 large estuarine river) are sources
+  too, where they cover at least 1 % of the cell (a river is long and narrow, so the 10 % of
+  standing water would leave the Amazon, Congo and Siberian rivers out).
 - **Same source price for sea and lake**, 2 USD/m³ (coastal desalination). Lake water could be
   treated more cheaply, but charging the desalination price is a deliberate shadow price that
   protects freshwater for other uses. Stated in the code (the tech YAMLs and, from step 3,
@@ -419,8 +422,10 @@ Done and still to do in this step (8 October):
   at your request; its folder holds a CANCELLED.md note.
 - **Site-cost table of the 20 % table** (GHD 2025): `inputs/site_costs/site_costs_center_20pct_slope20.csv`,
   every run cell covered. In half the run cells the equipment and installation factors are at
-  their caps (1.10, 1.34); 27 cells pay a slope factor (at most 1.095); water 5.5 USD/m3 median
-  (90th percentile 15.6). World maps: `results/campaigns/site_costs_review_20261008/maps/`.
+  their caps (1.10, 1.34); 27 cells pay a slope factor (at most 1.095); water 4.5 USD/m3 median
+  (90th percentile 12.1) with the rivers of 9 October, 5.5 (15.6) before. World maps:
+  `results/campaigns/site_costs_review_20261008/maps/`; the water map with rivers in
+  `results/campaigns/site_costs_review_20261009/maps/`.
 - **Weather land correction**: the first factors (job 13441218, release
   `20261008-weather-land-v1`) corrected PV wrongly, because the ERA5 stores hold no PV at sea,
   and nearly removed the wind of some steep coasts (Atacama: ERA5 land capacity factor 0.003);
@@ -433,11 +438,13 @@ Done and still to do in this step (8 October):
   Atacama coast keeps its hinterland's wind instead of ERA5's near-zero). Key-run LCOA, full year:
   Gladstone coast (23 S 151 E) 321 to 357 EUR/t, Perth coast 313 to 327, Ningaloo 328 to 331,
   inland Pilbara unchanged. Campaign runs set `weather_land_correction` to this file.
-- **Open, for you: rivers as water sources.** Section 0b counts the sea, lakes and reservoirs;
-  large rivers (GLWD classes 04-05) are not sources, so the Amazon interior pays 20 USD/m3 or more
-  beside its river. Counting rivers that cover at least 1 % of a cell would bring 5,031 run cells
-  closer to water (Amazon median distance 556 to 111 km, Congo 398 to 157, Siberia 229 to 94;
-  Australia and Chile unchanged), at the same shadow price. Recommended.
+- **Rivers as water sources, decided 9 October** (section 0b): large rivers covering at least
+  1 % of a cell are sources, at the same shadow price. 1,082 more cells hold a source (38,457 in
+  all); 5,065 of the 16,885 run cells get cheaper water and none dearer. Median distance to water:
+  Amazon 556 to 111 km, Congo 398 to 157, Siberia 229 to 94, Sahara 667 to 556 (the Nile);
+  Australia unchanged, Chile 111 to 106. Water over the run cells: median 5.54 to 4.48 USD2020/m3;
+  at 1.5 m3/t the cells that gain save 6 USD/t of ammonia at the median, 41 at most.
+  `cell_geography.csv` keeps the distance without rivers (`water_source_distance_km_without_rivers`).
 - Done for runs with site costs (commit d99ad1c): the `site_costs_<finance>_no_land_rent` cost
   scope in the manifest, the QA checks per cell, the wrapper and shard job passing the table.
 

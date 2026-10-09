@@ -11,7 +11,7 @@ beside it giving the inputs' hashes.
 | `aurecon2024_location_factors.csv` | Aurecon (2024), *2024 Energy Technology Cost and Technical Parameter Review*, revision 3 (6 December 2024), for AEMO: Table 11-1, the location factors of 77 sites in the NEM states, transcribed by hand on 7 October 2026. Every row passes the table's own arithmetic (installation = (location - 0.6 x equipment) / 0.4 within rounding, O&M = (location + installation) / 2) | hand |
 | `ghd2025_location_factors.csv` | GHD (2025), *2025 Energy Technology Cost and Technical Parameter Review*, draft report Rev C (28 November 2025), for AEMO's draft 2026 Forecasting Assumptions Update: Table 8.3, the factors of 110 sites, transcribed on 7 October 2026. Equipment factors by distance from a major port (1.00, 1.05, 1.10); installation factors from Rawlinsons (2025) regional cost maps, including each capital's price level | hand |
 | `ghd2025_capital_installation_factors.csv` | GHD (2025) Table 8.2: the capital cities' installation factors relative to Melbourne | hand |
-| `cell_geography.csv` | Every 1-degree cell from 55 S to 83 N: travel time to the nearest city of 5,000 to 5 million people (median over the cell's land pixels), distance to the nearest network port, sea and inland-water areas by class, whether the cell holds a water source and the distance to the nearest one (also with every saline lake and with none) | `python -m model.site_geography cells` |
+| `cell_geography.csv` | Every 1-degree cell from 55 S to 83 N: travel time to the nearest city of 5,000 to 5 million people (median over the cell's land pixels), distance to the nearest network port, sea and inland-water areas by class, whether the cell holds a water source (sea and lakes at least 10 % of it, or large rivers at least 1 %) and the distance to the nearest one (also with every saline lake, with none, and without the rivers) | `python -m model.site_geography cells` |
 | `gsw_permanent_water.csv` | For the 134 cells that would hold a water source only through a saline lake: the area where the JRC Global Surface Water occurrence layer shows water in at least half of the observations of 1984-2021, read remotely on 8 October 2026; 109 of them pass the 10 % threshold | the same, kept between runs |
 | `calibration_sites.csv` | The sites of both tables, located with the GeoNames gazetteer of Australia (Texas, Kingston SE, Campbelltown and Derwent Valley under their gazetteer names; Cardowan is a homestead, not a town), with their travel times and their distances to the nearest network port and to the state capital's port | `python -m model.site_geography sites` |
 | `remoteness_fit.json`, `remoteness_fit.md` | The fit of the equipment and installation factors to each table, and the report with every site's residual | `python -m model.site_geography fit` |
@@ -40,8 +40,10 @@ directly. The largest misses of both fits are regional cities far from their cap
 
 ## Water
 
-The source price is the technology YAML's baseline water price (2 EUR2020 per m3 in the
-campaign YAML), at sea and lake alike; at lakes it is a shadow price that protects freshwater.
+Sources are the sea, permanent lakes and reservoirs covering at least 10 % of a cell, and large
+rivers covering at least 1 % (GLWD classes 04-05, added on 9 October 2026). The source price is
+the technology YAML's baseline water price (2 EUR2020 per m3 in the campaign YAML), at sea, lake
+and river alike; inland it is a shadow price that protects freshwater.
 The pipeline from the nearest source is costed with the Texas Water Development Board's Uniform
 Costing Model (2018 unit costs, rural soil) for one plant's 1.5 million m3 a year: the
 least-cost standard diameter is 12 inches (0.65 m/s), a booster station every 70 km, 30 % (pipe)

@@ -330,9 +330,9 @@ def write_site_cost_table(
         pd.read_csv(geography_csv),
         load_remoteness_fit(fit_json, remoteness_source),
         # The source price is the YAML's baseline (the flat runs' price): the desalination price
-        # at sea and lake alike. Lake water could be treated more cheaply; charging the
+        # at sea, lake and river alike. Fresh water could be treated more cheaply; charging the
         # desalination price is a deliberate shadow price that protects freshwater for other uses
-        # (decision of 7 October 2026, stated in the paper).
+        # (decisions of 7 and 9 October 2026, stated in the paper).
         water_source_usd_per_m3=float(meta["water_cost_baseline_usd_per_m3"]),
         water_m3_per_t=float(meta["water_usage_m3_per_t_nh3"]),
     )

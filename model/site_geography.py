@@ -18,9 +18,10 @@ cells
     - the great-circle distance from the cell centre to the nearest of the 1,377 ports of the
       shipping network (data/ports/verschuur2024_ports.csv);
     - water: the area of sea (outside the land mask of GLWD v2), of each kind of inland water
-      (WATER_CLASSES), whether the cell holds a water source (WATER_SOURCE_CLASSES, at least
-      WATER_SOURCE_MIN_SHARE of the cell) and the great-circle distance between cell centres to
-      the nearest cell that does.
+      (WATER_CLASSES), whether the cell holds a water source (WATER_SOURCE_CLASSES covering at
+      least WATER_SOURCE_MIN_SHARE of the cell, or RIVER_SOURCE_CLASSES at least
+      RIVER_SOURCE_MIN_SHARE) and the great-circle distance between cell centres to the nearest
+      cell that does.
 sites
     The sites of the two AEMO location-factor tables (inputs/site_costs/*_location_factors.csv),
     located with the GeoNames gazetteer of Australia, with their travel times (at the site) and
@@ -107,6 +108,13 @@ GLWD_NORTH, GLWD_SOUTH = 84.0, -56.0
 # used before (then any water of the 2022 land cover).
 WATER_SOURCE_CLASSES = ("sea_km2", "fresh_lake_km2", "saline_lake_km2", "reservoir_km2", "other_permanent_water_km2")
 WATER_SOURCE_MIN_SHARE = 0.10
+# Large rivers (decision of 9 October 2026): GLWD classes 04 large river and 05 large estuarine
+# river are sources where they cover at least 1 % of the cell (about 120 km2 at the equator, a
+# river about 1 km wide across the cell). A river is long and narrow, so the 10 % of standing
+# water would leave out the Amazon, Congo and Siberian rivers beside which cells would pay for
+# hundreds of kilometres of pipeline.
+RIVER_SOURCE_CLASSES = ("large_river_km2",)
+RIVER_SOURCE_MIN_SHARE = 0.01
 # GLWD's saline lakes include salt lakes that are dry most years (Kati Thanda-Lake Eyre, Lake
 # Torrens, Makgadikgadi, Salar de Uyuni). Where a cell would hold a source only through its
 # saline lake, the lake counts only as far as the JRC Global Surface Water occurrence layer
@@ -306,12 +314,25 @@ def _append_gsw_cache(path: Path, key: tuple[float, float], km2: float) -> None:
         handle.write(f"{key[0]:g},{key[1]:g},{km2:.3f},{GSW_PERMANENT_OCCURRENCE_PCT},{stamp}\n")
 
 
-def water_sources(cells: pd.DataFrame, classes=WATER_SOURCE_CLASSES, min_share: float = WATER_SOURCE_MIN_SHARE) -> pd.DataFrame:
-    """Whether each cell holds a water source, its kind, and the distance to the nearest source cell."""
+def water_sources(
+    cells: pd.DataFrame,
+    classes=WATER_SOURCE_CLASSES,
+    min_share: float = WATER_SOURCE_MIN_SHARE,
+    river_classes=RIVER_SOURCE_CLASSES,
+    river_min_share: float = RIVER_SOURCE_MIN_SHARE,
+) -> pd.DataFrame:
+    """Whether each cell holds a water source, its kind, and the distance to the nearest source cell.
+
+    A cell holds a source if the standing water of `classes` covers `min_share` of it or the
+    rivers of `river_classes` cover `river_min_share` (no rivers: river_classes=()). The kind is
+    sea or lake by the larger standing water, or river where only the rivers make the source.
+    """
     source_km2 = cells[list(classes)].sum(axis=1)
-    is_source = source_km2 >= min_share * cells["cell_area_km2"]
+    standing = source_km2 >= min_share * cells["cell_area_km2"]
+    river = cells[list(river_classes)].sum(axis=1) >= river_min_share * cells["cell_area_km2"]
+    is_source = standing | river
     lake_km2 = source_km2 - cells["sea_km2"]
-    kind = np.where(cells["sea_km2"] >= lake_km2, "sea", "lake")
+    kind = np.where(~standing, "river", np.where(cells["sea_km2"] >= lake_km2, "sea", "lake"))
     sources = cells.loc[is_source]
     distance, index = nearest_km(cells["latitude"], cells["longitude"], sources["latitude"], sources["longitude"])
     distance = np.where(is_source, 0.0, distance)
@@ -358,10 +379,16 @@ def build_cell_geography(
     water["saline_lake_counted_km2"] = water["saline_lake_km2"]
     water.loc[candidates, "saline_lake_counted_km2"] = np.minimum(
         water.loc[candidates, "saline_lake_km2"], water.loc[candidates, "gsw_permanent_water_km2"])
-    water = water.join(water_sources(water, classes=(*others, "saline_lake_counted_km2")))
-    # the distances with every saline lake and with none, to show what the test changes
-    for suffix, classes in (("with_all_saline_lakes", WATER_SOURCE_CLASSES), ("without_saline_lakes", tuple(others))):
-        water[f"water_source_distance_km_{suffix}"] = water_sources(water, classes=classes)["water_source_distance_km"]
+    counted = (*others, "saline_lake_counted_km2")
+    water = water.join(water_sources(water, classes=counted))
+    # the distances with every saline lake, with none and without the rivers, to show what the
+    # permanence test and the river rule change
+    for suffix, options in (
+        ("with_all_saline_lakes", {"classes": WATER_SOURCE_CLASSES}),
+        ("without_saline_lakes", {"classes": tuple(others)}),
+        ("without_rivers", {"classes": counted, "river_classes": ()}),
+    ):
+        water[f"water_source_distance_km_{suffix}"] = water_sources(water, **options)["water_source_distance_km"]
 
     cells = water
     ports = pd.read_csv(ports_csv)
