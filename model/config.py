@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .parameters import parameter
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 INPUTS_DIR = REPO_ROOT / "inputs"
@@ -55,25 +57,29 @@ FINANCE_DIR = INPUTS_DIR / "finance"
 DEFAULT_TECH_YAML = TECH_DIR / "tech_config_ammonia_plant_2050_dea_colocated.yaml"
 DEFAULT_PLANT_DIR = PLANTS_DIR / "ammonia_plant_1mt"
 
-# Slope classes of the land tables (column, upper bound in degrees, inclusive), as decided on
-# 7 October 2026 (CAMPAIGN_PLAN.md, section 0a): no cost uplift up to 8.5 degrees (15 % grade),
-# then 8.5 to 14 and 14 to 20 degrees; land above 20 degrees is excluded. Each column is the
-# percentage of a cell's land (GEBCO elevation above zero) in the class. model/land_table.py
-# fills them; model/site_costs.py holds the cost factor of each class.
+# Slope classes of the land tables (column, upper bound in degrees, inclusive), from the bounds
+# in inputs/parameters.yaml (land.slope_class_upper_deg), with a last class above the last bound,
+# which is excluded. Each column is the percentage of a cell's land (GEBCO elevation above zero)
+# in the class, e.g. land_pct_slope_8p5_to_14deg. model/land_table.py fills them;
+# model/site_costs.py gives each class up to the last bound its cost factor.
+def _degrees_token(value: float) -> str:
+    return f"{value:g}".replace(".", "p")
+
+
+_SLOPE_BOUNDS = [float(bound) for bound in parameter("land.slope_class_upper_deg")]
 SLOPE_CLASSES = (
-    ("land_pct_slope_upto_8p5deg", 8.5),
-    ("land_pct_slope_8p5_to_14deg", 14.0),
-    ("land_pct_slope_14_to_20deg", 20.0),
-    ("land_pct_slope_above_20deg", float("inf")),
+    (f"land_pct_slope_upto_{_degrees_token(_SLOPE_BOUNDS[0])}deg", _SLOPE_BOUNDS[0]),
+    *((f"land_pct_slope_{_degrees_token(low)}_to_{_degrees_token(high)}deg", high)
+      for low, high in zip(_SLOPE_BOUNDS, _SLOPE_BOUNDS[1:])),
+    (f"land_pct_slope_above_{_degrees_token(_SLOPE_BOUNDS[-1])}deg", float("inf")),
 )
 SLOPE_CLASS_COLUMNS = tuple(column for column, _ in SLOPE_CLASSES)
 
-# Mean Earth radius for areas and great-circle distances
-EARTH_RADIUS_KM = 6371.0
-
-# Higher heating values used to convert energy flows to tonnes
-HYDROGEN_HHV_MWH_PER_T = 39.4
-AMMONIA_HHV_MWH_PER_T = 6.25
+# Physical constants (inputs/parameters.yaml, physical): the mean Earth radius for areas and
+# great-circle distances, and the higher heating values that convert energy flows to tonnes
+EARTH_RADIUS_KM = float(parameter("physical.earth_radius_km"))
+HYDROGEN_HHV_MWH_PER_T = float(parameter("physical.hydrogen_hhv_mwh_per_t"))
+AMMONIA_HHV_MWH_PER_T = float(parameter("physical.ammonia_hhv_mwh_per_t"))
 
 
 def repo_path(path: str | Path) -> Path:

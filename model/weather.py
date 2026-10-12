@@ -24,11 +24,12 @@ import pandas as pd
 import xarray as xr
 
 from .config import repo_path
+from .parameters import parameter
 
 LOGGER = logging.getLogger(__name__)
 
-# Wind output is reduced by 7 % for wake losses inside the farm
-WIND_WAKE_FACTOR = 0.93
+# Wind output after wake losses inside the farm (inputs/parameters.yaml)
+WIND_WAKE_FACTOR = float(parameter("weather.wind_wake_factor"))
 
 # resource name -> (file-name prefix, NetCDF variable)
 RESOURCES = {

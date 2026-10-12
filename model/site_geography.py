@@ -53,6 +53,7 @@ from .config import (
     PORTS_CSV,
     SITE_COSTS_DIR,
 )
+from .parameters import file_record, parameter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -101,29 +102,22 @@ GLWD_NODATA = 255
 GLWD_PIXELS_PER_DEGREE = 240
 GLWD_NORTH, GLWD_SOUTH = 84.0, -56.0
 
-# Water sources (decision of 7 October 2026, CAMPAIGN_PLAN.md section 0b): the sea and
-# permanent lakes and reservoirs, GLWD classes 01 freshwater lake, 02 saline lake, 03 reservoir
-# and 06 other permanent waterbody; not ephemeral water (20, 21) or salt pans (32). A cell holds
-# a source if the sea and these waters cover at least 10 % of it, the share the spatial inputs
-# used before (then any water of the 2022 land cover).
-WATER_SOURCE_CLASSES = ("sea_km2", "fresh_lake_km2", "saline_lake_km2", "reservoir_km2", "other_permanent_water_km2")
-WATER_SOURCE_MIN_SHARE = 0.10
-# Large rivers (decision of 9 October 2026): GLWD classes 04 large river and 05 large estuarine
-# river are sources where they cover at least 1 % of the cell (about 120 km2 at the equator, a
-# river about 1 km wide across the cell). A river is long and narrow, so the 10 % of standing
-# water would leave out the Amazon, Congo and Siberian rivers beside which cells would pay for
-# hundreds of kilometres of pipeline.
-RIVER_SOURCE_CLASSES = ("large_river_km2",)
-RIVER_SOURCE_MIN_SHARE = 0.01
-# GLWD's saline lakes include salt lakes that are dry most years (Kati Thanda-Lake Eyre, Lake
-# Torrens, Makgadikgadi, Salar de Uyuni). Where a cell would hold a source only through its
-# saline lake, the lake counts only as far as the JRC Global Surface Water occurrence layer
-# (Pekel et al. 2016, version 1.4, 1984-2021, 0.00025 degrees) shows water in at least half of
-# the observations. The tiles are read remotely, cell by cell; the result is kept in the table.
+# Water sources (inputs/parameters.yaml, water_sources): a cell holds a source if the standing
+# water of WATER_SOURCE_CLASSES covers WATER_SOURCE_MIN_SHARE of it, or the large rivers of
+# RIVER_SOURCE_CLASSES cover RIVER_SOURCE_MIN_SHARE (columns of cell_geography.csv). GLWD's saline
+# lakes include salt lakes that are dry most years (Kati Thanda-Lake Eyre, Lake Torrens,
+# Makgadikgadi, Salar de Uyuni): where a cell would hold a source only through its saline lake,
+# the lake counts only as far as the JRC Global Surface Water occurrence layer (version 1.4,
+# 1984-2021, 0.00025 degrees) shows water in at least GSW_PERMANENT_OCCURRENCE_PCT % of the
+# observations. The tiles are read remotely, cell by cell; the result is kept in the table.
+WATER_SOURCE_CLASSES = tuple(parameter("water_sources.standing_columns"))
+WATER_SOURCE_MIN_SHARE = float(parameter("water_sources.standing_min_share"))
+RIVER_SOURCE_CLASSES = tuple(parameter("water_sources.river_columns"))
+RIVER_SOURCE_MIN_SHARE = float(parameter("water_sources.river_min_share"))
+GSW_PERMANENT_OCCURRENCE_PCT = int(parameter("water_sources.saline_lake_min_occurrence_pct"))
 GSW_OCCURRENCE_URL = (
     "https://storage.googleapis.com/global-surface-water/downloads2021/occurrence/occurrence_{tile}v1_4_2021.tif"
 )
-GSW_PERMANENT_OCCURRENCE_PCT = 50
 GSW_PIXELS_PER_DEGREE = 4000
 
 # GeoNames admin1 codes of the Australian states; Canberra (ACT) is listed under NSW by GHD
@@ -639,6 +633,7 @@ def _write_with_provenance(frame: pd.DataFrame, path: Path, inputs: dict[str, Pa
         "written_by": "python -m model.site_geography",
         "rows": int(len(frame)),
         "sha256": _file_sha256(path),
+        "parameters": file_record(),
         "inputs": {name: {"path": str(source), "sha256": _file_sha256(source)} for name, source in inputs.items()},
     }
     path.with_name(path.stem + "_provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")

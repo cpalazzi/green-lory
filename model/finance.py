@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import COUNTRIES_GEOJSON, FINANCE_DIR
+from .config import COUNTRIES_GEOJSON, EARTH_RADIUS_KM, FINANCE_DIR
 
 AMELI_WACC_TABLE = FINANCE_DIR / "ameli_tiam_wacc_fig2.csv"
 SCENARIO_COLUMN = {
@@ -153,7 +153,7 @@ def fill_from_nearest(cells: pd.DataFrame, table: pd.DataFrame) -> tuple[pd.Data
             d = np.arccos(np.clip(np.sin(rad(lat)) * np.sin(c_lat) + np.cos(rad(lat)) * np.cos(c_lat) * np.cos(rad(lon) - c_lon), -1, 1))
             j = int(np.argmin(d))
             src_lat, src_lon = float(covered["lat"].iloc[j]), float(covered["lon"].iloc[j])
-            fill_rows.append({"lat": lat, "lon": lon, "source_lat": src_lat, "source_lon": src_lon, "distance_km": float(d[j] * 6371.0)})
+            fill_rows.append({"lat": lat, "lon": lon, "source_lat": src_lat, "source_lon": src_lon, "distance_km": float(d[j] * EARTH_RADIUS_KM)})
     fills = pd.DataFrame(fill_rows, columns=["lat", "lon", "source_lat", "source_lon", "distance_km"])
     frames = [table[["lat", "lon", "tech", "interest_rate"]]]
     for _, f in fills.iterrows():

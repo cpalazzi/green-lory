@@ -32,7 +32,7 @@ cell's land can host. Its supplier tables feed the green-porpoise shipping-netwo
 | Path | Contents |
 |---|---|
 | `model/` | the green-lory model library: `technology` (YAML costs and efficiencies), `weather`, `plant` (one plant), `accounting`, `land` (land budgets and capacity rules), `land_table` (land tables), `site_costs` and `site_geography` (location factors of the cost), `surface` (many cells), `runs` and `cli` (the run definitions and the `green-lory` command), `results` (results by run id, tables, maps), `suppliers` (supplier tables for the network model); `plants/ammonia_plant_1mt/` is the plant ([model/README.md](model/README.md)) |
-| `inputs/` | the model's inputs other than raw data, by topic: `tech/` (technology cost YAMLs), `finance/` (interest rates), `site_costs/`, `weather/`, `cells/`; [inputs/README.md](inputs/README.md) lists every file |
+| `inputs/` | the model's inputs other than raw data: `parameters.yaml` (every modelling assumption other than technology costs, with its source), and by topic `tech/` (technology cost YAMLs), `finance/` (interest rates), `site_costs/`, `weather/`, `cells/`; [inputs/README.md](inputs/README.md) lists every file |
 | `runs.yaml` | run definitions: every setting of every run and network we keep |
 | `run_store.csv` | the execution record: when, where and with what result each run ran |
 | `legacy_lcoa/` | the legacy-lcoa model reproduced end to end: frozen source, harness, land step, capacity rule, supplier table |

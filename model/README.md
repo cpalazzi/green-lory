@@ -6,7 +6,8 @@ a run uses them:
 
 | Module | Role |
 |---|---|
-| `config.py` | Paths (data, inputs, plant bundle), the default YAML and bundle, physical constants |
+| `parameters.py` | The modelling assumptions other than technology costs and the physical constants, read from `../inputs/parameters.yaml`; every module takes its values from there |
+| `config.py` | Paths (data, inputs, plant bundle), the default YAML and bundle, the slope classes, physical constants |
 | `technology.py` | The technology YAML (with `extends:`): link efficiencies from each link's recipe, annualised costs, and the per-cell override table (interest rates, build-cost multipliers, water and land prices) |
 | `finance.py` | The per-cell interest-rate (WACC) tables runs pin as `finance_csv`: uniform, or Ameli et al. (2021) by TIAM-UCL region (`python -m model.finance --help`) |
 | `weather.py` | Hourly PV and wind profiles of a cell from the NetCDF stack, and block averages for coarser steps |
@@ -58,12 +59,14 @@ at the cell's interest rate; fixed O&M is a share of that cost, so it follows bo
 |---|---|---|---|---|
 | Equipment (transport of plant and materials) | `tech_cost_per_mw`, every technology | `site_costs.equipment_multiplier`: 1 + a x great-circle distance to the nearest network port, capped | `../inputs/site_costs/cell_geography.csv` (`port_distance_km`), from `../data/ports/verschuur2024_ports.csv` | AEMO's equipment cost factors, fitted in `../inputs/site_costs/remoteness_fit.json` to GHD (2025) Table 8.3 or Aurecon (2024) Table 11-1; nearest-port basis as in AEMO (2025) |
 | Installation (labour, materials, mobilisation) | `build_cost_per_mw`, every technology | `site_costs.installation_multiplier`: 1 + b x min(travel time to the nearest city of at least N people, saturation) | `cell_geography.csv` (median over the cell's land), from Nelson et al. (2019) | AEMO's installation cost factors, same fit (N and the saturation by leave-one-out cross-validation) |
-| Slope | `build_cost_per_mw` of PV and wind | `site_costs.slope_multiplier`: 1.0 / 1.3 / 1.6 for land up to 8.5, 14 and 20 degrees, the plant's land share taken flattest first | the land table's `land_pct_slope_*` columns (`land_table.py`, from GEBCO) | Lopez et al. (2025), Table 12 (terrain multipliers); limits as decided on 7 October 2026 |
+| Slope | `build_cost_per_mw` of PV and wind | `site_costs.slope_multiplier`: 1.0 / 1.3 / 1.6 for land up to 8.5, 14 and 20 degrees (`../inputs/parameters.yaml`), the plant's land share taken flattest first | the land table's `land_pct_slope_*` columns (`land_table.py`, from GEBCO) | Lopez et al. (2025), Table 12 (terrain multipliers); limits as decided on 7 October 2026 |
 | Depth | `build_cost_per_mw` | 1 for every onshore cell (offshore cells are not in the table) | | |
 | Labour level | `build_cost_per_mw` | 1 everywhere: no wage level by country; finance differences are the finance table's | | |
 | Water | the LCOA, after the solve, at 1.5 m3/t | `site_costs.site_cost_table`: source price + distance to the nearest source x pipeline cost per m3 and km (`site_costs.water_pipeline_cost`); the pipeline's materials (30 %) take the equipment multiplier, the rest the PV and wind build multiplier | `cell_geography.csv`: sea and permanent lakes and reservoirs (GLWD v2 classes 1, 2, 3, 6; saline lakes only where the JRC Global Surface Water shows water at least half the time) covering at least 10 % of a cell, or large rivers (classes 4, 5) covering at least 1 % | Source price: the YAML's baseline, also a shadow price at lakes; pipeline: TWDB Uniform Costing Model (HDR and Freese and Nichols 2018); Lehner et al. (2025); Pekel et al. (2016) |
 | Land rent | the LCOA | 0 everywhere | | |
 
+The values behind these mechanisms (the AEMO table chosen, the slope factors, the water-source
+thresholds, the pipeline's unit costs) are in `../inputs/parameters.yaml`, each with its source.
 Inputs are built once from the rasters of `../data/README.md` by `site_geography.py`
 (`python -m model.site_geography cells | sites | fit`); `../inputs/site_costs/README.md`
 describes them and the fit.

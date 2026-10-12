@@ -1,0 +1,163 @@
+# Model parameters: the modelling assumptions other than technology costs, and the physical
+# constants, each with its source.
+#
+# Elsewhere: technology costs, lifetimes, efficiencies, water use and the water source price in
+# tech/; what differs between runs (time step, land share, finance, which tables) in
+# ../runs.yaml; the remoteness factors fitted to the AEMO tables in
+# site_costs/remoteness_fit.json. model/parameters.py reads this file; the land, geography and
+# site-cost tables and the run manifests record its hash, and tests/test_parameters.py checks
+# that the model reads every value. Full references: README.md (this folder),
+# ../CAMPAIGN_PLAN.md (References) and ../data/README.md.
+
+land:
+  # Share of each IGBP land-cover class (MODIS MCD12C1, Land Cover Type 1) that each technology
+  # may use, after Salmon and Banares-Alcantara (2022, Table 1) and Verschuur et al. (2024);
+  # unlisted classes give none. Wind coexists with farming; PV excludes cropland but takes a
+  # rooftop share of urban land.
+  #   0 water; 1-5 forests; 6 closed shrublands; 7 open shrublands; 8 woody savannas;
+  #   9 savannas; 10 grasslands; 11 permanent wetlands; 12 croplands; 13 urban and built-up;
+  #   14 cropland and natural vegetation mosaics; 15 snow and ice; 16 barren; 17 unclassified
+  wind_class_availability:
+    0: 1.0  # water: offshore wind only, which the campaign leaves out
+    6: 0.5
+    7: 0.5
+    8: 0.2
+    9: 0.2
+    10: 0.2
+    12: 0.05
+    14: 0.05
+    16: 1.0
+  solar_class_availability:
+    6: 0.5
+    7: 0.5
+    8: 0.2
+    9: 0.2
+    10: 0.2
+    13: 0.03  # rooftop PV
+    16: 1.0
+  # Protected land: WDPA polygons (February 2026) of these statuses are excluded
+  protected_area_statuses: [designated, inscribed, established]
+  # Slope classes of the land tables, upper bounds in degrees (GEBCO 2025): no build-cost uplift
+  # up to 8.5 degrees (15 % grade, the limit of standard single-axis trackers); land above the
+  # last bound is excluded (decided 7 October 2026, CAMPAIGN_PLAN.md section 0a; the September
+  # tables excluded land above 15 degrees)
+  slope_class_upper_deg: [8.5, 14.0, 20.0]
+  # Wind farm footprint per GW, for turbine spacing (Salmon et al. 2021)
+  wind_land_use_km2_per_gw: 200.0
+  # Fixed-tilt PV density: First Solar Series 6 modules (2018) packed in rows that do not shade
+  # each other at noon on the winter solstice, as in van de Ven et al. (2021); tilt equal to the
+  # latitude within the bounds, the ground cover ratio within its bounds
+  solar_module_width_m: 1.21
+  solar_module_length_m: 2.06
+  solar_module_power_kw: 0.45
+  solar_min_tilt_deg: 15.0
+  solar_max_tilt_deg: 55.0
+  solar_min_sun_altitude_deg: 5.0
+  solar_min_ground_cover_ratio: 0.05
+  solar_max_ground_cover_ratio: 0.8
+
+# The cells a campaign solves (land_table.run_cells, on the 100 % land table): at least this
+# share of land, this much area suitable for PV or wind, north of this latitude (no
+# Antarctica). The rule gives exactly the 16,509 cells of the September key runs.
+run_cells:
+  min_land_pct: 0.1
+  min_suitable_km2: 1.0
+  south_limit_deg: -60.0
+
+weather:
+  # Wind output after wake losses inside the farm: the legacy model's factor (wake_losses in
+  # Salmon's p_location_class.py, legacy_lcoa/source/)
+  wind_wake_factor: 0.93
+  # Land correction of the wind of cells with water (model/weather_land.py, 8 October 2026)
+  land_correction:
+    # cells with less land than this share (at least 1 % water) are corrected
+    full_land_share: 0.99
+    # month-hour bins whose whole-cell ERA5 wind is below this capacity factor take the cell's
+    # annual ratio instead of their own
+    calm_capacity_factor: 0.02
+    # neighbours with at least this land share count as fully inland for the floor
+    inland_land_share: 0.99
+
+# Water sources (CAMPAIGN_PLAN.md section 0b; decided 7 and 9 October 2026): a cell holds a source
+# if the sea and permanent lakes and reservoirs cover at least standing_min_share of it, or large
+# rivers river_min_share. The columns are those of site_costs/cell_geography.csv, from the Global
+# Lakes and Wetlands Database v2 (Lehner et al. 2025): fresh lakes 01, saline lakes 02,
+# reservoirs 03, large rivers 04-05, other permanent water 06. Ephemeral water (20, 21) and salt
+# pans (32) are not sources.
+water_sources:
+  standing_columns: [sea_km2, fresh_lake_km2, saline_lake_km2, reservoir_km2, other_permanent_water_km2]
+  standing_min_share: 0.10  # the share the spatial inputs used before
+  river_columns: [large_river_km2]
+  river_min_share: 0.01  # about 120 km2 at the equator: a river about 1 km wide across the cell
+  # A saline lake counts only where the JRC Global Surface Water occurrence layer (Pekel et al.
+  # 2016, version 1.4) shows water in at least this percentage of observations; dry salt lakes
+  # such as Kati Thanda-Lake Eyre fail
+  saline_lake_min_occurrence_pct: 50
+
+site_costs:
+  # The AEMO location-factor table the remoteness factors are fitted to: ghd2025 (GHD 2025,
+  # Table 8.3) or aurecon2024 (Aurecon 2024, Table 11-1); chosen 8 October 2026
+  remoteness_source: ghd2025
+  # Build-cost factor of each slope class (land.slope_class_upper_deg): none up to 8.5 degrees,
+  # then the middle of NREL's hilly (1.1-1.5) and mountainous (1.2-2.0) civil-works multipliers
+  # (Lopez et al. 2025, Table 12); decided 7 October 2026
+  slope_class_factors: [1.0, 1.3, 1.6]
+  # The technologies whose build cost the slope factor scales
+  slope_techs: [solar, solar_tracking, wind]
+  # Water depth and labour (wage level by country) multipliers: 1, since the campaign is onshore
+  # and finance differences are the finance table's
+  depth_multiplier: 1.0
+  labour_multiplier: 1.0
+  # Water pipeline from the nearest source: the Texas Water Development Board's Uniform Costing
+  # Model (HDR and Freese and Nichols 2018, User's Guide v2.0, Appendix C, Tables 1 and 3;
+  # December 2017 dollars), sized for one plant's flow
+  water_pipeline:
+    reference_ammonia_t_per_year: 1000000.0  # one 1 Mt/yr plant, at the tech YAML's water use
+    # Pipe with appurtenances, rural, in soil (USD per foot), by diameter (inches)
+    rural_soil_usd_per_ft:
+      6: 24
+      8: 38
+      10: 52
+      12: 65
+      14: 79
+      16: 92
+      18: 106
+      20: 120
+      24: 147
+    pipe_engineering_contingency: 0.30  # engineering, legal and contingencies: pipes
+    other_engineering_contingency: 0.35  # the same: all other facilities
+    environmental_usd_per_mile: 25000.0  # environmental studies and mitigation, pipelines
+    booster_station_usd: 2760000.0  # the smallest booster station of the capacity table (5 MGD)
+    pipe_om_fraction: 0.01  # O&M per year, share of capital
+    pump_om_fraction: 0.025
+    power_usd_per_kwh: 0.08  # power cost of the 2021 Texas regional water plans
+    hazen_williams_c: 120.0
+    # Booster stations lift up to the pipe's pressure class less a residual pressure (psi)
+    pipe_class_psi: 200.0
+    residual_pressure_psi: 25.0
+    pump_efficiency: 0.75
+    # Annuity: the 5 % rate of the uniform-finance runs; 45 years for pipes (as the
+    # district-heating proxy the pipeline replaced) and 20 for pump stations (UCM's debt period)
+    discount_rate: 0.05
+    pipe_lifetime_years: 45.0
+    pump_lifetime_years: 20.0
+    # US CPI-U (BLS series CUUR0000SA0), to bring December 2017 dollars to 2020
+    cpi_dec2017: 246.524
+    cpi_2020: 258.811
+    # Share of the pipeline's capital that is materials, which takes the equipment multiplier;
+    # the rest takes the cell's build multiplier (DEA Technology Data for Energy Transport,
+    # district-heating transmission line 113)
+    materials_share: 0.30
+
+# Physical constants with a source; exact unit definitions (feet, miles, psi of water head,
+# hours in the model year) stay in the code
+physical:
+  earth_radius_km: 6371.0  # mean radius; cell areas and distances treat the Earth as a sphere
+  earth_axial_tilt_deg: 23.44  # the sun's declination at the solstices (PV row spacing)
+  # Higher heating values that convert energy flows to tonnes: 141.8 and 22.5 MJ/kg, the legacy
+  # model's values (legacy_lcoa/source/94de8ce/main.py and p_auxiliary.py)
+  hydrogen_hhv_mwh_per_t: 39.4
+  ammonia_hhv_mwh_per_t: 6.25
+  # Pumping energy of the water pipeline
+  gravity_m_per_s2: 9.81
+  water_density_kg_per_m3: 1000.0

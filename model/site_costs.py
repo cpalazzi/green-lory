@@ -11,8 +11,9 @@ For each onshore cell of a land table, site_cost_table() gives
   mobilisation from the city (AEMO's installation cost factor);
 - slope_multiplier, on the build part of PV and wind only: the mean factor of the slope classes
   of the land the plant's share takes, flattest first (SLOPE_CLASS_FACTORS);
-- depth_multiplier and labour_multiplier, both 1: the table covers onshore cells, and there is no
-  wage level by country (finance differences are the finance table's job);
+- depth_multiplier and labour_multiplier, both 1 (inputs/parameters.yaml): the table covers
+  onshore cells, and there is no wage level by country (finance differences are the finance
+  table's job);
 - the water price (USD/m3, the site-cost currency of the technology YAML): the source price
   plus a pipeline from the nearest water source (water_pipeline_cost).
 
@@ -40,12 +41,14 @@ import numpy as np
 import pandas as pd
 
 from .config import DEFAULT_TECH_YAML, SITE_COSTS_DIR, SLOPE_CLASS_COLUMNS, repo_path
+from .parameters import file_record, parameter
 
 CELL_GEOGRAPHY_CSV = SITE_COSTS_DIR / "cell_geography.csv"
 ONSHORE_LAND_PCT_MIN = 1e-6
 REMOTENESS_FIT_JSON = SITE_COSTS_DIR / "remoteness_fit.json"
 
-# The table the remoteness factors are fitted to (model/site_geography.py fits both):
+# The values below, with their sources: inputs/parameters.yaml, section site_costs.
+# The AEMO table the remoteness factors are fitted to (model/site_geography.py fits both):
 #   ghd2025      GHD (2025), 2025 Energy Technology Cost and Technical Parameter Review, draft
 #                report Rev C for AEMO, Table 8.3: equipment factors by distance from a major
 #                port, installation factors from Rawlinsons (2025) regional cost maps (divided
@@ -53,47 +56,41 @@ REMOTENESS_FIT_JSON = SITE_COSTS_DIR / "remoteness_fit.json"
 #   aurecon2024  Aurecon (2024), 2024 Energy Technology Cost and Technical Parameter Review,
 #                Rev 3, Table 11-1: equipment factors by distance from the state capital,
 #                installation factors derived from Rawlinsons (2024) location factors
-# The default is the more recent table (chosen on 8 October 2026).
 REMOTENESS_SOURCES = ("ghd2025", "aurecon2024")
-DEFAULT_REMOTENESS_SOURCE = "ghd2025"
+DEFAULT_REMOTENESS_SOURCE = str(parameter("site_costs.remoteness_source"))
 
-# Build-cost factor of each slope class (decided 7 October 2026; CAMPAIGN_PLAN.md section 0a):
-# no uplift up to 8.5 degrees (15 % grade, the limit of standard single-axis trackers), the
-# middle of NREL's hilly (1.1-1.5) and mountainous (1.2-2.0) terrain multipliers for civil works
-# (Lopez et al. 2025, Table 12) above; land above 20 degrees is excluded by the land table.
-SLOPE_CLASS_FACTORS = dict(zip(SLOPE_CLASS_COLUMNS[:3], (1.0, 1.3, 1.6)))
-SLOPE_TECHS = ("solar", "solar_tracking", "wind")
+# Build-cost factor of each slope class up to the slope limit (the land tables exclude the rest)
+_SLOPE_FACTORS = [float(factor) for factor in parameter("site_costs.slope_class_factors")]
+if len(_SLOPE_FACTORS) != len(SLOPE_CLASS_COLUMNS) - 1:
+    raise ValueError("site_costs.slope_class_factors needs one factor per slope class bound (land.slope_class_upper_deg)")
+SLOPE_CLASS_FACTORS = dict(zip(SLOPE_CLASS_COLUMNS[:-1], _SLOPE_FACTORS))
+SLOPE_TECHS = tuple(parameter("site_costs.slope_techs"))
+DEPTH_MULTIPLIER = float(parameter("site_costs.depth_multiplier"))
+LABOUR_MULTIPLIER = float(parameter("site_costs.labour_multiplier"))
 
-# Water pipeline: unit costs of the Texas Water Development Board's Uniform Costing Model
-# (HDR and Freese and Nichols 2018, User's Guide v2.0, Appendix C, Tables 1 and 3; December 2017
-# dollars), sized for one reference plant's flow. Rural pipelines in soil, with appurtenances,
-# by diameter (inches, USD per foot):
-UCM_RURAL_SOIL_USD_PER_FT = {6: 24, 8: 38, 10: 52, 12: 65, 14: 79, 16: 92, 18: 106, 20: 120, 24: 147}
-UCM_PIPE_ENGINEERING_CONTINGENCY = 0.30  # engineering, legal and contingencies, pipes
-UCM_OTHER_ENGINEERING_CONTINGENCY = 0.35  # the same, all other facilities
-UCM_ENVIRONMENTAL_USD_PER_MILE = 25_000.0  # environmental studies and mitigation, pipelines
-UCM_BOOSTER_STATION_USD = 2.76e6  # smallest booster pump station of the capacity table (5 MGD)
-UCM_PIPE_OM_FRACTION = 0.01  # O&M per year, share of capital (pipelines)
-UCM_PUMP_OM_FRACTION = 0.025  # the same, pump stations
-UCM_POWER_USD_PER_KWH = 0.08  # power cost of the 2021 regional water plans
-# Hydraulics: Hazen-Williams C of 120; stations lift up to a 200 psi pipe class less a 25 psi
-# residual pressure (123 m); pumps 75 % efficient; no lift for the elevation gain (section 0b).
-HAZEN_WILLIAMS_C = 120.0
-BOOSTER_HEAD_M = (200.0 - 25.0) * 0.70307
-PUMP_EFFICIENCY = 0.75
-# Annuity of the pipeline: the base 5 % rate of the uniform-finance runs, 45 years for pipes (as
-# the district-heating proxy it replaces) and 20 years for pump stations (UCM's debt period)
-PIPELINE_DISCOUNT_RATE = 0.05
-PIPE_LIFETIME_YEARS = 45.0
-PUMP_LIFETIME_YEARS = 20.0
-# US CPI-U (BLS series CUUR0000SA0): December 2017 246.524, 2020 annual average 258.811
-USD_DEC2017_TO_USD2020 = 258.811 / 246.524
-# Reference flow: one 1 Mt/yr plant at the YAML's water use (1.5 m3 per tonne of ammonia)
-REFERENCE_AMMONIA_T_PER_YEAR = 1.0e6
-# Share of the pipeline's capital cost that is materials, on the equipment multiplier; the rest
-# (installation and soft costs) takes the cell's build multiplier. DEA Technology Data for
-# Energy Transport, district-heating transmission line (113): materials 30 %.
-PIPELINE_MATERIALS_SHARE = 0.30
+# Water pipeline (site_costs.water_pipeline): unit costs of the Texas Water Development Board's
+# Uniform Costing Model in December 2017 dollars, sized for one reference plant's flow
+_PIPELINE = parameter("site_costs.water_pipeline")
+UCM_RURAL_SOIL_USD_PER_FT = {int(diameter): float(usd) for diameter, usd in _PIPELINE["rural_soil_usd_per_ft"].items()}
+UCM_PIPE_ENGINEERING_CONTINGENCY = float(_PIPELINE["pipe_engineering_contingency"])
+UCM_OTHER_ENGINEERING_CONTINGENCY = float(_PIPELINE["other_engineering_contingency"])
+UCM_ENVIRONMENTAL_USD_PER_MILE = float(_PIPELINE["environmental_usd_per_mile"])
+UCM_BOOSTER_STATION_USD = float(_PIPELINE["booster_station_usd"])
+UCM_PIPE_OM_FRACTION = float(_PIPELINE["pipe_om_fraction"])
+UCM_PUMP_OM_FRACTION = float(_PIPELINE["pump_om_fraction"])
+UCM_POWER_USD_PER_KWH = float(_PIPELINE["power_usd_per_kwh"])
+HAZEN_WILLIAMS_C = float(_PIPELINE["hazen_williams_c"])
+PSI_TO_M_WATER = 0.70307  # metres of water head per psi
+GRAVITY_M_PER_S2 = float(parameter("physical.gravity_m_per_s2"))
+WATER_DENSITY_KG_PER_M3 = float(parameter("physical.water_density_kg_per_m3"))
+BOOSTER_HEAD_M = (float(_PIPELINE["pipe_class_psi"]) - float(_PIPELINE["residual_pressure_psi"])) * PSI_TO_M_WATER
+PUMP_EFFICIENCY = float(_PIPELINE["pump_efficiency"])
+PIPELINE_DISCOUNT_RATE = float(_PIPELINE["discount_rate"])
+PIPE_LIFETIME_YEARS = float(_PIPELINE["pipe_lifetime_years"])
+PUMP_LIFETIME_YEARS = float(_PIPELINE["pump_lifetime_years"])
+USD_DEC2017_TO_USD2020 = float(_PIPELINE["cpi_2020"]) / float(_PIPELINE["cpi_dec2017"])
+REFERENCE_AMMONIA_T_PER_YEAR = float(_PIPELINE["reference_ammonia_t_per_year"])
+PIPELINE_MATERIALS_SHARE = float(_PIPELINE["materials_share"])
 
 
 def _sha256(path: Path) -> str:
@@ -130,10 +127,10 @@ def installation_multiplier(travel_min, b_per_hour: float, saturation_min: float
 def slope_multiplier(class_pcts: pd.DataFrame, land_share: float) -> np.ndarray:
     """Mean factor of the land a plant's share takes, flattest class first.
 
-    class_pcts holds, per cell, the percentage of the cell's land in each class up to 20 degrees
-    (SLOPE_CLASS_FACTORS); land_share is the share of the cell's suitable land the plant may use
-    (the land table's land_competition_fraction). Suitable land is taken to spread over the
-    classes like all land up to 20 degrees.
+    class_pcts holds, per cell, the percentage of the cell's land in each class up to the slope
+    limit (SLOPE_CLASS_FACTORS); land_share is the share of the cell's suitable land the plant may
+    use (the land table's land_competition_fraction). Suitable land is taken to spread over the
+    classes like all land up to the limit.
     """
     shares = class_pcts[list(SLOPE_CLASS_FACTORS)].to_numpy(float)
     total = shares.sum(axis=1, keepdims=True)
@@ -168,7 +165,8 @@ def water_pipeline_cost(flow_m3_per_year: float) -> dict:
                                * (1.0 + UCM_OTHER_ENGINEERING_CONTINGENCY) * USD_DEC2017_TO_USD2020)
         capital_per_year = (pipe_usd_per_km * (_annuity(PIPELINE_DISCOUNT_RATE, PIPE_LIFETIME_YEARS) + UCM_PIPE_OM_FRACTION)
                             + stations_usd_per_km * (_annuity(PIPELINE_DISCOUNT_RATE, PUMP_LIFETIME_YEARS) + UCM_PUMP_OM_FRACTION))
-        energy_per_year = 1000.0 * 9.81 * flow * head_m_per_km / PUMP_EFFICIENCY / 1000.0 * 8760.0 * UCM_POWER_USD_PER_KWH
+        pump_kw = WATER_DENSITY_KG_PER_M3 * GRAVITY_M_PER_S2 * flow * head_m_per_km / PUMP_EFFICIENCY / 1000.0
+        energy_per_year = pump_kw * 8760.0 * UCM_POWER_USD_PER_KWH
         options.append({
             "diameter_in": diameter_in,
             "velocity_m_per_s": flow / (math.pi * diameter_m ** 2 / 4.0),
@@ -239,8 +237,8 @@ def site_cost_table(
     out["installation_multiplier"] = installation_multiplier(
         table[travel_column], remoteness["installation_b_per_hour"], remoteness["installation_saturation_min"])
     out["slope_multiplier"] = slope_multiplier(table, float(shares[0]))
-    out["depth_multiplier"] = 1.0
-    out["labour_multiplier"] = 1.0
+    out["depth_multiplier"] = DEPTH_MULTIPLIER
+    out["labour_multiplier"] = LABOUR_MULTIPLIER
     pv_wind_build = out["installation_multiplier"] * out["labour_multiplier"] * out["depth_multiplier"] * out["slope_multiplier"]
     out["water_source_kind"] = table["water_source_kind"]
     out["water_source_distance_km"] = table["water_source_distance_km"]
@@ -348,6 +346,7 @@ def write_site_cost_table(
             for name, path in (("land_table", land_csv), ("tech_yaml", tech_yaml),
                                ("cell_geography", geography_csv), ("remoteness_fit", fit_json))
         },
+        "parameters_yaml": file_record(),
         "parameters": parameters,
     }
     output.with_name(output.stem + "_provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")

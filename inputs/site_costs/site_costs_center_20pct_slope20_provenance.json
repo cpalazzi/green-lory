@@ -21,6 +21,10 @@
       "sha256": "d5588c3e04536a8a7e3d9e0d8ddbe40f2272c6f3170ac4bd4546eb05071d25a2"
     }
   },
+  "parameters_yaml": {
+    "path": "inputs/parameters.yaml",
+    "sha256": "9b56b2113b641e181719dafed7dd1dee55742b37565750dd6bd7f479d4de1f35"
+  },
   "parameters": {
     "land_cells_beyond_the_geography": 1788,
     "remoteness": {

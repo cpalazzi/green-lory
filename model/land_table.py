@@ -29,9 +29,11 @@ share variant takes seconds.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Tuple
 
@@ -41,6 +43,7 @@ import pandas as pd
 import xarray as xr
 
 from .config import BATHYMETRY_FILE, EARTH_RADIUS_KM, LAND_COVER_FILE, SLOPE_CLASS_COLUMNS, SLOPE_CLASSES, repo_path
+from .parameters import file_record, parameter
 from .land import (
     CLASSWISE_NESTED_UNION_AREA_COLUMN,
     CLASSWISE_NESTED_UNION_AVAILABILITY_COLUMN,
@@ -54,53 +57,28 @@ from .land import (
 LOGGER = logging.getLogger(__name__)
 
 MODIS_WATER_CLASS = 0
-WIND_LAND_USE_KM2_PER_GW = 200.0  # Salmon et al. (2021)
 DEFAULT_LAND_COMPETITION_FRACTION = 1.0
-# Land above 20 degrees is excluded (decision of 7 October 2026; the tables of September 2026
-# excluded land above 15 degrees and were built with --max-slope-degrees 15)
-DEFAULT_MAX_SLOPE_DEGREES = 20.0
+# The land assumptions, with their sources: inputs/parameters.yaml, section land
+WIND_LAND_USE_KM2_PER_GW = float(parameter("land.wind_land_use_km2_per_gw"))
+# Land above the last slope class bound is excluded
+DEFAULT_MAX_SLOPE_DEGREES = SLOPE_CLASSES[-2][1]
+PROTECTED_AREA_STATUSES = frozenset(str(status).lower() for status in parameter("land.protected_area_statuses"))
 
-# First Solar Series 6 (2018) module, packed in rows as in van de Ven et al. (2021)
-FIRST_SOLAR_MODULE_WIDTH_M = 1.21
-FIRST_SOLAR_MODULE_LENGTH_M = 2.06
-FIRST_SOLAR_MODULE_POWER_KW = 0.45
-SOLAR_DECLINATION_DEG = 23.44
-SOLAR_MIN_TILT_DEG = 15.0
-SOLAR_MAX_TILT_DEG = 55.0
-SOLAR_MIN_SUN_ALTITUDE_DEG = 5.0
-SOLAR_GCR_MIN = 0.05
-SOLAR_GCR_MAX = 0.8
+# Fixed-tilt PV rows
+FIRST_SOLAR_MODULE_WIDTH_M = float(parameter("land.solar_module_width_m"))
+FIRST_SOLAR_MODULE_LENGTH_M = float(parameter("land.solar_module_length_m"))
+FIRST_SOLAR_MODULE_POWER_KW = float(parameter("land.solar_module_power_kw"))
+SOLAR_DECLINATION_DEG = float(parameter("physical.earth_axial_tilt_deg"))  # at the solstices
+SOLAR_MIN_TILT_DEG = float(parameter("land.solar_min_tilt_deg"))
+SOLAR_MAX_TILT_DEG = float(parameter("land.solar_max_tilt_deg"))
+SOLAR_MIN_SUN_ALTITUDE_DEG = float(parameter("land.solar_min_sun_altitude_deg"))
+SOLAR_GCR_MIN = float(parameter("land.solar_min_ground_cover_ratio"))
+SOLAR_GCR_MAX = float(parameter("land.solar_max_ground_cover_ratio"))
 
-# Share of each IGBP land-cover class (MODIS MCD12C1 Land Cover Type 1) suitable for each
-# technology, after Salmon and Banares-Alcantara (2022, Table 1) and Verschuur et al. (2024).
-#   0 Water bodies                 6 Closed shrublands       12 Croplands
-#   1 Evergreen needleleaf forests 7 Open shrublands         13 Urban and built-up lands
-#   2 Evergreen broadleaf forests  8 Woody savannas          14 Cropland/natural veg. mosaics
-#   3 Deciduous needleleaf forests 9 Savannas                15 Permanent snow and ice
-#   4 Deciduous broadleaf forests 10 Grasslands              16 Barren / sparsely vegetated
-#   5 Mixed forests               11 Permanent wetlands      17 Unclassified (treated as 0)
-# Wind coexists with agriculture; PV excludes cropland but takes a small rooftop share of
-# urban land. Water counts for wind only when offshore wind is included.
-MODIS_CLASS_WIND_AVAILABILITY = {
-    0: 1.0,    # Water (offshore wind; off by default)
-    6: 0.5,    # Closed shrublands
-    7: 0.5,    # Open shrublands
-    8: 0.2,    # Woody savannas
-    9: 0.2,    # Savannas
-    10: 0.2,   # Grasslands
-    12: 0.05,  # Croplands
-    14: 0.05,  # Cropland / natural vegetation mosaics
-    16: 1.0,   # Barren / sparsely vegetated
-}
-MODIS_CLASS_SOLAR_AVAILABILITY = {
-    6: 0.5,    # Closed shrublands
-    7: 0.5,    # Open shrublands
-    8: 0.2,    # Woody savannas
-    9: 0.2,    # Savannas
-    10: 0.2,   # Grasslands
-    13: 0.03,  # Urban and built-up lands (rooftop solar)
-    16: 1.0,   # Barren / sparsely vegetated
-}
+# Share of each IGBP land-cover class (MODIS MCD12C1 Land Cover Type 1) that each technology may
+# use; unlisted classes give none
+MODIS_CLASS_WIND_AVAILABILITY = {int(k): float(v) for k, v in parameter("land.wind_class_availability").items()}
+MODIS_CLASS_SOLAR_AVAILABILITY = {int(k): float(v) for k, v in parameter("land.solar_class_availability").items()}
 
 FINAL_COLUMNS = [
     "latitude",
@@ -512,7 +490,7 @@ def _filter_protected_areas(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     output = frame.copy()
     if "STATUS" in output.columns:
         status = output["STATUS"].astype(str).str.lower().str.strip()
-        output = output[status.isin({"designated", "inscribed", "established"})]
+        output = output[status.isin(PROTECTED_AREA_STATUSES)]
 
     if "REALM" in output.columns:
         realm = output["REALM"].astype(str).str.lower().str.strip()
@@ -1033,16 +1011,16 @@ def apply_land_competition_scenario(
     return output
 
 
-# The cells a campaign runs: onshore cells with suitable land (the 16,509 of the key runs of
-# September 2026 from the centred 100 % table)
-RUN_CELLS_MIN_LAND_PCT = 0.1
-RUN_CELLS_MIN_SUITABLE_KM2 = 1.0
-RUN_CELLS_SOUTH_LIMIT = -60.0
+# The cells a campaign runs: onshore cells with suitable land (inputs/parameters.yaml, run_cells)
+RUN_CELLS_MIN_LAND_PCT = float(parameter("run_cells.min_land_pct"))
+RUN_CELLS_MIN_SUITABLE_KM2 = float(parameter("run_cells.min_suitable_km2"))
+RUN_CELLS_SOUTH_LIMIT = float(parameter("run_cells.south_limit_deg"))
 
 
 def run_cells(full_table: pd.DataFrame) -> pd.DataFrame:
-    """Cells with at least 0.1 % land, 1 km2 of PV plus onshore wind area in the 100 % table, and
-    north of 60 S, as `lat, lon` (the `--global-locations` list of a campaign)."""
+    """Cells with at least RUN_CELLS_MIN_LAND_PCT % land, RUN_CELLS_MIN_SUITABLE_KM2 of PV plus
+    onshore wind area in the 100 % table, and north of RUN_CELLS_SOUTH_LIMIT, as `lat, lon` (the
+    `--global-locations` list of a campaign)."""
     if not np.allclose(pd.to_numeric(full_table["land_competition_fraction"]), 1.0):
         raise ValueError("The run cells are defined on the 100 % table")
     keep = (
@@ -1052,6 +1030,26 @@ def run_cells(full_table: pd.DataFrame) -> pd.DataFrame:
     )
     cells = full_table.loc[keep, ["latitude", "longitude"]].rename(columns={"latitude": "lat", "longitude": "lon"})
     return cells.sort_values(["lat", "lon"]).reset_index(drop=True)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 24), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_provenance(output_csv: Path, rows: int, settings: dict) -> None:
+    """<table>_provenance.json beside a land table: its hash, the parameters file and the settings."""
+    provenance = {
+        "written_by": "python -m model.land_table",
+        "rows": int(rows),
+        "sha256": _sha256(output_csv),
+        "parameters": file_record(),
+        "settings": settings,
+    }
+    output_csv.with_name(output_csv.stem + "_provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
 
 def write_land_competition_variant(
@@ -1068,6 +1066,11 @@ def write_land_competition_variant(
     )
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_csv, index=False)
+    _write_provenance(output_csv, len(df), {
+        "base_csv": str(base_csv), "base_sha256": _sha256(base_csv),
+        "land_competition_fraction": land_competition_fraction,
+        "source_land_competition_fraction": source_land_competition_fraction,
+    })
     LOGGER.info(
         "Wrote land-competition variant %s from %s with fraction %.3f",
         output_csv,
@@ -1122,6 +1125,9 @@ def write_land_availability_table(config: LandAvailabilityConfig) -> pd.DataFram
     df = build_land_availability_table(cfg)
     cfg.output_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(cfg.output_csv, index=False)
+    settings = {key: (str(value) if isinstance(value, Path) else value) for key, value in asdict(cfg).items()}
+    settings["protected_area_paths"] = [str(path) for path in cfg.protected_area_paths]
+    _write_provenance(cfg.output_csv, len(df), settings)
     LOGGER.info("Wrote %s rows to %s", len(df), cfg.output_csv)
     return df
 

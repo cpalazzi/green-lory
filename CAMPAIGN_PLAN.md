@@ -531,6 +531,10 @@ All runs:
 - **Signed off on 7 October:** the step-2 layout and all of step 3 as planned, with the slope
   classes (no uplift below 8.5 degrees, 1.3 for 8.5-14, 1.6 for 14-20, land above 20 excluded,
   flattest land first) and the global land build on ARC.
+- **9 October:** `inputs/` sorted by topic (`tech/`, `finance/`, `site_costs/`, `weather/`,
+  `cells/`) with an index, `inputs/README.md`; every modelling assumption other than technology
+  costs moved from the code to `inputs/parameters.yaml`, each with its source (values unchanged:
+  the geography and site-cost tables regenerate byte for byte).
 - **Open, for you** (8 October):
   1. two step-3 points of section 3: the nearly inactive slope factor (no change proposed) and
      the water source price in EUR (the remoteness table, GHD 2025, was decided on 8 October);

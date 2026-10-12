@@ -33,6 +33,9 @@ from typing import Any
 
 import yaml
 
+# The model's assumptions other than technology costs; every run records the file's hash
+PARAMETERS_YAML = Path(__file__).resolve().parents[1] / "inputs" / "parameters.yaml"
+
 
 PLANT_FILES = (
     "network.csv",
@@ -689,6 +692,7 @@ def write_manifest(args: argparse.Namespace) -> None:
         "override_csv": override_record,
         "land_csv": _file_record(land_csv_path),
         "weather": _weather_record(Path(args.weather_dir)),
+        "parameters": _file_record(PARAMETERS_YAML),
     }
     if locations_csv_path is not None:
         inputs["locations_csv"] = _file_record(locations_csv_path)
@@ -929,7 +933,7 @@ def verify_manifest_inputs(manifest_path: Path) -> dict[str, int]:
         _verify_file_record(inputs.get(name), f"inputs.{name}")
         verified_file_count += 1
 
-    for name in ("locations_csv", "site_costs_csv", "weather_land_correction"):
+    for name in ("parameters", "locations_csv", "site_costs_csv", "weather_land_correction"):
         if name in inputs:
             _verify_file_record(inputs[name], f"inputs.{name}")
             verified_file_count += 1

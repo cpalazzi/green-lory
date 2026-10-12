@@ -11,6 +11,19 @@ gitignored here, and `runs.yaml` pins their hashes. Elsewhere:
   ARC; `../data/README.md` names the accepted ones;
 - which of these files each run uses: `../runs.yaml` (`green-lory show <run id>`).
 
+## `parameters.yaml`: the modelling assumptions
+
+Every modelling assumption other than technology costs, one value per key with its source:
+land-cover availability, protected-area statuses, slope classes and PV row geometry (`land`);
+the rule for the cells a campaign solves (`run_cells`); the wind wake factor and the land
+correction's thresholds (`weather`); what counts as a water source (`water_sources`); and the
+remoteness table chosen, the slope factors and the water pipeline's unit costs (`site_costs`);
+and the physical constants with a source, such as the heating values that turn energy into
+tonnes (`physical`).
+`model/parameters.py` reads it; the land, geography and site-cost tables and every run manifest
+record its hash, so a table built with other values can be told apart. A table built before a
+change of these values must be rebuilt (the land tables on ARC).
+
 ## `tech/`: technology costs
 
 One YAML per cost case; a YAML may `extends:` another and override its values

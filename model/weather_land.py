@@ -48,6 +48,7 @@ import numpy as np
 import pandas as pd
 
 from .config import EARTH_RADIUS_KM, GLWD_AREA_DIR, INPUTS_DIR
+from .parameters import file_record, parameter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,13 +63,13 @@ GLWD_PIXELS_PER_DEGREE = 240
 GLWD_NORTH = 84.0
 GLWD_NODATA = 255
 GLWD_OPEN_WATER = ("01", "02", "03", "04", "05", "06")  # lakes, reservoirs, rivers
-# A cell counts as having water when at least 1 % of it is water (sea, lakes, rivers)
-LAND_SHARE_FULL = 0.99
+# The correction's thresholds (inputs/parameters.yaml, weather.land_correction): cells with less
+# land than LAND_SHARE_FULL are corrected; bins whose whole-cell ERA5 wind averages below CALM_CF
+# take the annual ratio; a neighbour with at least INLAND_LAND_SHARE land counts as fully inland
+LAND_SHARE_FULL = float(parameter("weather.land_correction.full_land_share"))
 TECHS = ("wind",)
-# Bins whose whole-cell ERA5 wind averages below this capacity factor take the annual ratio
-CALM_CF = 0.02
-# A neighbour counts as fully inland with at least this share of land
-INLAND_LAND_SHARE = 0.99
+CALM_CF = float(parameter("weather.land_correction.calm_capacity_factor"))
+INLAND_LAND_SHARE = float(parameter("weather.land_correction.inland_land_share"))
 OPEN_WATER_COLUMNS = ("fresh_lake_km2", "saline_lake_km2", "reservoir_km2", "large_river_km2", "other_permanent_water_km2")
 
 
@@ -331,6 +332,7 @@ def write_correction(weights_csv: Path, geography_csv: Path, stores: Path, legac
             "description": "Factors that rescale the wind of the 1-degree profiles of cells with water to the cell's "
                            "land (model/weather_land.py); hours are UTC; PV is not corrected",
             "calm_cf": CALM_CF, "inland_land_share": INLAND_LAND_SHARE,
+            "parameters_yaml": file_record()["path"], "parameters_sha256": file_record()["sha256"],
             "weights_csv": str(weights_csv), "weights_sha256": _sha256(weights_csv),
             "geography_csv": str(geography_csv), "geography_sha256": _sha256(geography_csv),
             "era5_stores": str(stores), "alignment_check": json.dumps(check),
