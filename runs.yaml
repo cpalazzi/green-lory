@@ -213,6 +213,78 @@ runs:
     land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
     land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
 
+# The campaign of October 2026 (CAMPAIGN_PLAN.md section 5). Every run: DEA 2050 costs, fixed-tilt
+# PV, co-located land at a 20 % share of the October land build, land applied after the solve,
+# capacity from the scaled reference design, the wind of cells with water corrected to their land.
+
+  gl_dea2050_wacc5_bflat_wflat_land20oct_fixed:
+    role: campaign C2 (base, hourly)
+    runner: green_lory
+    description: >-
+      Campaign C2 (base, hourly): DEA 2050 costs, uniform 5 % WACC, flat build costs, uniform baseline water
+      of 2 EUR2020/m3 in the headline, no land rent, hourly weather with the wind of cells with water
+      corrected to their land, fixed-tilt PV only, co-located wind/PV, the October land build at
+      a 20 % share
+    results_class: 50_campaign
+    job_token: camp-c2
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed
+    interest_rate: 0.05  # every technology at every cell
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0
+    cost_scope: flat_wacc5_uniform_baseline_water_no_land_rent
+    land_share: 0.20
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
+    land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
+    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+    notes: >-
+      Global stage over the 16,885 run cells
+      (land_center_slope20_20261008_v2/locations_onshore_suitable_center_20261008.csv). Step 4 of
+      the plan compares C1 and C2 on the 1,317 validation cells
+      (inputs/cells/validation_cells_step4.csv).
+
+  gl_dea2050_wacc5_bflat_wflat_land20oct_fixed_4h:
+    role: campaign C1 (four-hour step)
+    runner: green_lory
+    description: >-
+      Campaign C1 (four-hour step): DEA 2050 costs, uniform 5 % WACC, flat build costs, uniform baseline water
+      of 2 EUR2020/m3 in the headline, no land rent, weather in four-hour steps with the wind of cells with water
+      corrected to their land, fixed-tilt PV only, co-located wind/PV, the October land build at
+      a 20 % share
+    results_class: 50_campaign
+    job_token: camp-c1-4h
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed
+    interest_rate: 0.05  # every technology at every cell
+    time_step_h: 4
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0
+    cost_scope: flat_wacc5_uniform_baseline_water_no_land_rent
+    land_share: 0.20
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
+    land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
+    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+    notes: >-
+      Global stage over the 16,885 run cells
+      (land_center_slope20_20261008_v2/locations_onshore_suitable_center_20261008.csv). Step 4 of
+      the plan compares C1 and C2 on the 1,317 validation cells
+      (inputs/cells/validation_cells_step4.csv).
+
 
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above
 # (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and

@@ -91,6 +91,7 @@ port distances, water), the remoteness fit and the site-cost table of the Octobe
 | `cell_countries.csv` | Each cell's country for the 54,360 cells of the land tables: the country covering most of the cell in `data/countries.geojson` (`assignment` overlap), else the country of the nearest such cell, with the distance (`nearest`: small islands missing from the map, and the sea; 653 of the 16,885 run cells). ISO codes from the reference below (`python -m model.countries`) | finance tables by country; the results' country column (overlap cells only) |
 | `country_reference_20260928_v1.csv` | 194 country names with their ISO 3166 alpha-3 codes: the September export's 177 and the aliases its provenance file lists | the cell-country table; the supplier export (`model/suppliers.py --country-reference`) |
 | `diagnostic_cells.csv` | Three cells (Atacama, north-west Australia, central Australia) | the smoke and diagnostic stages (`arc/submit_lory_sequence.sh`) |
+| `validation_cells_step4.csv` | 1,317 cells: Australia's 786 run cells of the October land table and 562 of the 563 cells of the legacy sample (`legacy_lcoa/cells_sample_v1.csv`; one has no suitable land), 31 in both (`group`) | the four-hour against hourly comparison of campaign step 4 (`--global-locations`) |
 
 ## Left at the top level
 

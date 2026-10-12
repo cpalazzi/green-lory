@@ -64,7 +64,7 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | Key | Meaning |
 |---|---|
 | `role`, `runner`, `description`, `notes` | See the two tables above; free text otherwise |
-| `results_class` | Subdirectory of the campaign the run is written to (`10_replication`, `30_keyruns`) |
+| `results_class` | Subdirectory of the campaign the run is written to (`10_replication`, `30_keyruns`, `50_campaign`) |
 | `job_token` | Short token in the Slurm job names |
 | `tech_yaml` | Technology and cost YAML in `inputs/tech/`; may `extends:` another YAML, whose values it overrides |
 | `plant_dir` | Plant bundle, see [Plant bundles](#plant-bundles) |
@@ -125,7 +125,7 @@ pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run
 | `wacc5`, `ameli`, `amelired` | uniform 5 % WACC, or Ameli reduced WACC by country |
 | `bflat`, `bspat` | build-cost multiplier 1 everywhere, or depth x remoteness x labour |
 | `wflat`, `wspat`, `wnone` | uniform baseline water (2 EUR2020/m³ from 24 Sep 2026), spatial water, no water cost |
-| `land20c`, `land2c`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`c` centred build of 23 Sep 2026, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |
+| `land20c`, `land2c`, `land20oct`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`c` centred build of 23 Sep 2026, `oct` the October build of 8 Oct 2026 with slope classes up to 20 degrees and protected land counted on land only, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |
 | `fixed`, `track`, `both` | PV technologies offered |
 | `4h` | four-hour weather step (default is hourly) |
 | `glannuity` | legacy model with green-lory's per-technology annuity instead of the workbook factor |
