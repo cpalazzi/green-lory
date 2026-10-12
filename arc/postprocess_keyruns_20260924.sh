@@ -41,13 +41,14 @@ SUBMIT_NETWORKS="${SUBMIT_NETWORKS:-1}"
 EXPORTS="${EXPORTS_DIR:-$ROOT/exports_${RUN_ID}_v1}"
 mkdir -p $EXPORTS
 cd $R
+COUNTRY_REFERENCE="$R/inputs/cells/country_reference_20260928_v1.csv"
 
 export_surface() {  # run dir, export name
   local d="$1" name="$2"
   if [[ -f "$EXPORTS/$name/contract.json" ]]; then echo "  $name: contract exists, skipping"; return 0; fi
   test -f "$d/qa/validation.json" && grep -Eq '"status": *"passed"' "$d/qa/validation.json" || { echo "QA not passed for $d" >&2; return 2; }
   $PY -m model.suppliers export --surface "$d/merged/global_run_results.csv" --qa "$d/qa/validation.json" \
-     --manifest "$d/manifest.json" --country-reference "$R/inputs/country_reference_20260928_v1.csv" --drop-unassigned \
+     --manifest "$d/manifest.json" --country-reference "$COUNTRY_REFERENCE" --drop-unassigned \
      --output "$EXPORTS/$name" --minimum-capacity "$CUTOFF" | grep -E '"exported_positive_capacity_rows"|"excluded_positive_below_cutoff_rows"|"output_sha256"'
 }
 
@@ -66,7 +67,7 @@ fi
 if [[ -f "$EXPORTS/gl_dea2050_wacc5_bflat_wflat_land2c_fixed/contract.json" ]]; then echo "  2 % contract exists, skipping"; else
 $PY -m model.suppliers export --surface "$D2/global_run_results.csv" --qa "$D2/qa/validation.json" --manifest "$D2/manifest.json" \
    --derived-provenance "$D2/provenance.json" --scenario-id-override gl_dea2050_wacc5_bflat_wflat_land2c_fixed \
-   --country-reference "$R/inputs/country_reference_20260928_v1.csv" --drop-unassigned --output "$EXPORTS/gl_dea2050_wacc5_bflat_wflat_land2c_fixed" \
+   --country-reference "$COUNTRY_REFERENCE" --drop-unassigned --output "$EXPORTS/gl_dea2050_wacc5_bflat_wflat_land2c_fixed" \
    --minimum-capacity "$CUTOFF" | grep -E '"exported_positive_capacity_rows"|"excluded_positive_below_cutoff_rows"|"output_sha256"'
 fi
 

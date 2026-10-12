@@ -31,7 +31,7 @@ Options:
                         split by longitude.
   --diagnostic-locations <csv>
                         Cells for the smoke and diagnostic stages (default:
-                        inputs/lory_reconciliation_diagnostic_cells.csv).
+                        inputs/cells/diagnostic_cells.csv).
   --dry-run             Check the inputs and print the plan; submit nothing.
   -h, --help            Show this help.
 
@@ -188,7 +188,7 @@ ARC_WORK_BASE="${ARC_WORK_BASE:-/data/${ARC_GROUP}/${USER_NAME}}"
 ARC_ENV_PREFIX="${ARC_ENV_PREFIX:-${ARC_WORK_BASE}/envs/green-lory-env}"
 ARC_PYTHON="${ARC_PYTHON:-${ARC_ENV_PREFIX}/bin/python}"
 WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"
-DIAGNOSTIC_LOCATIONS="${DIAGNOSTIC_LOCATIONS_OVERRIDE:-inputs/lory_reconciliation_diagnostic_cells.csv}"
+DIAGNOSTIC_LOCATIONS="${DIAGNOSTIC_LOCATIONS_OVERRIDE:-inputs/cells/diagnostic_cells.csv}"
 
 # Python for the checks: never on the login node
 VALIDATION_PYTHON=""

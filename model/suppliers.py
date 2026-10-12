@@ -15,7 +15,7 @@
     python -m model.suppliers derive --surface <merged csv> --multiplier 0.1 --parent-share 0.20 \
         --output-dir <new dir>
     python -m model.suppliers export --surface <csv> --qa <validation.json> --manifest <manifest.json> \
-        --country-reference inputs/country_reference_20260928_v1.csv --minimum-capacity 1 --drop-unassigned \
+        --country-reference inputs/cells/country_reference_20260928_v1.csv --minimum-capacity 1 --drop-unassigned \
         --output <new dir>
 
 The network itself runs in the green-porpoise repository (``legacy_gpo/``; linked here,

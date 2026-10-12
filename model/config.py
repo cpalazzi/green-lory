@@ -48,9 +48,11 @@ NELSON_TRAVEL_TIME_DIR = DATA_DIR / "accessibility" / "nelson2019_travel_time"
 GLWD_AREA_DIR = DATA_DIR / "water" / "glwd_v2" / "GLWD_v2_0_area_by_class_ha"
 GEONAMES_AU_FILE = DATA_DIR / "gazetteer" / "geonames_au" / "AU.txt"
 SITE_COSTS_DIR = INPUTS_DIR / "site_costs"
+TECH_DIR = INPUTS_DIR / "tech"
+FINANCE_DIR = INPUTS_DIR / "finance"
 
 # Defaults: the improved runs' YAML (DEA 2050 costs, co-located land use) and the plant bundle
-DEFAULT_TECH_YAML = INPUTS_DIR / "tech_config_ammonia_plant_2050_dea_colocated.yaml"
+DEFAULT_TECH_YAML = TECH_DIR / "tech_config_ammonia_plant_2050_dea_colocated.yaml"
 DEFAULT_PLANT_DIR = PLANTS_DIR / "ammonia_plant_1mt"
 
 # Slope classes of the land tables (column, upper bound in degrees, inclusive), as decided on

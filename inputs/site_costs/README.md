@@ -2,9 +2,10 @@
 
 `model/site_costs.py` builds a site-cost table for a land table from these files
 (`green-lory site-costs --land <table> --output <csv>`); `model/README.md` lists the cost
-mechanisms. Everything here except the two transcribed tables is written by
-`model/site_geography.py` from the data of `../../data/README.md`, with a `*_provenance.json`
-beside it giving the inputs' hashes.
+mechanisms. Everything here except the three transcribed tables is generated, with a
+`*_provenance.json` beside it giving the inputs' hashes: the site-cost table by
+`model/site_costs.py`, the rest by `model/site_geography.py` from the data of
+`../../data/README.md`.
 
 | File | What it is | Written by |
 |---|---|---|
@@ -15,6 +16,7 @@ beside it giving the inputs' hashes.
 | `gsw_permanent_water.csv` | For the 134 cells that would hold a water source only through a saline lake: the area where the JRC Global Surface Water occurrence layer shows water in at least half of the observations of 1984-2021, read remotely on 8 October 2026; 109 of them pass the 10 % threshold | the same, kept between runs |
 | `calibration_sites.csv` | The sites of both tables, located with the GeoNames gazetteer of Australia (Texas, Kingston SE, Campbelltown and Derwent Valley under their gazetteer names; Cardowan is a homestead, not a town), with their travel times and their distances to the nearest network port and to the state capital's port | `python -m model.site_geography sites` |
 | `remoteness_fit.json`, `remoteness_fit.md` | The fit of the equipment and installation factors to each table, and the report with every site's residual | `python -m model.site_geography fit` |
+| `site_costs_center_20pct_slope20.csv` | The site costs of every cell with onshore land in the October 20 % land table (`land_center_slope20_20261008_v2`): equipment, installation, slope, depth and labour multipliers, the nearest water source and the water price (USD2020/m3), with GHD's fit | `green-lory site-costs --land <land table> --output <csv>` |
 
 ## The fit
 
@@ -36,7 +38,7 @@ factor of about two because Aurecon derives them as the residual of an overall l
 directly. The largest misses of both fits are regional cities far from their capital
 (Townsville, Mackay, Rockhampton: 1.2 to 1.36 in Aurecon's table at no travel time to a town of
 20,000) and, in Aurecon's, Forsayth (2.67). `model/site_costs.py` uses GHD's fit by default
-(`--remoteness-source`); the choice is open for review.
+(`--remoteness-source`), as chosen on 8 October 2026.
 
 ## Water
 

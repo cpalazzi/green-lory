@@ -7,11 +7,11 @@ import pandas as pd
 import pytest
 
 from model import technology
-from model.config import INPUTS_DIR
+from model.config import TECH_DIR
 
 
 def test_extends_chain_merges_the_overlay_onto_its_parent():
-    yaml_path = INPUTS_DIR / "tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml"
+    yaml_path = TECH_DIR / "tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml"
     assert [path.name for path in technology.tech_yaml_files(yaml_path)] == [
         "tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml",
         "tech_config_ammonia_plant_2050_way_eur.yaml",
@@ -39,7 +39,7 @@ def test_link_efficiencies_come_from_the_yaml_recipe(yaml_name, expected):
     from model.config import DEFAULT_PLANT_DIR
 
     network = plant.build_network(2, DEFAULT_PLANT_DIR, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
-    technology.apply_link_efficiencies(network, technology.load_tech_inputs(INPUTS_DIR / yaml_name))
+    technology.apply_link_efficiencies(network, technology.load_tech_inputs(TECH_DIR / yaml_name))
     for name, value in expected.items():
         assert network.links.at[name, "efficiency"] == value  # exact: the recipes carry these numbers
     # Three-port links: compression draws power, synthesis draws hydrogen

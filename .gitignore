@@ -51,16 +51,10 @@ references/
 # copies of the green-porpoise archive (legacy_gpo extract-archive) keep their own README
 /results/**/git-0a63616/**
 
-# scripts/ (removed in campaign step 3, October 2026) may still hold local scratch
-/scripts/*
-
-# Claude session ARC file-queue bridge (local operational scratch)
-arc_exchange/
-
 # Generated finance overrides for the key runs (python -m model.finance);
 # their hashes are pinned in the ARC release manifests
-/inputs/uniform_interest_inputs_0p05_2050.csv
-/inputs/amelired_interest_inputs_2050_center.csv
+/inputs/finance/uniform_interest_inputs_0p05_2050.csv
+/inputs/finance/amelired_interest_inputs_2050_center.csv
 
 # pip install -e . metadata
 *.egg-info/

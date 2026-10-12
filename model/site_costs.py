@@ -53,7 +53,7 @@ REMOTENESS_FIT_JSON = SITE_COSTS_DIR / "remoteness_fit.json"
 #   aurecon2024  Aurecon (2024), 2024 Energy Technology Cost and Technical Parameter Review,
 #                Rev 3, Table 11-1: equipment factors by distance from the state capital,
 #                installation factors derived from Rawlinsons (2024) location factors
-# The default is the more recent table (proposed 7 October 2026, for review).
+# The default is the more recent table (chosen on 8 October 2026).
 REMOTENESS_SOURCES = ("ghd2025", "aurecon2024")
 DEFAULT_REMOTENESS_SOURCE = "ghd2025"
 

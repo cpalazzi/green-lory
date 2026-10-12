@@ -1,6 +1,7 @@
 # Canonical technology cost inputs for the basic ammonia plant — 2050 DEA scenario.
-# Base structure matches tech_config_ammonia_plant_2030_dea.yaml; cost values taken
-# directly from the DEA reference datasheets for the 2050 projection year.
+# Built on the DEA 2030 case ("the 2030 YAML" below: the Calliope model's techs_dea.yaml,
+# tech_config_ammonia_plant_2030_dea.yaml until 9 October 2026, in git history); cost values
+# taken directly from the DEA reference datasheets for the 2050 projection year.
 #
 # Source files (DEA data sheets, linked from Zotero in references/, untracked):
 #   Solar, Solar tracking, Wind:

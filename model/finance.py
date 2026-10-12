@@ -5,14 +5,14 @@ fraction), for the 15 technologies of the plant. ``model.technology`` reads it a
 override table, and runs.yaml pins each file's sha256.
 
 - ``uniform_table``: one rate everywhere (the flat-finance runs, 5 %);
-- ``ameli_rates``: the WACC of Ameli et al. (2021, Fig. 2; ``inputs/ameli_tiam_wacc_fig2.csv``)
+- ``ameli_rates``: the WACC of Ameli et al. (2021, Fig. 2; ``inputs/finance/ameli_tiam_wacc_fig2.csv``)
   by TIAM-UCL region, each cell's region taken from its country;
 - ``fill_from_nearest``: cells that a table does not cover take the rates of the nearest
   covered cell (great-circle distance), and the fills are listed.
 
-    python -m model.finance uniform --land-csv <land table> --rate 0.05 --output-dir inputs
-    python -m model.finance ameli --land-csv <land table> --scenario low-carbon-regional --output-dir inputs
-    python -m model.finance fill --land-csv <land table> --table <finance csv> --output-dir inputs
+    python -m model.finance uniform --land-csv <land table> --rate 0.05 --output-dir inputs/finance
+    python -m model.finance ameli --land-csv <land table> --scenario low-carbon-regional --output-dir inputs/finance
+    python -m model.finance fill --land-csv <land table> --table <finance csv> --output-dir inputs/finance
 
 Every file is written deterministically: identical inputs give identical bytes.
 """
@@ -25,9 +25,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import COUNTRIES_GEOJSON, INPUTS_DIR
+from .config import COUNTRIES_GEOJSON, FINANCE_DIR
 
-AMELI_WACC_TABLE = INPUTS_DIR / "ameli_tiam_wacc_fig2.csv"
+AMELI_WACC_TABLE = FINANCE_DIR / "ameli_tiam_wacc_fig2.csv"
 SCENARIO_COLUMN = {
     "reduced": "reduced_wacc_pct",
     "low-carbon-regional": "low_carbon_wacc_pct",

@@ -1,6 +1,6 @@
 """Technology costs: the technology YAML and how its costs reach the plant network.
 
-A technology YAML (inputs/tech_config_*.yaml) lists every plant component under `techs` with
+A technology YAML (inputs/tech/tech_config_*.yaml) lists every plant component under `techs` with
 its overnight cost split into equipment (`tech_cost_per_mw`) and installation, balance of plant
 and grid (`build_cost_per_mw`), its lifetime, fixed O&M as a fraction of capex and a default
 interest rate. `extends: <other.yaml>` makes a YAML a short overlay of another. Top-level keys

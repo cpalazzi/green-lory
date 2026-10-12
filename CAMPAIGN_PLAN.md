@@ -532,8 +532,8 @@ All runs:
   classes (no uplift below 8.5 degrees, 1.3 for 8.5-14, 1.6 for 14-20, land above 20 excluded,
   flattest land first) and the global land build on ARC.
 - **Open, for you** (8 October):
-  1. the three step-3 points of section 3: the remoteness table (GHD 2025 recommended), the
-     nearly inactive slope factor (no change proposed), the water source price in EUR;
+  1. two step-3 points of section 3: the nearly inactive slope factor (no change proposed) and
+     the water source price in EUR (the remoteness table, GHD 2025, was decided on 8 October);
   2. S2 interest rates (step 5): each cell's country as the surface assigns it (largest
      overlap), sea cells from the nearest land cell (`python -m model.finance ameli`);
   3. network equations for the campaign (step 5): corrected (`legacy_gpo --corrected`,

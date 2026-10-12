@@ -438,7 +438,7 @@ def main():
                    help="workbook: single 8 %%/20 y/2 %% factor rescaled to the WACC (replication). green_lory: overnight "
                         "CAPEX x (CRF(WACC, lifetime) + O&M) per equipment with lifetimes and O&M from --annuity-yaml "
                         "(key legacy run of 24 Sep 2026; not the archived arithmetic).")
-    p.add_argument("--annuity-yaml", type=Path, default=Path(__file__).resolve().parents[1] / "inputs/tech_config_ammonia_plant_2050_way_eur.yaml",
+    p.add_argument("--annuity-yaml", type=Path, default=Path(__file__).resolve().parents[1] / "inputs/tech/tech_config_ammonia_plant_2050_way_eur.yaml",
                    help="green-lory technology YAML supplying lifetimes and fixed O&M fractions for --annuity green_lory")
     p.add_argument("--wacc", default="workbook8:0.08,ameli_reduced:0.051",
                    help="comma-separated name:rate pairs; 'workbook8:0.08' is the unscaled workbook basis")

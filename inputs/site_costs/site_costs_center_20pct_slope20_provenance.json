@@ -9,7 +9,7 @@
       "sha256": "0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb"
     },
     "tech_yaml": {
-      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml",
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml",
       "sha256": "b6d1a5518f1481a3ea38f264035c1acb1e3c97460f2ffa9ada85f38bcf55b86d"
     },
     "cell_geography": {

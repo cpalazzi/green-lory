@@ -41,10 +41,10 @@ runs:
       compressor CAPEX, legacy bundled hydrogen storage
     results_class: 10_replication
     job_token: rep-nomh2
-    tech_yaml: inputs/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_way_eur_nominal_compression.yaml
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: both
-    finance_csv: inputs/amelired_interest_inputs_2050.csv
+    finance_csv: inputs/finance/amelired_interest_inputs_2050.csv
     finance_csv_sha256: b6cb3600a9a0a2a7d5a0c0fef016304d62b049ea308512224ba30e0bfb020ba8
     time_step_h: 4
     temporal_accounting: legacy_scaled
@@ -92,10 +92,10 @@ runs:
       wind/PV, centred land build at a 20 % share, onshore cells with suitable land
     results_class: 30_keyruns
     job_token: key-dea50-wacc5
-    tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
-    finance_csv: inputs/uniform_interest_inputs_0p05_2050.csv  # generated: python -m model.finance uniform --rate 0.05
+    finance_csv: inputs/finance/uniform_interest_inputs_0p05_2050.csv  # generated: python -m model.finance uniform --rate 0.05
     finance_csv_sha256: d29259c8e4d094a3a56f2007e61a48b56e6e6fc7bbbe62b7f9ad0a2caea08a3d
     time_step_h: 1
     temporal_accounting: snapshot_weighted
@@ -119,16 +119,16 @@ runs:
     description: >-
       Key run 2 (23 Sep 2026): DEA 2050 costs, Ameli reduced WACC by country (cells without a
       September country assignment take the nearest covered cell's rate, see
-      inputs/amelired_interest_fill_2050_center.csv), flat build/remoteness, uniform baseline
+      inputs/finance/amelired_interest_fill_2050_center.csv), flat build/remoteness, uniform baseline
       water of 2 EUR2020/m3 (2.284 USD2020 at the ECB 2020 rate) in the headline, no land rent,
       hourly weather, fixed-tilt PV only, explicit compressor and DEA tank, co-located wind/PV,
       centred land build at a 20 % share, onshore cells with suitable land
     results_class: 30_keyruns
     job_token: key-dea50-ameli
-    tech_yaml: inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
-    finance_csv: inputs/amelired_interest_inputs_2050_center.csv  # generated: python -m model.finance fill --table inputs/amelired_interest_inputs_2050.csv
+    finance_csv: inputs/finance/amelired_interest_inputs_2050_center.csv  # generated: python -m model.finance fill --table inputs/finance/amelired_interest_inputs_2050.csv
     finance_csv_sha256: bddbc6dbd47a2c0b5eb0db3300d2c07dd10ec9bad8baec14e4515667fcf68333
     time_step_h: 1
     temporal_accounting: snapshot_weighted
@@ -184,7 +184,7 @@ runs:
     cells: legacy_lcoa/shards/cells_archived_shard_*.csv
     annuity: >-
       green-lory convention: lifetimes and O&M from
-      inputs/tech_config_ammonia_plant_2050_way_eur.yaml
+      inputs/tech/tech_config_ammonia_plant_2050_way_eur.yaml
     capacity_rule: >-
       stated method on the centred 2 % land table (WDPA and slope exclusions), applied after
       the solve by build_legacy_supplier_table.py

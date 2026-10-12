@@ -16,7 +16,7 @@ changing the choice needs only post-processing of the existing key surfaces or a
 | Time resolution | hourly, one weather year (2019) | Sep | `time_step_h` |
 | Weather of coastal cells | the 1-degree profiles average the cell, sea included; for the campaign the profiles of cells with at least 1 % water are rescaled to their land with ERA5 at 0.25 degrees | 8 Oct | `weather_land_correction` |
 | PV | fixed tilt only; tracking-only is a named sensitivity; the optimiser does not choose between them | 16 Sep | `pv_policy`, plant bundle |
-| Tracking footprint | 1.458 x the fixed-tilt area (Bolinger and Bolinger 2022) | 16 Sep | `inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml` |
+| Tracking footprint | 1.458 x the fixed-tilt area (Bolinger and Bolinger 2022) | 16 Sep | `inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml` |
 | Wind/PV land sharing | co-located: only the wind direct-impact share (0.03 of the footprint, Denholm et al. 2009) excludes PV | 16 Sep | `land_allocation` |
 | Land table | centred 1-degree cells; MODIS MCD12C1 2022 with the Table-2 factors; WDPA exclusions counted on land only (water inside protected areas left out since 8 October); land above 20 degrees excluded (15 until 7 October) and the land's share in three slope classes recorded | 16 and 23 Sep, 7-8 Oct | `land_center_20260923_v1` on ARC; the 20-degree build of step 3 |
 | Land share | 20 % of suitable land as the base, 2 % as the sensitivity | 16 Sep | `land_share`, `land_table` |

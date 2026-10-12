@@ -23,7 +23,7 @@ from model.surface import CellFailure, RunInputs, RunSettings, run_cell
 import yaml
 
 # Way 2050 costs with the explicit compressor and the DEA tank (the pilots' plant cost set)
-TECH_YAML = Path("inputs/tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml")
+TECH_YAML = Path("inputs/tech/tech_config_ammonia_plant_2050_way_eur_explicit_compressor_dea_tank.yaml")
 PLANT_DIR = Path("model/plants/ammonia_plant_1mt")  # the Way efficiencies come from TECH_YAML
 
 STATE = {}
@@ -283,7 +283,7 @@ def main():
     bathymetry = validate_bathymetry_input(
         config.BATHYMETRY_FILE, previous_inputs["model_bathymetry.nc"])
     plant_dir = ROOT / PLANT_DIR
-    files = [*tech_yaml_dependencies(tech_path, ROOT), ROOT / "inputs/amelired_interest_inputs_2050.csv",
+    files = [*tech_yaml_dependencies(tech_path, ROOT), ROOT / "inputs/finance/amelired_interest_inputs_2050.csv",
              *sorted(plant_dir.glob("*.csv")), bathymetry]
     tech_yaml_changed = []
     for path in files:
@@ -331,7 +331,7 @@ def main():
                  meta=technology.load_tech_meta(tech_path), land_allocation=land_allocation,
                  land_lookup=land.index_land_table(land_table),
                  interest=technology.index_override_table(
-                     technology.load_override_table(ROOT / "inputs/amelired_interest_inputs_2050.csv")))
+                     technology.load_override_table(ROOT / "inputs/finance/amelired_interest_inputs_2050.csv")))
     STATE["weather"] = weather.ProfileStack(args.weather_run / "weather_used")
     STATE["base"] = plant.build_network(8760, plant_dir, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
     technology.apply_link_efficiencies(STATE["base"], tech)

@@ -177,9 +177,9 @@ class VerifyCampaignManifestInputsTest(unittest.TestCase):
 # --- flat cost scopes (key runs of 23 September 2026) ----------------------------------------
 
 ROOT = Path(__file__).resolve().parents[1]
-DEA_YAML = ROOT / "inputs/tech_config_ammonia_plant_2050_dea_colocated.yaml"
-UNIFORM = ROOT / "inputs/uniform_interest_inputs_0p05_2050.csv"
-AMELI = ROOT / "inputs/amelired_interest_inputs_2050.csv"
+DEA_YAML = ROOT / "inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml"
+UNIFORM = ROOT / "inputs/finance/uniform_interest_inputs_0p05_2050.csv"
+AMELI = ROOT / "inputs/finance/amelired_interest_inputs_2050.csv"
 
 
 def _manifest(scope_id, mode, rate=0.05):

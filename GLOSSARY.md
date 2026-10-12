@@ -66,7 +66,7 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `role`, `runner`, `description`, `notes` | See the two tables above; free text otherwise |
 | `results_class` | Subdirectory of the campaign the run is written to (`10_replication`, `30_keyruns`) |
 | `job_token` | Short token in the Slurm job names |
-| `tech_yaml` | Technology and cost YAML in `inputs/`; may `extends:` another YAML, whose values it overrides |
+| `tech_yaml` | Technology and cost YAML in `inputs/tech/`; may `extends:` another YAML, whose values it overrides |
 | `plant_dir` | Plant bundle, see [Plant bundles](#plant-bundles) |
 | `pv_policy` | PV offered to the optimiser: `fixed` (fixed tilt only) or `both` (fixed and single-axis tracking) |
 | `finance_csv`, `finance_csv_sha256` | Interest-only override CSV: `interest_rate` per cell and technology (`--override-csv`); the hash pins the file |
@@ -155,9 +155,9 @@ efficiencies and the tracking flag; the September reports name them.
 
 | Term | Meaning |
 |---|---|
-| Way 2050 | Technology costs after Way et al. (2022), 2050 values, as implemented in lcoa-opt; green-lory's EUR2020 version is `inputs/tech_config_ammonia_plant_2050_way_eur.yaml` (overnight costs reverse-engineered from the lcoa-opt workbook) |
+| Way 2050 | Technology costs after Way et al. (2022), 2050 values, as implemented in lcoa-opt; green-lory's EUR2020 version is `inputs/tech/tech_config_ammonia_plant_2050_way_eur.yaml` (overnight costs reverse-engineered from the lcoa-opt workbook) |
 | x_Cost, `xcost45` | The lcoa-opt cost workbook `x_Cost_Forecasting_20230831.xlsx`, RCP4.5 sheet, 2050 column: the Way-based CAPEX that the frozen legacy model reads |
-| DEA 2050 | Danish Energy Agency technology catalogue, 2050 values (`inputs/tech_config_ammonia_plant_2050_dea.yaml`) |
+| DEA 2050 | Danish Energy Agency technology catalogue, 2050 values (`inputs/tech/tech_config_ammonia_plant_2050_dea.yaml`) |
 | Ameli reduced WACC | Country WACC from Ameli et al. (2021) Fig. 2, reduced case, by TIAM-UCL region (`model/finance.py`; `python -m model.finance ameli --scenario reduced`) |
 | Workbook annuity | The legacy model's single annuity-due factor 0.1143 (8 %, 20 years, 2 % O&M) applied to every technology; green-lory annualises per technology with its own lifetime and O&M (`glannuity` in a legacy id) |
 | Nominal compressor, bundled H2 storage | The legacy cost convention: hydrogen-compressor CAPEX nominal only, compression cost bundled into the hydrogen-store cost. The reconciling run uses it |
