@@ -14,7 +14,7 @@ gitignored here, and `runs.yaml` pins their hashes. Elsewhere:
 ## `parameters.yaml`: the modelling assumptions
 
 Every modelling assumption other than technology costs, one value per key with its source:
-land-cover availability, protected-area statuses, slope classes and PV row geometry (`land`);
+the plant's reference output (`plant`); land-cover availability, protected-area statuses, slope classes and PV row geometry (`land`);
 the rule for the cells a campaign solves (`run_cells`); the wind wake factor and the land
 correction's thresholds (`weather`); what counts as a water source (`water_sources`); and the
 remoteness table chosen, the slope factors and the water pipeline's unit costs (`site_costs`);
@@ -27,9 +27,13 @@ change of these values must be rebuilt (the land tables on ARC).
 ## `tech/`: technology costs
 
 One YAML per cost case; a YAML may `extends:` another and override its values
-(`model/technology.py`). Costs are overnight EUR2020 per MW (per MWh for storage), on an output
-basis for conversion links, with the equipment part (`tech_cost_per_mw`) and the build part
-(`build_cost_per_mw`) apart.
+(`model/technology.py`). Each file gives every technology's values: overnight costs in EUR2020
+per MW (per MWh for storage, on an output basis for conversion links) with the equipment part
+(`tech_cost_per_mw`) and the build part (`build_cost_per_mw`) apart, lifetime, fixed O&M and
+default interest rate, each link's conversion recipe, and the operating values (the ammonia
+synthesis minimum load and ramp limits, the electrolysis variable cost, the battery's standing
+loss per day). The plant bundle, `model/plants/ammonia_plant_1mt/`, holds only the plant's
+structure.
 
 | File | What it is | Used by |
 |---|---|---|

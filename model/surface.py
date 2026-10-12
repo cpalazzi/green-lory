@@ -149,7 +149,7 @@ def read_run_inputs(
         time_step=settings.time_step,
         temporal_accounting_mode=settings.temporal_accounting_mode,
     )
-    technology.apply_link_efficiencies(base_network, tech_inputs)
+    technology.prepare_base_network(base_network, tech_inputs)
     plant.restrict_pv(base_network, settings.pv_policy)
     base_network._currency = str(tech_meta.get("currency", "USD")).strip().upper()
     base_network._ramp_limit_basis = settings.ramp_limit_basis

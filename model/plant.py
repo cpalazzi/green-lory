@@ -32,6 +32,7 @@ import pandas as pd
 import pypsa
 
 from .config import AMMONIA_HHV_MWH_PER_T, HYDROGEN_HHV_MWH_PER_T, repo_path
+from .parameters import parameter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +70,8 @@ COMPONENT_NAMES = {
 }
 
 PLANT_BUNDLE_FILES = ("buses.csv", "generators.csv", "links.csv", "loads.csv", "stores.csv")
+# The ammonia output the plant is solved for (inputs/parameters.yaml); designs scale linearly
+REFERENCE_OUTPUT_MT_PER_YEAR = float(parameter("plant.reference_output_mt_per_year"))
 
 
 def normalize_component_name(name: str | None) -> str | None:
@@ -100,7 +103,11 @@ def build_network(
     time_step: float,
     temporal_accounting_mode: str,
 ) -> pypsa.Network:
-    """Read a plant bundle into a network of ``n_snapshots`` snapshots of ``time_step`` hours."""
+    """Read a plant bundle into a network of ``n_snapshots`` snapshots of ``time_step`` hours.
+
+    The bundle holds the plant's structure; technology.prepare_base_network() then sets every
+    technology's values from the technology YAML. The ammonia demand is the reference output.
+    """
     if temporal_accounting_mode not in TEMPORAL_ACCOUNTING_MODES:
         raise ValueError(f"temporal_accounting_mode must be one of {TEMPORAL_ACCOUNTING_MODES}")
     network = pypsa.Network()
@@ -121,11 +128,17 @@ def build_network(
         if carrier not in existing:
             network.add("Carrier", carrier)
 
-    if temporal_accounting_mode == "legacy_scaled":
-        # The published convention, kept byte for byte for the reconciliation runs
-        network.stores.capital_cost *= time_step
-        network.links.marginal_cost *= 24 * 366 / n_snapshots
+    network.links.marginal_cost *= legacy_marginal_cost_scale(network)
+    network.loads.at["ammonia", "p_set"] = REFERENCE_OUTPUT_MT_PER_YEAR * 1e6 * AMMONIA_HHV_MWH_PER_T / 8760
     return network
+
+
+def legacy_marginal_cost_scale(network: pypsa.Network) -> float:
+    """24 x 366 / snapshots under legacy_scaled accounting (the published convention for link
+    variable costs, kept byte for byte for the reconciliation runs), 1 otherwise."""
+    if getattr(network, "_temporal_accounting_mode", None) == "legacy_scaled":
+        return 24 * 366 / len(network.snapshots)
+    return 1.0
 
 
 def set_ammonia_output(network: pypsa.Network, mt_per_year: float) -> pypsa.Network:

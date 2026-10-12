@@ -334,7 +334,7 @@ def main():
                      technology.load_override_table(ROOT / "inputs/finance/amelired_interest_inputs_2050.csv")))
     STATE["weather"] = weather.ProfileStack(args.weather_run / "weather_used")
     STATE["base"] = plant.build_network(8760, plant_dir, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
-    technology.apply_link_efficiencies(STATE["base"], tech)
+    technology.prepare_base_network(STATE["base"], tech)
     apply_pv_policy(STATE["base"], args.pv_policy)
     try:
         with ProcessPoolExecutor(max_workers=3, mp_context=multiprocessing.get_context("fork")) as pool:

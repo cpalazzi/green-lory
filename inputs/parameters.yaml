@@ -9,6 +9,11 @@
 # that the model reads every value. Full references: README.md (this folder),
 # ../CAMPAIGN_PLAN.md (References) and ../data/README.md.
 
+plant:
+  # The ammonia output the plant is solved for. The model is linear, so designs and capacities
+  # scale with it; it also sizes the water pipeline (site_costs.water_pipeline)
+  reference_output_mt_per_year: 1.0
+
 land:
   # Share of each IGBP land-cover class (MODIS MCD12C1, Land Cover Type 1) that each technology
   # may use, after Salmon and Banares-Alcantara (2022, Table 1) and Verschuur et al. (2024);
@@ -110,9 +115,8 @@ site_costs:
   labour_multiplier: 1.0
   # Water pipeline from the nearest source: the Texas Water Development Board's Uniform Costing
   # Model (HDR and Freese and Nichols 2018, User's Guide v2.0, Appendix C, Tables 1 and 3;
-  # December 2017 dollars), sized for one plant's flow
+  # December 2017 dollars), sized for the reference plant's flow at the tech YAML's water use
   water_pipeline:
-    reference_ammonia_t_per_year: 1000000.0  # one 1 Mt/yr plant, at the tech YAML's water use
     # Pipe with appurtenances, rural, in soil: USD per metre by diameter (mm), converted from
     # UCM's USD per foot by diameter in inches (given after each value)
     rural_soil_usd_per_m:

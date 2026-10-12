@@ -10,7 +10,11 @@ site-cost inputs.
 The YAML also gives each link's conversion recipe: `carriers_in` and `carriers_out`, the flows
 by bus at one operating point, in any common unit (per MW of input or per MW of output).
 apply_link_efficiencies() turns a recipe into the link's `efficiency` (bus0 to bus1) and, for a
-third port, `efficiency2`; the plant bundle supplies only the topology.
+third port, `efficiency2`. A technology may also state operating values: `min_load_fraction`,
+`ramp_limit_up` and `ramp_limit_down` (fractions of capacity per hour), `variable_cost_per_mwh`
+and, for a store, `standing_loss_fraction_per_day` (apply_operating_parameters). The plant bundle
+supplies only the topology and the formulation devices (prepare_base_network checks that the
+YAML covers every other component).
 
 Costs reach the network in two steps for each cell:
 1. apply_base_costs() annualises every YAML cost with the capital recovery factor plus fixed O&M.
@@ -25,7 +29,8 @@ multipliers and the water price.
 
 Links are rated on PyPSA's input side (bus0) while the YAML quotes output capacity, so link
 costs are multiplied by the link efficiency. In the legacy_scaled time accounting, store costs
-are also multiplied by the time step (see plant.py).
+are also multiplied by the time step (store_cost_scale) and link variable costs by
+24 x 366 / snapshots (plant.legacy_marginal_cost_scale).
 """
 from __future__ import annotations
 
@@ -38,7 +43,7 @@ import pandas as pd
 import yaml
 
 from .config import DEFAULT_TECH_YAML, repo_path
-from .plant import normalize_component_name
+from .plant import legacy_marginal_cost_scale, normalize_component_name
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +51,19 @@ LOGGER = logging.getLogger(__name__)
 LOCATION_COST_COLUMNS = ("land_cost_usd_per_km2_year", "water_cost_usd_per_m3")
 # What every generator, link and store of a technology YAML must state
 COST_KEYS = ("interest_rate", "lifetime_years", "fixed_om_fraction")
+# Operating values a technology may state: the network attribute each sets and the components it
+# applies to. A technology without one has none (no minimum load, no ramp limit, no variable
+# cost, no standing loss).
+OPERATING_KEYS = {
+    "min_load_fraction": ("p_min_pu", ("generators", "links")),
+    "ramp_limit_up": ("ramp_limit_up", ("links",)),
+    "ramp_limit_down": ("ramp_limit_down", ("links",)),
+    "variable_cost_per_mwh": ("marginal_cost", ("generators", "links")),
+    "standing_loss_fraction_per_day": ("standing_loss", ("stores",)),
+}
+# Components of the plant bundle that are formulation devices, not technologies: the switched-off
+# grid and the generator feeding the ramp penalty. The YAML gives every other component's values.
+FORMULATION_DEVICES = ("grid", "ramp_dummy")
 TECH_META_KEYS = (
     "model_currency_price_year",
     "spatial_cost_currency",
@@ -153,7 +171,7 @@ def apply_link_efficiencies(network, tech_inputs: dict[str, dict]) -> None:
     efficiency = carriers_out[bus1] / carriers_in[bus0]. A third port (bus2: the power drawn by
     hydrogen compression, the hydrogen drawn by ammonia synthesis) gets efficiency2 =
     -carriers_in[bus2] / carriers_in[bus0], or +carriers_out[bus2] / carriers_in[bus0] for a
-    product. Links without a recipe keep the bundle's values. Must run before the costs are
+    product. Every link has a recipe (check_plant_coverage). Must run before the costs are
     set, which convert link costs with the efficiency.
     """
     for name in network.links.index:
@@ -176,6 +194,53 @@ def apply_link_efficiencies(network, tech_inputs: dict[str, dict]) -> None:
                 network.links.at[name, "efficiency2"] = float(carriers_out[bus2]) / flow_in
             else:
                 raise ValueError(f"techs.{name}: the link has bus2 '{bus2}' but the recipe omits it")
+
+
+def check_plant_coverage(network, tech_inputs: dict[str, dict]) -> None:
+    """Every generator, link and store of the bundle except the formulation devices needs its cost
+    in the YAML, and every link its recipe: the bundle itself holds no technology values."""
+    gaps = []
+    for component, unit in (("generators", "mw"), ("links", "mw"), ("stores", "mwh")):
+        for name in getattr(network, component).index:
+            if name in FORMULATION_DEVICES:
+                continue
+            raw = tech_inputs.get(name) or {}
+            if raw.get(f"overnight_cost_per_{unit}") is None:
+                gaps.append(f"{name}.overnight_cost_per_{unit}")
+            if component == "links" and not (raw.get("carriers_in") and raw.get("carriers_out")):
+                gaps.append(f"{name}.carriers_in/carriers_out")
+    if gaps:
+        raise ValueError(f"The technology YAML lacks plant values: {', '.join(gaps)}")
+
+
+def apply_operating_parameters(network, tech_inputs: dict[str, dict]) -> None:
+    """Set minimum loads, ramp limits, variable costs and standing losses from the YAML.
+
+    PyPSA applies a store's standing loss per hour, so a loss per day d becomes 1 - (1 - d)^(1/24).
+    A link's variable cost (per MWh of its input) follows the legacy time scaling of the bundle's
+    own variable costs (plant.legacy_marginal_cost_scale).
+    """
+    for name, raw in tech_inputs.items():
+        for key, (attribute, components) in OPERATING_KEYS.items():
+            if key not in raw:
+                continue
+            component = next((c for c in components if name in getattr(network, c).index), None)
+            if component is None:
+                raise ValueError(f"techs.{name}.{key}: the plant has no {' or '.join(components)} component {name}")
+            value = float(raw[key])
+            if key == "standing_loss_fraction_per_day":
+                value = 1.0 - (1.0 - value) ** (1.0 / 24.0)
+            elif key == "variable_cost_per_mwh" and component == "links":
+                value *= legacy_marginal_cost_scale(network)
+            getattr(network, component).at[name, attribute] = value
+
+
+def prepare_base_network(network, tech_inputs: dict[str, dict]) -> None:
+    """Give the bundle's network its technology values: efficiencies and operating values (the
+    costs follow per cell, apply_base_costs and apply_cell_overrides)."""
+    check_plant_coverage(network, tech_inputs)
+    apply_link_efficiencies(network, tech_inputs)
+    apply_operating_parameters(network, tech_inputs)
 
 
 def annuity_factor(interest_rate: float, lifetime_years: float) -> float:

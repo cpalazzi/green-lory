@@ -1,2 +1,2 @@
-name,bus,p_set,comment
-ammonia,ammonia,713.4703196,Nominal ammonia output (MW thermal equivalent) demanded at the Ammonia bus for a 1 Mt/yr case.
+name,bus,comment
+ammonia,ammonia,Ammonia demand; build_network sets it from the reference output (inputs/parameters.yaml) and the ammonia heating value.

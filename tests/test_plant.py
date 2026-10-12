@@ -8,10 +8,19 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from model import plant
-from model.config import PLANTS_DIR
+from model import plant, technology
+from model.config import DEFAULT_TECH_YAML, PLANTS_DIR
 
 PLANT_DIR = PLANTS_DIR / "ammonia_plant_1mt"
+
+
+def _prepared(n_snapshots, time_step, mode):
+    """The bundle's network with the campaign YAML's technology values, costs included."""
+    tech = technology.load_tech_inputs(DEFAULT_TECH_YAML)
+    network = plant.build_network(n_snapshots, PLANT_DIR, time_step=time_step, temporal_accounting_mode=mode)
+    technology.prepare_base_network(network, tech)
+    technology.apply_base_costs(network, tech, time_step=time_step, temporal_accounting_mode=mode)
+    return network
 
 
 def test_older_component_names_map_to_bundle_names():
@@ -56,23 +65,61 @@ def test_highs_ignores_gurobi_environment(monkeypatch):
 
 # --- time accounting --------------------------------------------------------------------------
 
-def _raw_store_cost():
-    return pd.read_csv(PLANT_DIR / "stores.csv", index_col=0).at["compressed_hydrogen_store", "capital_cost"]
-
-
 def test_snapshot_weighted_mode_uses_physical_duration():
     network = plant.build_network(4, PLANT_DIR, time_step=4.0, temporal_accounting_mode="snapshot_weighted")
     assert len(network.snapshots) == 4
     assert (network.snapshot_weightings["objective"] == 4.0).all()
     assert (network.snapshot_weightings["stores"] == 4.0).all()
-    assert network.stores.at["compressed_hydrogen_store", "capital_cost"] == _raw_store_cost()
+    assert network.loads.at["ammonia", "p_set"] == pytest.approx(1e6 * 6.25 / 8760)  # the reference 1 Mt/yr
     assert network._temporal_accounting_mode == "snapshot_weighted"
 
 
-def test_legacy_mode_scales_store_costs_by_the_time_step():
-    network = plant.build_network(4, PLANT_DIR, time_step=4.0, temporal_accounting_mode="legacy_scaled")
-    assert network.stores.at["compressed_hydrogen_store", "capital_cost"] == _raw_store_cost() * 4.0
-    assert network._temporal_accounting_mode == "legacy_scaled"
+def test_legacy_mode_scales_store_and_variable_costs():
+    weighted, legacy = _prepared(4, 4.0, "snapshot_weighted"), _prepared(4, 4.0, "legacy_scaled")
+    assert legacy._temporal_accounting_mode == "legacy_scaled"
+    store = "compressed_hydrogen_store"
+    assert legacy.stores.at[store, "capital_cost"] == pytest.approx(4.0 * weighted.stores.at[store, "capital_cost"])
+    assert weighted.links.at["electrolysis", "marginal_cost"] == pytest.approx(0.537)
+    assert legacy.links.at["electrolysis", "marginal_cost"] == pytest.approx(0.537 * 24 * 366 / 4)
+
+
+# --- technology values from the YAML ----------------------------------------------------------
+
+def test_operating_values_come_from_the_yaml():
+    network = _prepared(4, 1.0, "snapshot_weighted")
+    assert network.links.at["ammonia_synthesis", "p_min_pu"] == 0.3
+    assert network.links.at["ammonia_synthesis", "ramp_limit_up"] == 0.4
+    assert network.links.at["ammonia_synthesis", "ramp_limit_down"] == 0.4
+    # 0.1 % a day, which PyPSA applies hour by hour
+    assert (1 - network.stores.at["battery_storage", "standing_loss"]) ** 24 == pytest.approx(0.999, rel=1e-12)
+    assert network.stores.at["compressed_hydrogen_store", "standing_loss"] == 0.0
+
+
+def test_the_bundle_needs_the_yaml_values():
+    tech = technology.load_tech_inputs(DEFAULT_TECH_YAML)
+    del tech["electrolysis"]["overnight_cost_per_mw"]
+    network = plant.build_network(4, PLANT_DIR, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
+    with pytest.raises(ValueError, match="electrolysis.overnight_cost_per_mw"):
+        technology.prepare_base_network(network, tech)
+
+
+@pytest.mark.parametrize("hours_per_snapshot", [1.0, 4.0])
+def test_a_battery_left_alone_keeps_its_daily_share(hours_per_snapshot):
+    """PyPSA's own solve: a full battery with no flows keeps 99.9 % after a day, at any step (the
+    first snapshot holds the initial energy, so a day ends one snapshot after 24 hours' worth)."""
+    import pypsa
+
+    pytest.importorskip("highspy")
+    network = pypsa.Network()
+    network.set_snapshots(range(int(24 / hours_per_snapshot) + 1))
+    network.snapshot_weightings.loc[:, :] = hours_per_snapshot
+    network.add("Bus", "power_storage")
+    # alone on its bus the store cannot dispatch; the cost only gives PyPSA an objective
+    network.add("Store", "battery_storage", bus="power_storage", e_nom=1000.0, e_initial=1000.0, e_cyclic=False,
+                marginal_cost=1.0)
+    technology.apply_operating_parameters(network, {"battery_storage": {"standing_loss_fraction_per_day": 0.001}})
+    network.optimize(solver_name="highs")
+    assert network.stores_t.e["battery_storage"].iloc[-1] == pytest.approx(999.0, rel=1e-9)
 
 
 def test_unknown_time_accounting_is_rejected():
@@ -111,7 +158,7 @@ def test_per_hour_ramp_clears_native_limits_and_scales_the_custom_rate():
 
 
 def test_legacy_ramp_keeps_native_snapshot_rates():
-    network = plant.build_network(4, PLANT_DIR, time_step=4.0, temporal_accounting_mode="legacy_scaled")
+    network = _prepared(4, 4.0, "legacy_scaled")
     network._ramp_limit_basis = "legacy_per_snapshot"
     up_before = network.links.at["ammonia_synthesis", "ramp_limit_up"]
     plant.prepare_ammonia_ramp_constraints(network)

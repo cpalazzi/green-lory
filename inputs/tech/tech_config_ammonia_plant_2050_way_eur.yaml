@@ -92,6 +92,13 @@ techs:
     carriers_in: {power: 0.16, hydrogen: 1.13472}
     carriers_out: {ammonia: 1.0}
     overall_efficiency: 0.772
+    # Operation: minimum load and ramp limits, fractions of capacity per hour (per snapshot
+    # under the legacy ramp basis); the legacy model's values
+    # (legacy_lcoa/source/94de8ce/Basic_ammonia_plant/links.csv), to be checked against the
+    # literature in campaign step 4 (D9)
+    min_load_fraction: 0.3
+    ramp_limit_up: 0.4
+    ramp_limit_down: 0.4
   electrolysis:
     component_type: link
     source_note: Way et al 2050 electrolyser (33,721 $/MW_in/yr → 276,735 $/MW_in ÷ 0.886509 eff = 312,174 $/MW_out → 281,700 EUR2020/MW_H2_out)
@@ -105,6 +112,10 @@ techs:
     carriers_in: {power: 1.0}           # per MW of power in
     carriers_out: {hydrogen: 0.886509}  # Way 2050 HHV efficiency
     overall_efficiency: 0.886509
+    # Variable cost, EUR per MWh of electricity in. No source found: in the plant bundle since its
+    # first version (January 2026); DEA 2050 gives no variable O&M for AEC and the legacy model
+    # has none
+    variable_cost_per_mwh: 0.537
   hydrogen_compression:
     component_type: link
     source_note: DEA 2050 (not in Way et al; compression bundled in lcoa-opt H2 store cost)
@@ -217,7 +228,7 @@ techs:
     lifetime_years: 30
     interest_rate: 0.1
     fixed_om_fraction: 0.029
-    standing_loss_fraction_per_day: 0.001
+    standing_loss_fraction_per_day: 0.001 # DEA 2050 Li-ion, as the DEA case (the legacy model had none)
   compressed_hydrogen_store:
     component_type: store
     source_note: lcoa-opt H2 store (2,524 $/MWh/yr → 20,714 $/MWh USD2018 → 18,700 EUR2020/MWh; includes some compression in lcoa-opt)

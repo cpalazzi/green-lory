@@ -88,7 +88,7 @@ PIPELINE_DISCOUNT_RATE = float(_PIPELINE["discount_rate"])
 PIPE_LIFETIME_YEARS = float(_PIPELINE["pipe_lifetime_years"])
 PUMP_LIFETIME_YEARS = float(_PIPELINE["pump_lifetime_years"])
 USD_DEC2017_TO_USD2020 = float(_PIPELINE["cpi_2020"]) / float(_PIPELINE["cpi_dec2017"])
-REFERENCE_AMMONIA_T_PER_YEAR = float(_PIPELINE["reference_ammonia_t_per_year"])
+REFERENCE_AMMONIA_T_PER_YEAR = float(parameter("plant.reference_output_mt_per_year")) * 1e6
 PIPELINE_MATERIALS_SHARE = float(_PIPELINE["materials_share"])
 
 

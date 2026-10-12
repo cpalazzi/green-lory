@@ -145,10 +145,12 @@ a test checks that every definition has one.
 ## Plant bundle
 
 The plant is one directory of PyPSA component tables, `model/plants/ammonia_plant_1mt/`: the
-components, how they connect, the 1 Mt/yr ammonia load, the Haber-Bosch minimum load and ramp
-limits. Each run sets the rest from its technology YAML: the capital costs and every link's
-efficiencies (from the YAML's `carriers_in`/`carriers_out` recipe), and from its `pv_policy`
-whether tracking PV may be built. Until 7 October 2026 there were three bundles
+components and how they connect, with no technology values. Each run sets those from its
+technology YAML: the capital costs, every link's efficiencies (from the YAML's
+`carriers_in`/`carriers_out` recipe) and the operating values (Haber-Bosch minimum load and ramp
+limits, the electrolysis variable cost, the battery standing loss); the ammonia demand comes from
+the reference output in `inputs/parameters.yaml`, and the run's `pv_policy` decides whether
+tracking PV may be built. Until 7 October 2026 there were three bundles
 (`basic_ammonia_plant_2050`, `_2050_way`, `_2050_way_tracking`), which differed only in four
 efficiencies and the tracking flag; the September reports name them.
 

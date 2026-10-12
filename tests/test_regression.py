@@ -2,9 +2,12 @@
 
 Three focal cells (inland Chile -23,-69; Pilbara -23,117; central Australia -21,135) for the
 improved key run and the reconciling run, over one week and over the full year. The baseline
-(tests/regression/focal_cells_baseline.csv) was produced on 7 October 2026 with the code
-before the step-2 restructuring; its full-year LCOA equals the accepted ARC surfaces to within
-5e-5 (the solver tolerance).
+(tests/regression/focal_cells_baseline.csv) was regenerated on 12 October 2026, when the battery
+standing loss became the technology YAML's 0.1 % a day (the plant bundle's 0.001 had been
+applied per hour) and the ammonia demand was derived from the heating value: full-year LCOA fell
+by 0.006 % to 0.05 %. With the old loss and demand forced back, the code reproduced the earlier
+baseline of 7 October 2026 exactly; that baseline's full-year LCOA equals the accepted ARC
+surfaces to within 5e-5 (the solver tolerance).
 
 The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells) with a
 15-degree slope limit, against tests/regression/land_center_100pct_lat_m24_m22.csv. That file
@@ -51,6 +54,11 @@ TOLERANCES = {  # column -> relative tolerance; everything else numeric must agr
     "lcoa_plant_eur_per_t": 1e-5,
     "total_cost_eur_per_year": 1e-5,
     "scaled_design_max_gridless_onshore_ammonia_capacity_t": 1e-3,
+    # Generation used rather than curtailed is not unique at the optimum (curtailment costs
+    # nothing), so these dispatch totals differ by up to 0.15 % between solver runs
+    "power_bus_generator_supply_mwh": 1e-2,
+    "grid_energy_reference_mwh": 1e-2,
+    "grid_energy_tolerance_mwh": 1e-2,
 }
 
 
