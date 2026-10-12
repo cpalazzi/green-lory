@@ -1,0 +1,178 @@
+country,tiam_region_code,tiam_region_name
+Algeria,AFR,Africa
+Angola,AFR,Africa
+Benin,AFR,Africa
+Botswana,AFR,Africa
+Burkina Faso,AFR,Africa
+Burundi,AFR,Africa
+Cameroon,AFR,Africa
+Central African Republic,AFR,Africa
+Chad,AFR,Africa
+Democratic Republic of the Congo,AFR,Africa
+Djibouti,AFR,Africa
+Egypt,AFR,Africa
+Equatorial Guinea,AFR,Africa
+Eritrea,AFR,Africa
+Ethiopia,AFR,Africa
+Gabon,AFR,Africa
+Gambia,AFR,Africa
+Ghana,AFR,Africa
+Guinea,AFR,Africa
+Guinea-Bissau,AFR,Africa
+Ivory Coast,AFR,Africa
+Kenya,AFR,Africa
+Lesotho,AFR,Africa
+Liberia,AFR,Africa
+Libya,AFR,Africa
+Madagascar,AFR,Africa
+Malawi,AFR,Africa
+Mali,AFR,Africa
+Mauritania,AFR,Africa
+Morocco,AFR,Africa
+Mozambique,AFR,Africa
+Namibia,AFR,Africa
+Niger,AFR,Africa
+Nigeria,AFR,Africa
+Republic of the Congo,AFR,Africa
+Rwanda,AFR,Africa
+Senegal,AFR,Africa
+Sierra Leone,AFR,Africa
+Somalia,AFR,Africa
+Somaliland,AFR,Africa
+South Africa,AFR,Africa
+South Sudan,AFR,Africa
+Sudan,AFR,Africa
+Togo,AFR,Africa
+Tunisia,AFR,Africa
+Uganda,AFR,Africa
+United Republic of Tanzania,AFR,Africa
+Western Sahara,AFR,Africa
+Zambia,AFR,Africa
+Zimbabwe,AFR,Africa
+eSwatini,AFR,Africa
+Australia,AUS,Australia
+Fiji,AUS,Australia
+New Zealand,AUS,Australia
+Canada,CAN,Canada
+Greenland,CAN,Canada
+China,CHI,China
+Mongolia,CHI,China
+Argentina,CSA,Central and South America
+Belize,CSA,Central and South America
+Bolivia,CSA,Central and South America
+Brazil,CSA,Central and South America
+Chile,CSA,Central and South America
+Colombia,CSA,Central and South America
+Costa Rica,CSA,Central and South America
+Cuba,CSA,Central and South America
+Dominican Republic,CSA,Central and South America
+Ecuador,CSA,Central and South America
+El Salvador,CSA,Central and South America
+Falkland Islands,CSA,Central and South America
+Guatemala,CSA,Central and South America
+Guyana,CSA,Central and South America
+Haiti,CSA,Central and South America
+Honduras,CSA,Central and South America
+Jamaica,CSA,Central and South America
+Nicaragua,CSA,Central and South America
+Panama,CSA,Central and South America
+Paraguay,CSA,Central and South America
+Peru,CSA,Central and South America
+Puerto Rico,CSA,Central and South America
+Suriname,CSA,Central and South America
+The Bahamas,CSA,Central and South America
+Trinidad and Tobago,CSA,Central and South America
+Uruguay,CSA,Central and South America
+Venezuela,CSA,Central and South America
+Albania,EEU,Eastern Europe
+Bosnia and Herzegovina,EEU,Eastern Europe
+Bulgaria,EEU,Eastern Europe
+Croatia,EEU,Eastern Europe
+Cyprus,EEU,Eastern Europe
+Czechia,EEU,Eastern Europe
+Hungary,EEU,Eastern Europe
+Kosovo,EEU,Eastern Europe
+Montenegro,EEU,Eastern Europe
+North Macedonia,EEU,Eastern Europe
+Northern Cyprus,EEU,Eastern Europe
+Poland,EEU,Eastern Europe
+Republic of Serbia,EEU,Eastern Europe
+Romania,EEU,Eastern Europe
+Slovakia,EEU,Eastern Europe
+Slovenia,EEU,Eastern Europe
+Armenia,FSU,Former Soviet Union
+Azerbaijan,FSU,Former Soviet Union
+Belarus,FSU,Former Soviet Union
+Estonia,FSU,Former Soviet Union
+Georgia,FSU,Former Soviet Union
+Kazakhstan,FSU,Former Soviet Union
+Kyrgyzstan,FSU,Former Soviet Union
+Latvia,FSU,Former Soviet Union
+Lithuania,FSU,Former Soviet Union
+Moldova,FSU,Former Soviet Union
+Russia,FSU,Former Soviet Union
+Tajikistan,FSU,Former Soviet Union
+Turkmenistan,FSU,Former Soviet Union
+Ukraine,FSU,Former Soviet Union
+Uzbekistan,FSU,Former Soviet Union
+India,IND,India
+Japan,JAP,Japan
+Iran,MEA,Middle-east
+Iraq,MEA,Middle-east
+Israel,MEA,Middle-east
+Jordan,MEA,Middle-east
+Kuwait,MEA,Middle-east
+Lebanon,MEA,Middle-east
+Oman,MEA,Middle-east
+Palestine,MEA,Middle-east
+Qatar,MEA,Middle-east
+Saudi Arabia,MEA,Middle-east
+Syria,MEA,Middle-east
+Turkey,MEA,Middle-east
+United Arab Emirates,MEA,Middle-east
+Yemen,MEA,Middle-east
+Mexico,MEX,Mexico
+Afghanistan,ODA,Other Developing Asia
+Bangladesh,ODA,Other Developing Asia
+Bhutan,ODA,Other Developing Asia
+Brunei,ODA,Other Developing Asia
+Cambodia,ODA,Other Developing Asia
+East Timor,ODA,Other Developing Asia
+Indonesia,ODA,Other Developing Asia
+Laos,ODA,Other Developing Asia
+Malaysia,ODA,Other Developing Asia
+Myanmar,ODA,Other Developing Asia
+Nepal,ODA,Other Developing Asia
+North Korea,ODA,Other Developing Asia
+Pakistan,ODA,Other Developing Asia
+Papua New Guinea,ODA,Other Developing Asia
+Philippines,ODA,Other Developing Asia
+Solomon Islands,ODA,Other Developing Asia
+Sri Lanka,ODA,Other Developing Asia
+Taiwan,ODA,Other Developing Asia
+Thailand,ODA,Other Developing Asia
+Vanuatu,ODA,Other Developing Asia
+Vietnam,ODA,Other Developing Asia
+South Korea,SKO,South Korea
+United Kingdom,UK,United Kingdom
+United States of America,USA,USA
+Austria,WEU,Western Europe
+Belgium,WEU,Western Europe
+Denmark,WEU,Western Europe
+Finland,WEU,Western Europe
+France,WEU,Western Europe
+French Southern and Antarctic Lands,WEU,Western Europe
+Germany,WEU,Western Europe
+Greece,WEU,Western Europe
+Iceland,WEU,Western Europe
+Ireland,WEU,Western Europe
+Italy,WEU,Western Europe
+Luxembourg,WEU,Western Europe
+Malta,WEU,Western Europe
+Netherlands,WEU,Western Europe
+New Caledonia,WEU,Western Europe
+Norway,WEU,Western Europe
+Portugal,WEU,Western Europe
+Spain,WEU,Western Europe
+Sweden,WEU,Western Europe
+Switzerland,WEU,Western Europe

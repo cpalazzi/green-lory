@@ -41,6 +41,7 @@ WRAPPER_VARIABLES = {
     "pv_policy": "PV_POLICY",
     "finance_csv": "OVERRIDE_CSV",
     "finance_csv_sha256": "EXPECTED_OVERRIDE_CSV_SHA256",
+    "interest_rate": "INTEREST_RATE",
     "time_step_h": "TIME_STEP",
     "temporal_accounting": "TEMPORAL_ACCOUNTING_MODE",
     "ramp_limit_basis": "RAMP_LIMIT_BASIS",
@@ -58,10 +59,12 @@ WRAPPER_VARIABLES = {
     "weather_land_correction": "WEATHER_LAND_CORRECTION",
     "weather_land_correction_sha256": "EXPECTED_WEATHER_LAND_CORRECTION_SHA256",
 }
-# Keys a green_lory run may leave out (the wrapper then gets an empty value): runs without site
-# costs use flat build costs and the YAML's uniform water price; runs without a land correction
-# use the 1-degree profiles as they are (every run before October 2026)
-OPTIONAL_KEYS = ("site_costs_csv", "site_costs_csv_sha256", "weather_land_correction", "weather_land_correction_sha256")
+# Keys a green_lory run may leave out (the wrapper then gets an empty value): a run sets either a
+# finance table (finance_csv) or one interest rate for every technology and cell (interest_rate);
+# runs without site costs use flat build costs and the YAML's uniform water price; runs without a
+# land correction use the 1-degree profiles as they are (every run before October 2026)
+OPTIONAL_KEYS = ("finance_csv", "finance_csv_sha256", "interest_rate", "site_costs_csv", "site_costs_csv_sha256",
+                 "weather_land_correction", "weather_land_correction_sha256")
 
 ALLOWED_VALUES = {
     "pv_policy": {"both", "fixed"},
@@ -78,6 +81,7 @@ TABLE_KEYS = (
     "plant_dir",
     "pv_policy",
     "finance_csv",
+    "interest_rate",
     "time_step_h",
     "temporal_accounting",
     "ramp_limit_basis",
@@ -209,9 +213,13 @@ def _validate_green_lory_run(run_id: str, run: Mapping[str, Any]) -> None:
     missing = sorted(set(WRAPPER_VARIABLES) - set(OPTIONAL_KEYS) - set(run))
     if missing:
         raise RunDefinitionError(f"Run {run_id} is missing {', '.join(missing)}")
-    for key in ("site_costs_csv", "weather_land_correction"):
+    for key in ("finance_csv", "site_costs_csv", "weather_land_correction"):
         if bool(run.get(key)) != bool(run.get(f"{key}_sha256")):
             raise RunDefinitionError(f"Run {run_id}: {key} and {key}_sha256 go together")
+    if bool(run.get("finance_csv")) == (run.get("interest_rate") is not None):
+        raise RunDefinitionError(f"Run {run_id}: set either finance_csv or interest_rate")
+    if run.get("interest_rate") is not None and not 0.0 <= float(run["interest_rate"]) < 1.0:
+        raise RunDefinitionError(f"Run {run_id}: interest_rate is a fraction, e.g. 0.05")
     for key, allowed in ALLOWED_VALUES.items():
         if run[key] not in allowed:
             raise RunDefinitionError(f"Run {run_id}: {key}={run[key]!r} is not one of {sorted(allowed)}")
@@ -228,7 +236,7 @@ def _shell_value(key: str, value: Any) -> str:
         return f"{float(value):.1f}"
     if key == "site_costs_in_headline":
         return "1" if value else "0"
-    if key == "water_eur2020_per_m3":
+    if key in ("water_eur2020_per_m3", "interest_rate"):
         return repr(float(value))
     if key == "land_share":
         return f"{float(value):.2f}"
@@ -308,7 +316,8 @@ def surface_arguments(run_id: str, *, campaigns_dir: str | Path = LOCAL_CAMPAIGN
                       runs: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """Keyword arguments of model.surface.run_surface for a green_lory run of runs.yaml.
 
-    Checks the pinned hashes of the land table, the finance file and the site-cost table.
+    Checks the pinned hashes of the land table, the finance table (if any), the site-cost table
+    and the weather land correction.
     """
     import hashlib
 
@@ -319,9 +328,11 @@ def surface_arguments(run_id: str, *, campaigns_dir: str | Path = LOCAL_CAMPAIGN
         raise RunDefinitionError(f"{run_id!r} is not a green_lory run of runs.yaml")
     run = runs[run_id]
     land_csv = Path(campaigns_dir) / run["land_table"]
-    finance_csv = REPO_ROOT / run["finance_csv"]
+    finance_csv = REPO_ROOT / run["finance_csv"] if run.get("finance_csv") else None
     site_costs_csv = REPO_ROOT / run["site_costs_csv"] if run.get("site_costs_csv") else None
-    pinned = [("land table", land_csv, run["land_table_sha256"]), ("finance CSV", finance_csv, run["finance_csv_sha256"])]
+    pinned = [("land table", land_csv, run["land_table_sha256"])]
+    if finance_csv is not None:
+        pinned.append(("finance CSV", finance_csv, run["finance_csv_sha256"]))
     if site_costs_csv is not None:
         pinned.append(("site-cost table", site_costs_csv, run["site_costs_csv_sha256"]))
     land_correction = REPO_ROOT / run["weather_land_correction"] if run.get("weather_land_correction") else None
@@ -336,6 +347,7 @@ def surface_arguments(run_id: str, *, campaigns_dir: str | Path = LOCAL_CAMPAIGN
         "tech_yaml": REPO_ROOT / run["tech_yaml"],
         "plant_dir": REPO_ROOT / run["plant_dir"],
         "override_csv": finance_csv,
+        "interest_rate": float(run["interest_rate"]) if run.get("interest_rate") is not None else None,
         "site_costs_csv": site_costs_csv,
         "weather_dir": REPO_ROOT / run["weather_dir"],
         "weather_land_correction": land_correction,

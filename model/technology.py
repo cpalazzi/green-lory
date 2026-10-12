@@ -317,6 +317,13 @@ def index_override_table(frame: pd.DataFrame) -> dict[tuple[float, float], dict[
     return index
 
 
+def uniform_interest_overrides(cells, tech_names, rate: float) -> dict[tuple[float, float], dict[str, dict[str, float]]]:
+    """The override index of a run with one interest rate: every technology at every cell takes
+    it, as a finance table of that rate would set (the cells share one read-only mapping)."""
+    rates = {name: {"interest_rate": float(rate)} for name in sorted(tech_names)}
+    return {_cell_key(lat, lon): rates for lat, lon in cells}
+
+
 def cell_overrides(index: dict, lat: float, lon: float) -> dict[str, dict[str, float]] | None:
     """One cell's overrides, or None."""
     return index.get(_cell_key(lat, lon)) or None

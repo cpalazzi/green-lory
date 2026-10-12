@@ -12,7 +12,7 @@ changing the choice needs only post-processing of the existing key surfaces or a
 |---|---|---|---|
 | Technology costs | DEA 2050; Way 2050 only for the reconciling run | 16 Sep | `tech_yaml` in `runs.yaml` |
 | Currency | EUR2020 for LCOA; supplier contracts in USD2018, the network model's currency | 23 Sep | result columns, contract export |
-| Finance | uniform 5 % WACC as the base; Ameli reduced WACC by country as a sensitivity (it moves the median LCOA by under 1 %) | 5 Oct | `finance_csv` |
+| Finance | uniform 5 % WACC as the base; Ameli reduced WACC by country as a sensitivity (it moves the median LCOA by under 1 %) | 5 Oct | `interest_rate` (uniform) or `finance_csv` (by country) in `runs.yaml` |
 | Time resolution | hourly, one weather year (2019) | Sep | `time_step_h` |
 | Weather of coastal cells | the 1-degree profiles average the cell, sea included; for the campaign the profiles of cells with at least 1 % water are rescaled to their land with ERA5 at 0.25 degrees | 8 Oct | `weather_land_correction`; thresholds in `inputs/parameters.yaml` (weather) |
 | PV | fixed tilt only; tracking-only is a named sensitivity; the optimiser does not choose between them | 16 Sep | `pv_policy`, plant bundle |

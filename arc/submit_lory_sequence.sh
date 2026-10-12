@@ -281,7 +281,7 @@ print_scenario_summary() {
   echo "  class:       $SCENARIO_CLASS"
   echo "  tech yaml:   $TECH_YAML"
   echo "  plant dir:   $PLANT_DIR"
-  echo "  override:    $OVERRIDE_CSV"
+  echo "  finance:     ${OVERRIDE_CSV:-interest rate $INTEREST_RATE for every technology and cell}"
   echo "  site costs table: ${SITE_COSTS_CSV:-<none: flat build costs and water>}"
   echo "  weather land correction: ${WEATHER_LAND_CORRECTION:-<none: 1-degree profiles as they are>}"
   echo "  land csv:    $LAND_CSV"
@@ -300,7 +300,7 @@ SUBMIT_ENV_VARIABLES=(
   CAMPAIGN_ID RUN_ID RUN_STAGE SOURCE_COMMIT SOURCE_DIFF_SHA256
   SCENARIO_ID SCENARIO_CLASS SCENARIO_DESCRIPTION SCENARIO_JOB_TOKEN
   RUN_DIR MANIFEST_PATH MANIFEST_SHA256
-  TECH_YAML PLANT_DIR PV_POLICY OVERRIDE_CSV SITE_COSTS_CSV LAND_CSV WEATHER_DIR WEATHER_LAND_CORRECTION LOCATIONS_CSV
+  TECH_YAML PLANT_DIR PV_POLICY OVERRIDE_CSV INTEREST_RATE SITE_COSTS_CSV LAND_CSV WEATHER_DIR WEATHER_LAND_CORRECTION LOCATIONS_CSV
   TIME_STEP MAX_SNAPSHOTS SIMULATED_HOURS LAND_CONSTRAINT CAPACITY_RULE LAND_ALLOCATION
   TEMPORAL_ACCOUNTING_MODE RAMP_LIMIT_BASIS INCLUDE_SITE_COSTS
   NUM_WORKERS THREADS_PER_WORKER SLURM_CPUS SLURM_MEMORY
@@ -483,7 +483,8 @@ validate_cost_scope_and_override_coverage() {
     "$DRY_RUN" \
     "$COST_SCOPE" \
     "$FLAT_WATER_MODEL_PER_M3" \
-    "$SITE_COSTS_CSV" <<'PY'
+    "$SITE_COSTS_CSV" \
+    "$INTEREST_RATE" <<'PY'
 from pathlib import Path
 import sys
 
@@ -493,7 +494,7 @@ from arc.manifest import (
 )
 
 tech_yaml = Path(sys.argv[1])
-override_csv = Path(sys.argv[2])
+override_csv = Path(sys.argv[2]) if sys.argv[2] else None
 land_csv = Path(sys.argv[3])
 locations_csv = Path(sys.argv[4]) if sys.argv[4] else None
 include_site_costs = sys.argv[5] == "1"
@@ -502,9 +503,11 @@ dry_run = sys.argv[6].lower() == "true"
 cost_scope_id = sys.argv[7]
 flat_water_model_currency_per_m3 = float(sys.argv[8])
 site_costs_csv = Path(sys.argv[9]) if sys.argv[9] else None
+interest_rate = float(sys.argv[10]) if sys.argv[10] else None
 build_cost_scope(
     tech_yaml=tech_yaml,
     override_csv=override_csv,
+    interest_rate=interest_rate,
     include_site_costs=include_site_costs,
     cost_scope_id=cost_scope_id,
     flat_water_model_currency_per_m3=flat_water_model_currency_per_m3,
@@ -530,7 +533,14 @@ PY
 }
 
 validate_scenario_sources() {
-  local required=("$TECH_YAML" "$OVERRIDE_CSV" "$DIAGNOSTIC_LOCATIONS")
+  local required=("$TECH_YAML" "$DIAGNOSTIC_LOCATIONS")
+  if [[ -n "$OVERRIDE_CSV" && -n "$INTEREST_RATE" ]] || [[ -z "$OVERRIDE_CSV" && -z "$INTEREST_RATE" ]]; then
+    echo "A run sets either a finance table (finance_csv) or one interest rate (interest_rate)" >&2
+    return 2
+  fi
+  if [[ -n "$OVERRIDE_CSV" ]]; then
+    required+=("$OVERRIDE_CSV")
+  fi
   if [[ -n "$LOCATIONS_CSV" ]]; then
     required+=("$LOCATIONS_CSV")
   fi
@@ -543,7 +553,9 @@ validate_scenario_sources() {
   done
   validate_plant_dir "$PLANT_DIR"
   validate_pinned_sha256 "Land table" "$LAND_CSV" "$EXPECTED_LAND_TABLE_SHA256"
-  validate_pinned_sha256 "Finance CSV" "$OVERRIDE_CSV" "$EXPECTED_OVERRIDE_CSV_SHA256"
+  if [[ -n "$OVERRIDE_CSV" ]]; then
+    validate_pinned_sha256 "Finance CSV" "$OVERRIDE_CSV" "$EXPECTED_OVERRIDE_CSV_SHA256"
+  fi
   if [[ -n "$SITE_COSTS_CSV" ]]; then
     [[ -f "$SITE_COSTS_CSV" ]] || { echo "Required site-cost table not found: $SITE_COSTS_CSV" >&2; return 2; }
     validate_pinned_sha256 "Site-cost table" "$SITE_COSTS_CSV" "$EXPECTED_SITE_COSTS_CSV_SHA256"
@@ -594,7 +606,6 @@ manifest_command() {
     --run-dir "$RUN_DIR"
     --tech-yaml "$TECH_YAML"
     --plant-dir "$PLANT_DIR"
-    --override-csv "$OVERRIDE_CSV"
     --land-csv "$LAND_CSV"
     --weather-dir "$WEATHER_DIR"
     --time-step-hours "$TIME_STEP"
@@ -620,6 +631,11 @@ manifest_command() {
   )
   if [[ -n "$RELEASE_SOURCE_INVENTORY" ]]; then
     MANIFEST_COMMAND+=(--release-source-inventory "$RELEASE_SOURCE_INVENTORY")
+  fi
+  if [[ -n "$OVERRIDE_CSV" ]]; then
+    MANIFEST_COMMAND+=(--override-csv "$OVERRIDE_CSV")
+  else
+    MANIFEST_COMMAND+=(--interest-rate "$INTEREST_RATE")
   fi
   if [[ -n "$LOCATIONS_CSV" ]]; then
     MANIFEST_COMMAND+=(--locations-csv "$LOCATIONS_CSV")
@@ -659,6 +675,7 @@ submit_or_plan_jobs() {
     "ARC_PLANT_DIR=$PLANT_DIR"
     "ARC_PV_POLICY=$PV_POLICY"
     "ARC_OVERRIDE_CSV=$OVERRIDE_CSV"
+    "ARC_INTEREST_RATE=$INTEREST_RATE"
     "ARC_SITE_COSTS_CSV=$SITE_COSTS_CSV"
     "ARC_LAND_CSV=$LAND_CSV"
     "ARC_WEATHER_DIR=$WEATHER_DIR"

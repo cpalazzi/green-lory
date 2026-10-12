@@ -98,6 +98,7 @@ fi
 
 export ARC_TECH_YAML="${ARC_TECH_YAML:?ARC_TECH_YAML must name the technology YAML of the run}"
 export ARC_OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
+export ARC_INTEREST_RATE="${ARC_INTEREST_RATE:-}"
 export ARC_SITE_COSTS_CSV="${ARC_SITE_COSTS_CSV:-}"
 export ARC_WEATHER_LAND_CORRECTION="${ARC_WEATHER_LAND_CORRECTION:-}"
 export ARC_LAND_CSV="${ARC_LAND_CSV:?ARC_LAND_CSV must point at a centred land table (cell_anchor=center)}"
@@ -216,6 +217,7 @@ result = run_surface(
     tech_yaml=env("ARC_TECH_YAML"),
     plant_dir=env("ARC_PLANT_DIR") or None,
     override_csv=env("ARC_OVERRIDE_CSV") or None,
+    interest_rate=float(env("ARC_INTEREST_RATE")) if env("ARC_INTEREST_RATE") else None,
     site_costs_csv=env("ARC_SITE_COSTS_CSV") or None,
     weather_dir=env("ARC_WEATHER_DIR") or None,
     weather_land_correction=env("ARC_WEATHER_LAND_CORRECTION") or None,

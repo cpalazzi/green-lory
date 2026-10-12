@@ -572,17 +572,21 @@ def _flat_cost_scope_expectations(
     if land.get("included_in_headline") is not False:
         raise ValueError("A missing land-rent input cannot be declared headline-active")
 
-    override_columns = (
-        manifest.get("inputs", {}).get("override_csv", {}).get("columns")
-    )
-    if not isinstance(override_columns, list):
-        raise ValueError("Manifest must record override CSV column names")
-    normalized_columns = [str(column).strip().lower() for column in override_columns]
-    if normalized_columns != ["lat", "lon", "tech", "interest_rate"]:
-        raise ValueError(
-            "flat_amelired requires an interest-only override CSV; "
-            f"manifest records {override_columns}"
-        )
+    # the rates come from a finance table (interest-only) or one rate for every technology and cell
+    inputs = manifest.get("inputs", {})
+    if finance.get("source") == "interest_rate":
+        if not isinstance(inputs.get("interest_rate"), (int, float)):
+            raise ValueError("Manifest finance from interest_rate must record inputs.interest_rate")
+    else:
+        override_columns = inputs.get("override_csv", {}).get("columns")
+        if not isinstance(override_columns, list):
+            raise ValueError("Manifest must record override CSV column names")
+        normalized_columns = [str(column).strip().lower() for column in override_columns]
+        if normalized_columns != ["lat", "lon", "tech", "interest_rate"]:
+            raise ValueError(
+                "flat_amelired requires an interest-only override CSV; "
+                f"manifest records {override_columns}"
+            )
 
     try:
         build_multiplier = float(build["expected_result_build_cost_multiplier"])

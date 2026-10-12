@@ -71,6 +71,9 @@ class RunDefinitionsTest(unittest.TestCase):
             ({"site_costs_in_headline": "yes"}, "true or false"),
             ({"time_step_h": 7}, "divide 8760"),
             ({"site_costs_csv": "inputs/site_costs/x.csv"}, "go together"),
+            ({"finance_csv": "inputs/finance/x.csv", "finance_csv_sha256": "0" * 64}, "either finance_csv or interest_rate"),
+            ({"interest_rate": None}, "either finance_csv or interest_rate"),
+            ({"interest_rate": 5}, "a fraction"),
         ):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "runs.yaml"

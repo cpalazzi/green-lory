@@ -69,7 +69,8 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `tech_yaml` | Technology and cost YAML in `inputs/tech/`; may `extends:` another YAML, whose values it overrides |
 | `plant_dir` | Plant bundle, see [Plant bundles](#plant-bundles) |
 | `pv_policy` | PV offered to the optimiser: `fixed` (fixed tilt only) or `both` (fixed and single-axis tracking) |
-| `finance_csv`, `finance_csv_sha256` | Interest-only override CSV: `interest_rate` per cell and technology (`--override-csv`); the hash pins the file |
+| `finance_csv`, `finance_csv_sha256` | Interest-only override CSV: `interest_rate` per cell and technology (`--override-csv`); the hash pins the file. A run sets this or `interest_rate` |
+| `interest_rate` | One interest rate (a fraction, e.g. 0.05) for every technology at every cell (`--interest-rate`), instead of a finance table |
 | `site_costs_csv`, `site_costs_csv_sha256` | Optional site-cost table of the run's land table (`green-lory site-costs`): equipment and build multipliers and the water price per cell (`--site-costs-csv`); runs without it are flat |
 | `weather_land_correction`, `weather_land_correction_sha256` | Optional factors that rescale the profiles of cells with water to their land (`model/weather_land.py`, `--weather-land-correction`); runs before October 2026 have none |
 | `time_step_h`, `temporal_accounting`, `ramp_limit_basis` | Weather step and the matching accounting options, see [Run options](#run-options) |

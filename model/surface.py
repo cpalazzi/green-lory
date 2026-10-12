@@ -121,14 +121,18 @@ def read_run_inputs(
     tech_yaml: str | Path | None = None,
     plant_dir: str | Path | None = None,
     override_csv: str | Path | None = None,
+    interest_rate: float | None = None,
     site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
     weather_land_correction: str | Path | None = None,
     load_weather: bool = True,
 ) -> RunInputs:
     """Read a run's shared inputs. The base network has the run's snapshot count, the YAML's
-    link efficiencies and the run's PV policy; a site-cost table's multipliers and water price
-    join the finance table's interest rates in the overrides."""
+    link efficiencies and the run's PV policy. The finance is a per-cell table (override_csv) or
+    one interest rate for every technology and cell (interest_rate); a site-cost table's
+    multipliers and water price join the interest rates in the overrides."""
+    if override_csv is not None and interest_rate is not None:
+        raise ValueError("A run takes its interest rates from a finance table or one rate, not both")
     tech_yaml = repo_path(tech_yaml) if tech_yaml is not None else DEFAULT_TECH_YAML
     plant_dir = plant.check_plant_bundle(plant_dir if plant_dir is not None else DEFAULT_PLANT_DIR)
     tech_inputs = technology.load_tech_inputs(tech_yaml)
@@ -149,7 +153,11 @@ def read_run_inputs(
     plant.restrict_pv(base_network, settings.pv_policy)
     base_network._currency = str(tech_meta.get("currency", "USD")).strip().upper()
     base_network._ramp_limit_basis = settings.ramp_limit_basis
-    overrides = technology.index_override_table(technology.load_override_table(override_csv))
+    land_index = land.index_land_table(land_table)
+    if interest_rate is not None:
+        overrides = technology.uniform_interest_overrides(land_index, tech_inputs, interest_rate)
+    else:
+        overrides = technology.index_override_table(technology.load_override_table(override_csv))
     site_cost_cells = None
     if site_costs_csv is not None:
         site_overrides = site_costs.load_site_cost_overrides(site_costs_csv, tech_inputs)
@@ -160,7 +168,7 @@ def read_run_inputs(
         tech_inputs=tech_inputs,
         tech_meta=tech_meta,
         overrides=overrides,
-        land=land.index_land_table(land_table),
+        land=land_index,
         base_network=base_network,
         weather=profiles,
         site_cost_cells=site_cost_cells,
@@ -498,6 +506,7 @@ def run_surface(
     tech_yaml: str | Path | None = None,
     plant_dir: str | Path | None = None,
     override_csv: str | Path | None = None,
+    interest_rate: float | None = None,
     site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
     weather_land_correction: str | Path | None = None,
@@ -522,8 +531,8 @@ def run_surface(
         started = time.perf_counter()
         inputs = read_run_inputs(
             settings, land_csv=land_csv, tech_yaml=tech_yaml, plant_dir=plant_dir,
-            override_csv=override_csv, site_costs_csv=site_costs_csv, weather_dir=weather_dir,
-            weather_land_correction=weather_land_correction,
+            override_csv=override_csv, interest_rate=interest_rate, site_costs_csv=site_costs_csv,
+            weather_dir=weather_dir, weather_land_correction=weather_land_correction,
         )
         if locations is None:
             location_list = default_locations(inputs.land)
@@ -781,7 +790,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, help="Run only the first N locations.")
     parser.add_argument("--tech-yaml", help=f"Technology YAML (default {DEFAULT_TECH_YAML.name}).")
     parser.add_argument("--plant-dir", help=f"Plant bundle (default {DEFAULT_PLANT_DIR.name}).")
-    parser.add_argument("--override-csv", help="Per-cell finance table (interest rates; optionally build multipliers, water).")
+    finance = parser.add_mutually_exclusive_group()
+    finance.add_argument("--override-csv", help="Per-cell finance table (interest rates; optionally build multipliers, water).")
+    finance.add_argument("--interest-rate", type=float, help="One interest rate (a fraction) for every technology and cell.")
     parser.add_argument("--site-costs-csv", help="Site-cost table (model/site_costs.py): multipliers and water price per cell.")
     parser.add_argument("--weather-dir", help="Weather profile folder (default the runs.yaml run_defaults folder).")
     parser.add_argument("--weather-land-correction", help="Land correction of cells with water (model/weather_land.py).")
@@ -815,8 +826,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     frame = run_surface(
         locations, land_csv=args.land_csv, tech_yaml=args.tech_yaml, plant_dir=args.plant_dir,
-        override_csv=args.override_csv, site_costs_csv=args.site_costs_csv, weather_dir=args.weather_dir,
-        weather_land_correction=args.weather_land_correction, settings=settings, output_csv=args.output_csv, quiet=args.quiet, threads_per_worker=args.threads_per_worker,
+        override_csv=args.override_csv, interest_rate=args.interest_rate, site_costs_csv=args.site_costs_csv,
+        weather_dir=args.weather_dir, weather_land_correction=args.weather_land_correction, settings=settings, output_csv=args.output_csv, quiet=args.quiet, threads_per_worker=args.threads_per_worker,
         num_workers=args.num_workers, lon_min=args.lon_min, lon_max=args.lon_max, fail_fast=args.fail_fast,
     )
     print(f"Processed {len(frame)} locations. Results saved to {args.output_csv}.")

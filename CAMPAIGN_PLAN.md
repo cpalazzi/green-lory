@@ -534,7 +534,10 @@ All runs:
 - **9 October:** `inputs/` sorted by topic (`tech/`, `finance/`, `site_costs/`, `weather/`,
   `cells/`) with an index, `inputs/README.md`; every modelling assumption other than technology
   costs moved from the code to `inputs/parameters.yaml`, each with its source (values unchanged:
-  the geography and site-cost tables regenerate byte for byte).
+  the geography and site-cost tables regenerate byte for byte). A uniform rate is now one number
+  in `runs.yaml` (`interest_rate`), not a 22 MB table (the uniform key run reproduces its
+  regression cells); the countries of each TIAM-UCL region are in `inputs/finance/tiam_regions.csv`;
+  the per-cell finance tables are generated and gitignored.
 - **Open, for you** (8 October):
   1. two step-3 points of section 3: the nearly inactive slope factor (no change proposed) and
      the water source price in EUR (the remoteness table, GHD 2025, was decided on 8 October);

@@ -77,6 +77,16 @@ def test_override_table_is_indexed_by_cell(tmp_path):
     assert technology.interest_rates(cell) == {"solar": 0.06, "electrolysis": 0.07}
 
 
+def test_one_rate_gives_the_overrides_of_a_uniform_table(tmp_path):
+    techs = ["wind", "solar", "electrolysis"]
+    cells = [(-23.0, 117.0), (-22.0, 117.0)]
+    path = tmp_path / "uniform.csv"
+    pd.DataFrame([{"lat": lat, "lon": lon, "tech": tech, "interest_rate": 0.05}
+                  for lat, lon in cells for tech in sorted(techs)]).to_csv(path, index=False)
+    from_table = technology.index_override_table(technology.load_override_table(path))
+    assert technology.uniform_interest_overrides(cells, techs, 0.05) == from_table
+
+
 def test_cell_override_multiplies_only_the_installation_part():
     network = SimpleNamespace(generators=pd.DataFrame({"capital_cost": [0.0]}, index=["solar"]),
                               links=pd.DataFrame(), stores=pd.DataFrame())
@@ -114,16 +124,15 @@ def test_ameli_rates_follow_the_scenario():
     assert finance.ameli_rates(pd.Series(["Morocco"]), "reduced").interest_rate.iloc[0] == pytest.approx(0.051)
 
 
-def test_uniform_table_and_nearest_fill():
+def test_nearest_fill():
     from model import finance
 
     cells = pd.DataFrame({"lat": [0.0, 0.0, 10.0], "lon": [0.0, 1.0, 0.0]})
-    uniform = finance.uniform_table(cells, 0.05)
-    assert len(uniform) == 3 * len(finance.TECHNOLOGIES) and (uniform.interest_rate == 0.05).all()
-    covered = finance.uniform_table(cells.iloc[[0, 2]], 0.05)
+    covered = cells.iloc[[0, 2]].merge(pd.DataFrame({"tech": sorted(finance.TECHNOLOGIES)}), how="cross")
+    covered["interest_rate"] = 0.05
     covered.loc[covered.lat == 10.0, "interest_rate"] = 0.09
     filled, fills = finance.fill_from_nearest(cells, covered)
-    assert len(filled) == len(uniform)
+    assert len(filled) == 3 * len(finance.TECHNOLOGIES)
     assert (filled[(filled.lat == 0.0) & (filled.lon == 1.0)].interest_rate == 0.05).all()  # nearest is (0, 0)
     assert list(fills[["source_lat", "source_lon"]].iloc[0]) == [0.0, 0.0]
     assert fills.distance_km.iloc[0] == pytest.approx(111.19, abs=0.01)

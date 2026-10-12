@@ -95,8 +95,7 @@ runs:
     tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
-    finance_csv: inputs/finance/uniform_interest_inputs_0p05_2050.csv  # generated: python -m model.finance uniform --rate 0.05
-    finance_csv_sha256: d29259c8e4d094a3a56f2007e61a48b56e6e6fc7bbbe62b7f9ad0a2caea08a3d
+    interest_rate: 0.05  # every technology at every cell
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour

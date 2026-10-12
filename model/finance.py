@@ -1,16 +1,15 @@
 """Finance inputs: the per-cell interest-rate (WACC) tables that runs pin as ``finance_csv``.
 
+A run with one interest rate everywhere sets ``interest_rate`` in runs.yaml and needs no table.
 A finance table has one row per cell and technology, ``lat, lon, tech, interest_rate`` (a
 fraction), for the 15 technologies of the plant. ``model.technology`` reads it as the per-cell
-override table, and runs.yaml pins each file's sha256.
+override table, and runs.yaml pins each file's sha256. The tables are generated (gitignored).
 
-- ``uniform_table``: one rate everywhere (the flat-finance runs, 5 %);
 - ``ameli_rates``: the WACC of Ameli et al. (2021, Fig. 2; ``inputs/finance/ameli_tiam_wacc_fig2.csv``)
-  by TIAM-UCL region, each cell's region taken from its country;
+  by TIAM-UCL region, each cell's region taken from its country (``inputs/finance/tiam_regions.csv``);
 - ``fill_from_nearest``: cells that a table does not cover take the rates of the nearest
   covered cell (great-circle distance), and the fills are listed.
 
-    python -m model.finance uniform --land-csv <land table> --rate 0.05 --output-dir inputs/finance
     python -m model.finance ameli --land-csv <land table> --scenario low-carbon-regional --output-dir inputs/finance
     python -m model.finance fill --land-csv <land table> --table <finance csv> --output-dir inputs/finance
 
@@ -20,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +28,8 @@ import pandas as pd
 from .config import COUNTRIES_GEOJSON, EARTH_RADIUS_KM, FINANCE_DIR
 
 AMELI_WACC_TABLE = FINANCE_DIR / "ameli_tiam_wacc_fig2.csv"
+# The TIAM-UCL region of each country of data/countries.geojson (Ameli et al. 2021, Table 1)
+TIAM_REGIONS_CSV = FINANCE_DIR / "tiam_regions.csv"
 SCENARIO_COLUMN = {
     "reduced": "reduced_wacc_pct",
     "low-carbon-regional": "low_carbon_wacc_pct",
@@ -42,85 +44,28 @@ TECHNOLOGIES = (
     "hydrogen_from_storage", "hydrogen_fuel_cell", "penalty_link", "solar", "solar_tracking", "wind",
 )
 
-# TIAM-UCL regions of Ameli et al. (2021, Table 1), with the country names of
-# data/countries.geojson; territories are placed with the country that governs them.
-AFRICA = {
-    "Algeria", "Angola", "Benin", "Botswana", "Burkina Faso", "Burundi",
-    "Cameroon", "Central African Republic", "Chad", "Democratic Republic of the Congo",
-    "Djibouti", "Egypt", "Equatorial Guinea", "Eritrea", "Ethiopia", "Gabon",
-    "Gambia", "Ghana", "Guinea", "Guinea-Bissau", "Ivory Coast", "Kenya",
-    "Lesotho", "Liberia", "Libya", "Madagascar", "Malawi", "Mali", "Mauritania",
-    "Morocco", "Mozambique", "Namibia", "Niger", "Nigeria", "Republic of the Congo",
-    "Rwanda", "Senegal", "Sierra Leone", "Somalia", "Somaliland", "South Africa",
-    "South Sudan", "Sudan", "Togo", "Tunisia", "Uganda",
-    "United Republic of Tanzania", "Western Sahara", "Zambia", "Zimbabwe", "eSwatini",
-}
-CENTRAL_SOUTH_AMERICA = {
-    "Argentina", "Belize", "Bolivia", "Brazil", "Chile", "Colombia", "Costa Rica",
-    "Cuba", "Dominican Republic", "Ecuador", "El Salvador", "Falkland Islands",
-    "Guatemala", "Guyana", "Haiti", "Honduras", "Jamaica", "Nicaragua", "Panama",
-    "Paraguay", "Peru", "Puerto Rico", "Suriname", "The Bahamas",
-    "Trinidad and Tobago", "Uruguay", "Venezuela",
-}
-WESTERN_EUROPE = {
-    "Austria", "Belgium", "Denmark", "Finland", "France", "Germany", "Greece",
-    "Iceland", "Ireland", "Italy", "Luxembourg", "Malta", "Netherlands",
-    "New Caledonia", "Norway", "Portugal", "Spain", "Sweden", "Switzerland",
-    "French Southern and Antarctic Lands",
-}
-EASTERN_EUROPE = {
-    "Albania", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia",
-    "Hungary", "Kosovo", "Montenegro", "North Macedonia", "Northern Cyprus",
-    "Poland", "Republic of Serbia", "Romania", "Slovakia", "Slovenia",
-}
-FORMER_SOVIET_UNION = {
-    "Armenia", "Azerbaijan", "Belarus", "Estonia", "Georgia", "Kazakhstan",
-    "Kyrgyzstan", "Latvia", "Lithuania", "Moldova", "Russia", "Tajikistan",
-    "Turkmenistan", "Ukraine", "Uzbekistan",
-}
-MIDDLE_EAST = {
-    "Iran", "Iraq", "Israel", "Jordan", "Kuwait", "Lebanon", "Oman", "Palestine",
-    "Qatar", "Saudi Arabia", "Syria", "Turkey", "United Arab Emirates", "Yemen",
-}
-OTHER_DEVELOPING_ASIA = {
-    "Afghanistan", "Bangladesh", "Bhutan", "Brunei", "Cambodia", "East Timor",
-    "Indonesia", "Laos", "Malaysia", "Myanmar", "Nepal", "North Korea", "Pakistan",
-    "Papua New Guinea", "Philippines", "Solomon Islands", "Sri Lanka", "Taiwan",
-    "Thailand", "Vanuatu", "Vietnam",
-}
-AUSTRALIA_REGION = {"Australia", "Fiji", "New Zealand"}
 UNASSIGNED = "UNASSIGNED"
+
+
+@lru_cache(maxsize=None)
+def _tiam_regions(path: Path = TIAM_REGIONS_CSV) -> dict[str, str]:
+    table = pd.read_csv(path)
+    if table["country"].duplicated().any():
+        raise ValueError(f"{path} lists a country twice")
+    return dict(zip(table["country"], table["tiam_region_code"]))
 
 
 def tiam_region(country: str | float | None) -> str:
     """The TIAM-UCL region code of a country name (UNASSIGNED for none, Antarctica, or unknown)."""
     if country is None or pd.isna(country) or country == "":
         return UNASSIGNED
-    country = str(country)
-    single = {"Mexico": "MEX", "India": "IND", "South Korea": "SKO", "China": "CHI", "Mongolia": "CHI",
-              "Canada": "CAN", "Greenland": "CAN", "United States of America": "USA", "United Kingdom": "UK",
-              "Japan": "JAP"}
-    if country in single:
-        return single[country]
-    for members, code in ((AFRICA, "AFR"), (CENTRAL_SOUTH_AMERICA, "CSA"), (MIDDLE_EAST, "MEA"),
-                          (OTHER_DEVELOPING_ASIA, "ODA"), (AUSTRALIA_REGION, "AUS"), (EASTERN_EUROPE, "EEU"),
-                          (FORMER_SOVIET_UNION, "FSU"), (WESTERN_EUROPE, "WEU")):
-        if country in members:
-            return code
-    return UNASSIGNED
+    return _tiam_regions().get(str(country), UNASSIGNED)
 
 
 def land_cells(land_csv: str | Path) -> pd.DataFrame:
     """The cells (lat, lon) of a land table, sorted."""
     cells = pd.read_csv(land_csv, usecols=["latitude", "longitude"]).drop_duplicates().sort_values(["latitude", "longitude"])
     return cells.rename(columns={"latitude": "lat", "longitude": "lon"}).reset_index(drop=True)
-
-
-def uniform_table(cells: pd.DataFrame, rate: float, techs: tuple[str, ...] = TECHNOLOGIES) -> pd.DataFrame:
-    """One interest rate for every technology at every cell."""
-    grid = cells[["lat", "lon"]].merge(pd.DataFrame({"tech": sorted(techs)}), how="cross")
-    grid["interest_rate"] = rate
-    return grid.sort_values(["lat", "lon", "tech"])
 
 
 def ameli_rates(countries: pd.Series, scenario: str, wacc_table: str | Path = AMELI_WACC_TABLE) -> pd.DataFrame:
@@ -181,24 +126,19 @@ def _write(frame: pd.DataFrame, path: Path) -> None:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    uniform = commands.add_parser("uniform", help="one rate everywhere")
-    uniform.add_argument("--rate", type=float, default=0.05)
     ameli = commands.add_parser("ameli", help="Ameli WACC by TIAM region; cells without a country take the nearest cell's rate")
     ameli.add_argument("--scenario", choices=sorted(SCENARIO_COLUMN), required=True)
     ameli.add_argument("--countries", type=Path, default=COUNTRIES_GEOJSON)
     fill = commands.add_parser("fill", help="an existing finance table extended to every cell by nearest-cell fill")
     fill.add_argument("--table", type=Path, required=True)
     fill.add_argument("--name", default="amelired_interest_inputs_2050_center", help="output file name without .csv")
-    for command in (uniform, ameli, fill):
+    for command in (ameli, fill):
         command.add_argument("--land-csv", type=Path, required=True, help="land table whose latitude/longitude labels define the cells")
         command.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
 
     cells = land_cells(args.land_csv)
-    if args.command == "uniform":
-        tag = f"{args.rate:g}".replace(".", "p")
-        _write(uniform_table(cells, args.rate), args.output_dir / f"uniform_interest_inputs_{tag}_2050.csv")
-    elif args.command == "ameli":
+    if args.command == "ameli":
         from .surface import country_lookup, load_countries
 
         lookup = country_lookup(load_countries(args.countries), list(cells.itertuples(index=False, name=None)))

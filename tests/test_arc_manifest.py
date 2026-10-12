@@ -178,12 +178,17 @@ class VerifyCampaignManifestInputsTest(unittest.TestCase):
 
 ROOT = Path(__file__).resolve().parents[1]
 DEA_YAML = ROOT / "inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml"
-UNIFORM = ROOT / "inputs/finance/uniform_interest_inputs_0p05_2050.csv"
-AMELI = ROOT / "inputs/finance/amelired_interest_inputs_2050.csv"
 
 
-def _manifest(scope_id, mode, rate=0.05):
-    finance = {"mode": mode, "source": "override_csv", "override_column": "interest_rate"}
+def _finance_csv(path: Path, rates) -> Path:
+    """A small finance table: one row per (cell, rate) for two technologies."""
+    rows = [f"{-23 + i},117,{tech},{rate}" for i, rate in enumerate(rates) for tech in ("solar", "wind")]
+    path.write_text("lat,lon,tech,interest_rate\n" + "\n".join(rows) + "\n")
+    return path
+
+
+def _manifest(scope_id, mode, rate=0.05, source="override_csv"):
+    finance = {"mode": mode, "source": source, "override_column": "interest_rate"}
     if mode == "uniform_wacc":
         finance["rate"] = rate
     return {
@@ -194,7 +199,8 @@ def _manifest(scope_id, mode, rate=0.05):
                       "expected_result_cost_usd_per_m3": 2.0, "model_currency": "EUR", "source_to_model_currency": 0.875506, "expected_result_cost_model_currency_per_m3": 1.751012, "usage_m3_per_t_nh3": 1.5, "included_in_headline": True},
             "land_rent": {"mode": "none_zero", "source": "no_land_rent_input", "expected_result_cost_usd_per_km2_year": 0.0, "included_in_headline": False},
         },
-        "inputs": {"override_csv": {"columns": ["lat", "lon", "tech", "interest_rate"]}},
+        "inputs": ({"interest_rate": rate} if source == "interest_rate"
+                   else {"override_csv": {"columns": ["lat", "lon", "tech", "interest_rate"]}}),
     }
 
 
@@ -203,6 +209,14 @@ class QaGateTest(unittest.TestCase):
         for scope_id, mode in [("flat_wacc5_uniform_baseline_water_no_land_rent", "uniform_wacc"), ("flat_amelired_uniform_baseline_water_no_land_rent", "ameli_reduced_wacc")]:
             out = _flat_cost_scope_expectations(_manifest(scope_id, mode), {"include_site_costs": True})
             self.assertEqual(out["water_cost_usd_per_m3"], 2.0, scope_id)
+
+    def test_one_interest_rate_is_accepted_when_recorded(self):
+        scope_id = "flat_wacc5_uniform_baseline_water_no_land_rent"
+        manifest = _manifest(scope_id, "uniform_wacc", source="interest_rate")
+        self.assertEqual(_flat_cost_scope_expectations(manifest, {"include_site_costs": True})["water_cost_usd_per_m3"], 2.0)
+        del manifest["inputs"]["interest_rate"]
+        with self.assertRaisesRegex(ValueError, "inputs.interest_rate"):
+            _flat_cost_scope_expectations(manifest, {"include_site_costs": True})
 
     def test_finance_mode_must_match_the_scope_id(self):
         for scope_id, mode in [("flat_wacc5_uniform_baseline_water_no_land_rent", "ameli_reduced_wacc"), ("flat_amelired_uniform_baseline_water_no_land_rent", "uniform_wacc"), ("flat_spatial_uniform_baseline_water_no_land_rent", "uniform_wacc")]:
@@ -215,23 +229,34 @@ class ManifestBuilderTest(unittest.TestCase):
         self.assertEqual(flat_finance_token("flat_wacc5_uniform_baseline_water_no_land_rent"), "wacc5")
         self.assertEqual(flat_finance_token("flat_amelired_uniform_baseline_water_no_land_rent"), "amelired")
 
-    @unittest.skipUnless(UNIFORM.exists() and AMELI.exists() and DEA_YAML.exists(), "campaign inputs not present")
-    def test_override_must_agree_with_the_declared_finance(self):
-        scope = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True, cost_scope_id="flat_wacc5_uniform_baseline_water_no_land_rent", flat_water_model_currency_per_m3=2.0)
-        self.assertEqual(scope["finance"]["mode"], "uniform_wacc")
+    def test_the_rates_must_agree_with_the_declared_finance(self):
+        wacc5 = "flat_wacc5_uniform_baseline_water_no_land_rent"
+        scope = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.05, include_site_costs=True,
+                                               cost_scope_id=wacc5, flat_water_model_currency_per_m3=2.0)
+        self.assertEqual((scope["finance"]["mode"], scope["finance"]["source"]), ("uniform_wacc", "interest_rate"))
+        self.assertAlmostEqual(scope["finance"]["rate"], 0.05)
         self.assertAlmostEqual(scope["water"]["expected_result_cost_model_currency_per_m3"], 2.0, places=7)
         self.assertEqual(scope["water"]["model_currency"], "EUR")
-        with self.assertRaises(ValueError):
-            build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True, cost_scope_id="flat_wacc5_uniform_baseline_water_no_land_rent", flat_water_model_currency_per_m3=1.75)
-        self.assertAlmostEqual(scope["finance"]["rate"], 0.05)
-        self.assertEqual(scope["id"], "flat_wacc5_uniform_baseline_water_no_land_rent")
-        ameli = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=AMELI, include_site_costs=True)
-        self.assertEqual(ameli["finance"]["mode"], "ameli_reduced_wacc")
-        with self.assertRaises(ValueError):
-            build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=AMELI, include_site_costs=True, cost_scope_id="flat_wacc5_uniform_baseline_water_no_land_rent")
-        with self.assertRaises(ValueError):
-            build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True)
-
+        self.assertEqual(scope["id"], wacc5)
+        with self.assertRaises(ValueError):  # the water price disagrees with the YAML
+            build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.05, include_site_costs=True,
+                                           cost_scope_id=wacc5, flat_water_model_currency_per_m3=1.75)
+        with self.assertRaisesRegex(ValueError, "uniform interest rate of 0.05"):
+            build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.07, include_site_costs=True, cost_scope_id=wacc5)
+        with self.assertRaisesRegex(ValueError, "country-varying"):
+            build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.05, include_site_costs=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            uniform = _finance_csv(Path(tmp) / "uniform.csv", [0.05, 0.05])
+            countries = _finance_csv(Path(tmp) / "countries.csv", [0.05, 0.08])
+            table_scope = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=uniform, include_site_costs=True, cost_scope_id=wacc5)
+            self.assertEqual(table_scope["finance"]["source"], "override_csv")
+            ameli = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=countries, include_site_costs=True)
+            self.assertEqual(ameli["finance"]["mode"], "ameli_reduced_wacc")
+            with self.assertRaises(ValueError):
+                build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=countries, include_site_costs=True, cost_scope_id=wacc5)
+            with self.assertRaisesRegex(ValueError, "not both"):
+                build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=uniform, interest_rate=0.05,
+                                               include_site_costs=True, cost_scope_id=wacc5)
 
 
 def _site_cost_table(path: Path, *, source_price=2.28439325, land_cost=0.0, slope=1.2) -> Path:
@@ -245,11 +270,10 @@ def _site_cost_table(path: Path, *, source_price=2.28439325, land_cost=0.0, slop
 
 
 class SiteCostScopeTest(unittest.TestCase):
-    @unittest.skipUnless(UNIFORM.exists() and DEA_YAML.exists(), "campaign inputs not present")
-    def test_site_cost_scope_takes_finance_from_the_override_and_costs_from_the_table(self):
+    def test_site_cost_scope_takes_finance_from_the_run_and_costs_from_the_table(self):
         with tempfile.TemporaryDirectory() as tmp:
             table = _site_cost_table(Path(tmp) / "site_costs.csv")
-            scope = build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+            scope = build_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.05, include_site_costs=True,
                                      cost_scope_id="site_costs_wacc5_no_land_rent",
                                      flat_water_model_currency_per_m3=2.0, site_costs_csv=table)
             self.assertEqual(scope["finance"]["mode"], "uniform_wacc")
@@ -257,20 +281,19 @@ class SiteCostScopeTest(unittest.TestCase):
             self.assertEqual(scope["water"]["mode"], "site_cost_table")
             self.assertAlmostEqual(scope["water"]["source_price_model_currency_per_m3"], 2.0, places=6)
             with self.assertRaisesRegex(ValueError, "needs a site-cost table"):
-                build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+                build_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.05, include_site_costs=True,
                                  cost_scope_id="site_costs_wacc5_no_land_rent")
             with self.assertRaisesRegex(ValueError, "flat scope"):
-                build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+                build_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.05, include_site_costs=True,
                                  cost_scope_id="flat_wacc5_uniform_baseline_water_no_land_rent", site_costs_csv=table)
 
-    @unittest.skipUnless(UNIFORM.exists() and DEA_YAML.exists(), "campaign inputs not present")
     def test_site_cost_tables_must_match_the_yaml_and_carry_no_land_rent(self):
         for kwargs, pattern in (({"source_price": 2.0}, "not the YAML baseline"), ({"land_cost": 5.0}, "zero land cost"),
                                 ({"slope": 0.9}, "at least 1")):
             with self.subTest(kwargs=kwargs), tempfile.TemporaryDirectory() as tmp:
                 table = _site_cost_table(Path(tmp) / "site_costs.csv", **kwargs)
                 with self.assertRaisesRegex(ValueError, pattern):
-                    build_cost_scope(tech_yaml=DEA_YAML, override_csv=UNIFORM, include_site_costs=True,
+                    build_cost_scope(tech_yaml=DEA_YAML, interest_rate=0.05, include_site_costs=True,
                                      cost_scope_id="site_costs_wacc5_no_land_rent", site_costs_csv=table)
 
 

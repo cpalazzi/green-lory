@@ -51,10 +51,11 @@ references/
 # copies of the green-porpoise archive (legacy_gpo extract-archive) keep their own README
 /results/**/git-0a63616/**
 
-# Generated finance overrides for the key runs (python -m model.finance);
-# their hashes are pinned in the ARC release manifests
-/inputs/finance/uniform_interest_inputs_0p05_2050.csv
-/inputs/finance/amelired_interest_inputs_2050_center.csv
+# Finance tables per cell are generated (python -m model.finance), not tracked: runs.yaml pins their
+# hashes and arc/stage_release.sh copies them into releases. Only the two source tables are tracked.
+/inputs/finance/*
+!/inputs/finance/ameli_tiam_wacc_fig2.csv
+!/inputs/finance/tiam_regions.csv
 
 # pip install -e . metadata
 *.egg-info/
