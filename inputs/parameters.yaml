@@ -113,28 +113,31 @@ site_costs:
   # December 2017 dollars), sized for one plant's flow
   water_pipeline:
     reference_ammonia_t_per_year: 1000000.0  # one 1 Mt/yr plant, at the tech YAML's water use
-    # Pipe with appurtenances, rural, in soil (USD per foot), by diameter (inches)
-    rural_soil_usd_per_ft:
-      6: 24
-      8: 38
-      10: 52
-      12: 65
-      14: 79
-      16: 92
-      18: 106
-      20: 120
-      24: 147
+    # Pipe with appurtenances, rural, in soil: USD per metre by diameter (mm), converted from
+    # UCM's USD per foot by diameter in inches (given after each value)
+    rural_soil_usd_per_m:
+      152.4: 78.740157  # 6 in, 24 USD/ft
+      203.2: 124.671916  # 8 in, 38 USD/ft
+      254.0: 170.603675  # 10 in, 52 USD/ft
+      304.8: 213.254593  # 12 in, 65 USD/ft
+      355.6: 259.186352  # 14 in, 79 USD/ft
+      406.4: 301.837270  # 16 in, 92 USD/ft
+      457.2: 347.769029  # 18 in, 106 USD/ft
+      508.0: 393.700787  # 20 in, 120 USD/ft
+      609.6: 482.283465  # 24 in, 147 USD/ft
     pipe_engineering_contingency: 0.30  # engineering, legal and contingencies: pipes
     other_engineering_contingency: 0.35  # the same: all other facilities
-    environmental_usd_per_mile: 25000.0  # environmental studies and mitigation, pipelines
-    booster_station_usd: 2760000.0  # the smallest booster station of the capacity table (5 MGD)
+    # Environmental studies and mitigation, pipelines: converted from 25,000 USD per mile
+    environmental_usd_per_km: 15534.28
+    # The smallest booster station of the capacity table (5 million US gallons, 18,900 m3, a day)
+    booster_station_usd: 2760000.0
     pipe_om_fraction: 0.01  # O&M per year, share of capital
     pump_om_fraction: 0.025
     power_usd_per_kwh: 0.08  # power cost of the 2021 Texas regional water plans
     hazen_williams_c: 120.0
-    # Booster stations lift up to the pipe's pressure class less a residual pressure (psi)
-    pipe_class_psi: 200.0
-    residual_pressure_psi: 25.0
+    # Lift of a booster station, metres of water: converted from UCM's 200 psi pipe pressure
+    # class less a 25 psi residual pressure (175 psi, 1,207 kPa)
+    booster_lift_m: 123.037
     pump_efficiency: 0.75
     # Annuity: the 5 % rate of the uniform-finance runs; 45 years for pipes (as the
     # district-heating proxy the pipeline replaced) and 20 for pump stations (UCM's debt period)
@@ -149,8 +152,7 @@ site_costs:
     # district-heating transmission line 113)
     materials_share: 0.30
 
-# Physical constants with a source; exact unit definitions (feet, miles, psi of water head,
-# hours in the model year) stay in the code
+# Physical constants with a source
 physical:
   earth_radius_km: 6371.0  # mean radius; cell areas and distances treat the Earth as a sphere
   earth_axial_tilt_deg: 23.44  # the sun's declination at the solstices (PV row spacing)

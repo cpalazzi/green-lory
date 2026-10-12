@@ -48,9 +48,9 @@ def test_slope_shares_ignore_land_above_twenty_degrees():
 
 def test_water_pipeline_takes_the_cheapest_diameter():
     pipeline = site_costs.water_pipeline_cost(1.5e6)
-    totals = {option["diameter_in"]: option["capital_usd_per_m3_km"] + option["energy_usd_per_m3_km"]
+    totals = {option["diameter_mm"]: option["capital_usd_per_m3_km"] + option["energy_usd_per_m3_km"]
               for option in pipeline["options"]}
-    assert pipeline["diameter_in"] == min(totals, key=totals.get)
+    assert pipeline["diameter_mm"] == min(totals, key=totals.get)
     assert pipeline["capital_usd_per_m3_km"] + pipeline["energy_usd_per_m3_km"] == pytest.approx(min(totals.values()))
     # a smaller flow pays more per cubic metre (the scale effect behind Zhou and Tol's lower costs)
     small = site_costs.water_pipeline_cost(0.15e6)

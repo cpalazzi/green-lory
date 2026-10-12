@@ -48,7 +48,7 @@ the technology YAML's baseline water price (2 EUR2020 per m3 in the campaign YAM
 and river alike; inland it is a shadow price that protects freshwater.
 The pipeline from the nearest source is costed with the Texas Water Development Board's Uniform
 Costing Model (2018 unit costs, rural soil) for one plant's 1.5 million m3 a year: the
-least-cost standard diameter is 12 inches (0.65 m/s), a booster station every 70 km, 30 % (pipe)
+least-cost standard diameter is 305 mm (12 inches; 0.65 m/s), a booster station every 70 km, 30 % (pipe)
 and 35 % (stations) engineering and contingencies, 1 % and 2.5 % O&M a year, friction pumping
 at 0.08 USD/kWh, 5 % over 45 years (pipe) and 20 years (stations), USD of December 2017
 escalated to 2020 with the US CPI: 1.80 USD2020 per m3 and 100 km at multipliers of 1.

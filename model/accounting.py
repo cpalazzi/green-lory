@@ -82,9 +82,9 @@ def cost_splits(
         tech_total = tech_total_base * float(params.get("equipment_cost_multiplier", 1.0))
         build_total_base = float(build_cost) * capacity
         build_total = build_total_base * multiplier
-        lifetime = float(raw.get("lifetime_years", 20.0))
-        rate = float(params.get("interest_rate", raw.get("interest_rate", 0.07)))
-        fom = float(raw.get("fixed_om_fraction", 0.0))
+        lifetime = float(raw["lifetime_years"])
+        rate = float(params.get("interest_rate", raw["interest_rate"]))
+        fom = float(raw["fixed_om_fraction"])
         if lifetime <= 0:
             continue
         overnight = tech_total + build_total

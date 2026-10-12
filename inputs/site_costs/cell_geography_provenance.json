@@ -4,7 +4,7 @@
   "sha256": "7d6f1b31b775cd93de60bcf2ce9891a4054f0fd548f1c2789b01bff17ac2119d",
   "parameters": {
     "path": "inputs/parameters.yaml",
-    "sha256": "9b56b2113b641e181719dafed7dd1dee55742b37565750dd6bd7f479d4de1f35"
+    "sha256": "678a7d872e8b5f9bc3c65e8102e8dab4fda6bd1a7460c20322a6b615128e3bc4"
   },
   "inputs": {
     "ports": {

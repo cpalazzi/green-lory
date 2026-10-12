@@ -71,19 +71,18 @@ LABOUR_MULTIPLIER = float(parameter("site_costs.labour_multiplier"))
 # Water pipeline (site_costs.water_pipeline): unit costs of the Texas Water Development Board's
 # Uniform Costing Model in December 2017 dollars, sized for one reference plant's flow
 _PIPELINE = parameter("site_costs.water_pipeline")
-UCM_RURAL_SOIL_USD_PER_FT = {int(diameter): float(usd) for diameter, usd in _PIPELINE["rural_soil_usd_per_ft"].items()}
+UCM_RURAL_SOIL_USD_PER_M = {float(diameter_mm): float(usd) for diameter_mm, usd in _PIPELINE["rural_soil_usd_per_m"].items()}
 UCM_PIPE_ENGINEERING_CONTINGENCY = float(_PIPELINE["pipe_engineering_contingency"])
 UCM_OTHER_ENGINEERING_CONTINGENCY = float(_PIPELINE["other_engineering_contingency"])
-UCM_ENVIRONMENTAL_USD_PER_MILE = float(_PIPELINE["environmental_usd_per_mile"])
+UCM_ENVIRONMENTAL_USD_PER_KM = float(_PIPELINE["environmental_usd_per_km"])
 UCM_BOOSTER_STATION_USD = float(_PIPELINE["booster_station_usd"])
 UCM_PIPE_OM_FRACTION = float(_PIPELINE["pipe_om_fraction"])
 UCM_PUMP_OM_FRACTION = float(_PIPELINE["pump_om_fraction"])
 UCM_POWER_USD_PER_KWH = float(_PIPELINE["power_usd_per_kwh"])
 HAZEN_WILLIAMS_C = float(_PIPELINE["hazen_williams_c"])
-PSI_TO_M_WATER = 0.70307  # metres of water head per psi
 GRAVITY_M_PER_S2 = float(parameter("physical.gravity_m_per_s2"))
 WATER_DENSITY_KG_PER_M3 = float(parameter("physical.water_density_kg_per_m3"))
-BOOSTER_HEAD_M = (float(_PIPELINE["pipe_class_psi"]) - float(_PIPELINE["residual_pressure_psi"])) * PSI_TO_M_WATER
+BOOSTER_HEAD_M = float(_PIPELINE["booster_lift_m"])
 PUMP_EFFICIENCY = float(_PIPELINE["pump_efficiency"])
 PIPELINE_DISCOUNT_RATE = float(_PIPELINE["discount_rate"])
 PIPE_LIFETIME_YEARS = float(_PIPELINE["pipe_lifetime_years"])
@@ -154,13 +153,13 @@ def water_pipeline_cost(flow_m3_per_year: float) -> dict:
     multipliers scale; energy_usd_per_m3_km: friction pumping, unscaled.
     """
     flow = flow_m3_per_year / (365.0 * 86400.0)  # m3/s
-    feet_per_km = 1000.0 / 0.3048
     options = []
-    for diameter_in, usd_per_ft in UCM_RURAL_SOIL_USD_PER_FT.items():
-        diameter_m = diameter_in * 0.0254
+    for diameter_mm, usd_per_m in UCM_RURAL_SOIL_USD_PER_M.items():
+        diameter_m = diameter_mm / 1000.0
+        # Hazen-Williams friction loss, metric form (head in m, flow in m3/s, diameter in m)
         head_m_per_km = 1000.0 * 10.67 * flow ** 1.852 / (HAZEN_WILLIAMS_C ** 1.852 * diameter_m ** 4.87)
-        pipe_usd_per_km = (usd_per_ft * feet_per_km * (1.0 + UCM_PIPE_ENGINEERING_CONTINGENCY)
-                           + UCM_ENVIRONMENTAL_USD_PER_MILE / 1.609344) * USD_DEC2017_TO_USD2020
+        pipe_usd_per_km = (usd_per_m * 1000.0 * (1.0 + UCM_PIPE_ENGINEERING_CONTINGENCY)
+                           + UCM_ENVIRONMENTAL_USD_PER_KM) * USD_DEC2017_TO_USD2020
         stations_usd_per_km = (head_m_per_km / BOOSTER_HEAD_M * UCM_BOOSTER_STATION_USD
                                * (1.0 + UCM_OTHER_ENGINEERING_CONTINGENCY) * USD_DEC2017_TO_USD2020)
         capital_per_year = (pipe_usd_per_km * (_annuity(PIPELINE_DISCOUNT_RATE, PIPE_LIFETIME_YEARS) + UCM_PIPE_OM_FRACTION)
@@ -168,7 +167,7 @@ def water_pipeline_cost(flow_m3_per_year: float) -> dict:
         pump_kw = WATER_DENSITY_KG_PER_M3 * GRAVITY_M_PER_S2 * flow * head_m_per_km / PUMP_EFFICIENCY / 1000.0
         energy_per_year = pump_kw * 8760.0 * UCM_POWER_USD_PER_KWH
         options.append({
-            "diameter_in": diameter_in,
+            "diameter_mm": diameter_mm,
             "velocity_m_per_s": flow / (math.pi * diameter_m ** 2 / 4.0),
             "friction_head_m_per_km": head_m_per_km,
             "pipe_usd2020_per_km": pipe_usd_per_km,

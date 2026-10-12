@@ -44,6 +44,8 @@ LOGGER = logging.getLogger(__name__)
 
 # Location-level columns of the override table (not per technology)
 LOCATION_COST_COLUMNS = ("land_cost_usd_per_km2_year", "water_cost_usd_per_m3")
+# What every generator, link and store of a technology YAML must state
+COST_KEYS = ("interest_rate", "lifetime_years", "fixed_om_fraction")
 TECH_META_KEYS = (
     "model_currency_price_year",
     "spatial_cost_currency",
@@ -113,6 +115,14 @@ def load_tech_inputs(path: str | Path | None) -> dict[str, dict]:
         normalized = normalize_component_name(name)
         if isinstance(raw, dict) and normalized is not None:
             out[normalized] = raw
+    # Every costed component states its finance and O&M: the model has no defaults of its own
+    missing = sorted(
+        f"{name}.{key}" for name, raw in out.items()
+        if str(raw.get("component_type", "")).lower() in {"generator", "link", "store"}
+        for key in COST_KEYS if key not in raw
+    )
+    if missing:
+        raise ValueError(f"Tech YAML {resolved} lacks {', '.join(missing)}")
     return out
 
 
@@ -220,9 +230,9 @@ def apply_base_costs(
             continue
         annual = annualised_capital_cost(
             float(overnight),
-            float(raw.get("interest_rate", 0.07)),
-            float(raw.get("lifetime_years", 20.0)),
-            float(raw.get("fixed_om_fraction", 0.0)),
+            float(raw["interest_rate"]),
+            float(raw["lifetime_years"]),
+            float(raw["fixed_om_fraction"]),
         )
         _set_annual_cost(network, name, component_type, annual, store_scale)
 
@@ -266,9 +276,9 @@ def apply_cell_overrides(
                      + float(build_cost) * float(params.get("build_cost_multiplier", 1.0)))
         annual = annualised_capital_cost(
             overnight,
-            float(params.get("interest_rate", raw.get("interest_rate", 0.07))),
-            float(raw.get("lifetime_years", 20.0)),
-            float(raw.get("fixed_om_fraction", 0.0)),
+            float(params.get("interest_rate", raw["interest_rate"])),
+            float(raw["lifetime_years"]),
+            float(raw["fixed_om_fraction"]),
         )
         _set_annual_cost(network, name, component_type, annual, store_scale)
 
