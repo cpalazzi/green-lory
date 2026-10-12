@@ -115,10 +115,6 @@ techs:
     carriers_in: {power: 1.0}           # per MW of power in
     carriers_out: {hydrogen: 0.886509}  # Way 2050 HHV efficiency
     overall_efficiency: 0.886509
-    # Variable cost, EUR per MWh of electricity in. No source found: in the plant bundle since its
-    # first version (January 2026); DEA 2050 gives no variable O&M for AEC and the legacy model
-    # has none
-    variable_cost_per_mwh: 0.537
   hydrogen_compression:
     component_type: link
     source_note: Nominal compressor-CAPEX sensitivity for lcoa-opt replication; keeps compression power draw but avoids double-counting compression outside compressed_hydrogen_store.

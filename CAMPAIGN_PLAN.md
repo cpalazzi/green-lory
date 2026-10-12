@@ -477,9 +477,8 @@ Done and still to do in this step (8 October):
 ## 4. Validation (small runs, before ARC time)
 
 - The D9 literature check: compressor cost, storage basis, Haber-Bosch flexibility (30 % minimum
-  load, ramps of 40 % of capacity per hour, the legacy model's values), and the electrolysis
-  variable cost of 0.537 EUR/MWh, which has no source (DEA 2050 gives no variable O&M for AEC);
-  any change goes into the YAML with its source.
+  load, ramps of 40 % of capacity per hour, the legacy model's values); any change goes into the
+  YAML with its source.
 - 4 h against 1 h on Australia's 565 eligible cells and the 563-cell legacy sample, both with the
   improved plant, to measure the resolution effect before the global runs.
 - PV profiles above 1.0 (AC/DC basis).
@@ -541,11 +540,14 @@ All runs:
   regression cells); the countries of each TIAM-UCL region are in `inputs/finance/tiam_regions.csv`;
   the per-cell finance tables are generated and gitignored.
 - **12 October:** the plant bundle (`model/plants/ammonia_plant_1mt/`) holds only the plant's
-  structure; every technology value, including the Haber-Bosch minimum load and ramp limits, the
-  electrolysis variable cost and the battery standing loss, is in the technology YAMLs. The
-  battery standing loss was wrong: the bundle's 0.001 was applied per hour (2.4 % a day), the
-  YAML's 0.1 % a day (DEA 2050) was never read; with the fix the focal cells' full-year LCOA
-  falls by 0.006 % to 0.05 % (Chile 328.42 to 328.26 EUR/t in the key run).
+  structure; every technology value, including the Haber-Bosch minimum load and ramp limits and
+  the battery standing loss, is in the technology YAMLs. The battery standing loss was wrong: the
+  bundle's 0.001 was applied per hour (2.4 % a day), the YAML's 0.1 % a day (DEA 2050) was never
+  read; with the fix the focal cells' full-year LCOA falls by 0.006 % to 0.05 % (Chile 328.42 to
+  328.26 EUR/t in the key run). The electrolysis variable cost of 0.537 EUR/MWh, in the bundle
+  since January 2026 with no source (DEA gives none, the legacy model had none), is dropped at
+  your request: full-year LCOA falls by 4.53 EUR/t in the key run (1.3-1.6 %) and 4.3 EUR/t in
+  the reconciling run.
 - **Open, for you** (8 October):
   1. two step-3 points of section 3: the nearly inactive slope factor (no change proposed) and
      the water source price in EUR (the remoteness table, GHD 2025, was decided on 8 October);

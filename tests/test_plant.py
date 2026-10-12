@@ -79,8 +79,11 @@ def test_legacy_mode_scales_store_and_variable_costs():
     assert legacy._temporal_accounting_mode == "legacy_scaled"
     store = "compressed_hydrogen_store"
     assert legacy.stores.at[store, "capital_cost"] == pytest.approx(4.0 * weighted.stores.at[store, "capital_cost"])
-    assert weighted.links.at["electrolysis", "marginal_cost"] == pytest.approx(0.537)
-    assert legacy.links.at["electrolysis", "marginal_cost"] == pytest.approx(0.537 * 24 * 366 / 4)
+    # the bundle's tie-breaking cost and a YAML variable cost take the same legacy scaling
+    assert legacy.links.at["hydrogen_compression", "marginal_cost"] == pytest.approx(0.0001 * 24 * 366 / 4)
+    technology.apply_operating_parameters(legacy, {"electrolysis": {"variable_cost_per_mwh": 2.0}})
+    assert legacy.links.at["electrolysis", "marginal_cost"] == pytest.approx(2.0 * 24 * 366 / 4)
+    assert weighted.links.at["electrolysis", "marginal_cost"] == 0.0
 
 
 # --- technology values from the YAML ----------------------------------------------------------

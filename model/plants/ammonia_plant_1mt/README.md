@@ -8,8 +8,8 @@ the costs):
 - every capital cost, from the annualised overnight cost;
 - every link's conversion coefficients (`efficiency`, `efficiency2`), from the YAML's
   `carriers_in`/`carriers_out` recipe;
-- the operating values a technology states: the ammonia synthesis minimum load and ramp limits,
-  the electrolysis variable cost and the battery's standing loss.
+- the operating values a technology states: the ammonia synthesis minimum load and ramp limits
+  and the battery's standing loss.
 
 `build_network` sets the constant ammonia demand from the reference output and the ammonia
 heating value (`inputs/parameters.yaml`: 1 Mt/yr, 713.47 MW at 6.25 MWh/t), and the run's
@@ -38,5 +38,6 @@ and the stores' starting levels, which cyclic operation overrides (the penalty s
 Until 7 October 2026 there were three bundles, which differed only in four efficiencies (DEA
 or Way 2050) and in whether tracking PV was allowed. Until 12 October 2026 the bundle also held
 copies of the costs and efficiencies (overwritten by every run), the minimum load and ramp
-limits, the electrolysis variable cost and a battery standing loss of 0.001 that PyPSA applied
-per hour (2.4 % a day; the YAML's 0.1 % a day is now applied).
+limits, an electrolysis variable cost of 0.537 EUR/MWh with no known source (dropped) and a
+battery standing loss of 0.001 that PyPSA applied per hour (2.4 % a day; the YAML's 0.1 % a day
+is now applied).

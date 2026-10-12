@@ -148,7 +148,7 @@ The plant is one directory of PyPSA component tables, `model/plants/ammonia_plan
 components and how they connect, with no technology values. Each run sets those from its
 technology YAML: the capital costs, every link's efficiencies (from the YAML's
 `carriers_in`/`carriers_out` recipe) and the operating values (Haber-Bosch minimum load and ramp
-limits, the electrolysis variable cost, the battery standing loss); the ammonia demand comes from
+limits, the battery standing loss); the ammonia demand comes from
 the reference output in `inputs/parameters.yaml`, and the run's `pv_policy` decides whether
 tracking PV may be built. Until 7 October 2026 there were three bundles
 (`basic_ammonia_plant_2050`, `_2050_way`, `_2050_way_tracking`), which differed only in four

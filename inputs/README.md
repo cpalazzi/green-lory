@@ -31,8 +31,7 @@ One YAML per cost case; a YAML may `extends:` another and override its values
 per MW (per MWh for storage, on an output basis for conversion links) with the equipment part
 (`tech_cost_per_mw`) and the build part (`build_cost_per_mw`) apart, lifetime, fixed O&M and
 default interest rate, each link's conversion recipe, and the operating values (the ammonia
-synthesis minimum load and ramp limits, the electrolysis variable cost, the battery's standing
-loss per day). The plant bundle, `model/plants/ammonia_plant_1mt/`, holds only the plant's
+synthesis minimum load and ramp limits, the battery's standing loss per day). The plant bundle, `model/plants/ammonia_plant_1mt/`, holds only the plant's
 structure.
 
 | File | What it is | Used by |

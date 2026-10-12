@@ -118,10 +118,6 @@ techs:
     carriers_in: {power: 1.1904761904761905} # 1/0.84 — DEA 2050 HHV efficiency (LHV 69.9% + HHV delta 14.1% ≈ 84%)
     carriers_out: {hydrogen: 1.0}
     overall_efficiency: 0.84 # HHV basis; DEA 2050 stack+BOP = 47.6 kWh/kgH2, H2 HHV = 39.4 kWh/kg
-    # Variable cost, EUR per MWh of electricity in. No source found: in the plant bundle since its
-    # first version (January 2026); DEA 2050 gives no variable O&M for AEC and the legacy model
-    # has none
-    variable_cost_per_mwh: 0.537
   hydrogen_compression:
     component_type: link
     source_note: DEA 2050 H2 storage tanks (compressor component, DEA 2050/2030 ratio 8,481/25,434 = 0.333 applied to 2030 YAML)
