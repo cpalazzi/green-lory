@@ -51,11 +51,11 @@ references/
 # copies of the green-porpoise archive (legacy_gpo extract-archive) keep their own README
 /results/**/git-0a63616/**
 
-# Finance tables per cell are generated (python -m model.finance), not tracked: runs.yaml pins their
-# hashes and arc/stage_release.sh copies them into releases. Only the two source tables are tracked.
+# Finance tables keyed by cell are large and made outside the repository, so not tracked:
+# runs.yaml pins their hashes and arc/stage_release.sh copies them into releases. Finance tables
+# keyed by country are small and tracked.
 /inputs/finance/*
-!/inputs/finance/ameli_tiam_wacc_fig2.csv
-!/inputs/finance/tiam_regions.csv
+!/inputs/finance/*_by_country.csv
 
 # pip install -e . metadata
 *.egg-info/

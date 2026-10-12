@@ -1,6 +1,6 @@
 """Run the plant over many cells: a cost and capacity surface.
 
-    results = run_surface(locations, land_csv=..., tech_yaml=..., plant_dir=..., override_csv=...,
+    results = run_surface(locations, land_csv=..., tech_yaml=..., plant_dir=..., interest_rate=0.05,
                           weather_dir=..., settings=RunSettings(time_step=1.0))
 
 For a run defined in runs.yaml, the ARC job (arc/jobs/01_run_global.sh) calls run_surface with
@@ -8,11 +8,11 @@ that run's settings. Locally, `python -m model.surface --help` runs a few cells.
 
 What happens:
 1. read_run_inputs() reads everything shared by the cells once: the technology YAML, the
-   override table and the land table (each indexed by cell), the weather stack, and the plant
-   bundle as a base network.
-2. run_cell() handles one cell: it copies the base network, sets the YAML costs and the cell's
-   overrides, solves the plant for the cell's weather (plant.solve), then completes the
-   accounting (accounting.py) and the land capacity (land.py).
+   run's interest rates (one rate, or a finance table by cell or country), the site-cost and
+   land tables (each indexed by cell), the weather stack, and the plant bundle as a base network.
+2. run_cell() handles one cell: it copies the base network, sets the costs at the cell's
+   interest rates and site costs, solves the plant for the cell's weather (plant.solve), then
+   completes the accounting (accounting.py) and the land capacity (land.py).
 3. solve_cell() retries a numerical solver failure on a fresh network with sturdier Gurobi
    settings (NUMERICAL_RETRY_OPTIONS).
 4. run_surface() runs the cells serially or in a pool of forked workers that share the loaded
@@ -37,14 +37,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
-import geopandas as gpd
 import pandas as pd
 import pypsa
-from shapely.errors import GEOSException
-from shapely.geometry import box
 
 from . import accounting, land, plant, site_costs, technology, weather
-from .config import COUNTRIES_GEOJSON, DEFAULT_PLANT_DIR, DEFAULT_TECH_YAML, WEATHER_DIR, repo_path
+from .config import DEFAULT_PLANT_DIR, DEFAULT_TECH_YAML, WEATHER_DIR, repo_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -112,6 +109,8 @@ class RunInputs:
     weather: weather.ProfileStack | None = None
     # cells of the site-cost table, when the run has one (every cell run must be among them)
     site_cost_cells: frozenset | None = None
+    # cells the run's finance leaves without an interest rate for some technologies (not runnable)
+    finance_gaps: dict | None = None
 
 
 def read_run_inputs(
@@ -120,7 +119,7 @@ def read_run_inputs(
     land_csv: str | Path,
     tech_yaml: str | Path | None = None,
     plant_dir: str | Path | None = None,
-    override_csv: str | Path | None = None,
+    finance_csv: str | Path | None = None,
     interest_rate: float | None = None,
     site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
@@ -128,11 +127,11 @@ def read_run_inputs(
     load_weather: bool = True,
 ) -> RunInputs:
     """Read a run's shared inputs. The base network has the run's snapshot count, the YAML's
-    link efficiencies and the run's PV policy. The finance is a per-cell table (override_csv) or
-    one interest rate for every technology and cell (interest_rate); a site-cost table's
-    multipliers and water price join the interest rates in the overrides."""
-    if override_csv is not None and interest_rate is not None:
-        raise ValueError("A run takes its interest rates from a finance table or one rate, not both")
+    technology values and the run's PV policy. The interest rates come from a finance table
+    (finance_csv, by cell or by country) or one rate for every technology and cell
+    (interest_rate); a site-cost table's multipliers and water price join them in the overrides."""
+    if (finance_csv is None) == (interest_rate is None):
+        raise ValueError("A run takes its interest rates from a finance table (finance_csv) or one rate (interest_rate)")
     tech_yaml = repo_path(tech_yaml) if tech_yaml is not None else DEFAULT_TECH_YAML
     plant_dir = plant.check_plant_bundle(plant_dir if plant_dir is not None else DEFAULT_PLANT_DIR)
     tech_inputs = technology.load_tech_inputs(tech_yaml)
@@ -154,10 +153,11 @@ def read_run_inputs(
     base_network._currency = str(tech_meta.get("currency", "USD")).strip().upper()
     base_network._ramp_limit_basis = settings.ramp_limit_basis
     land_index = land.index_land_table(land_table)
+    finance_gaps: dict = {}
     if interest_rate is not None:
         overrides = technology.uniform_interest_overrides(land_index, tech_inputs, interest_rate)
     else:
-        overrides = technology.index_override_table(technology.load_override_table(override_csv))
+        overrides, finance_gaps = technology.finance_overrides(finance_csv, land_index, tech_inputs)
     site_cost_cells = None
     if site_costs_csv is not None:
         site_overrides = site_costs.load_site_cost_overrides(site_costs_csv, tech_inputs)
@@ -172,6 +172,7 @@ def read_run_inputs(
         base_network=base_network,
         weather=profiles,
         site_cost_cells=site_cost_cells,
+        finance_gaps=finance_gaps,
     )
 
 
@@ -235,11 +236,7 @@ def run_cell(
         network = copy.deepcopy(inputs.base_network)
         network._ramp_limit_basis = settings.ramp_limit_basis
         network._currency = str(inputs.tech_meta.get("currency", "USD")).strip().upper()
-        technology.apply_base_costs(
-            network, inputs.tech_inputs, time_step=settings.time_step,
-            temporal_accounting_mode=settings.temporal_accounting_mode,
-        )
-        technology.apply_cell_overrides(
+        technology.apply_costs(
             network, inputs.tech_inputs, overrides, time_step=settings.time_step,
             temporal_accounting_mode=settings.temporal_accounting_mode,
         )
@@ -392,84 +389,19 @@ def solve_cell(inputs: RunInputs, lat: float, lon: float, *, fail_fast: bool, qu
 
 
 # ---------------------------------------------------------------------------------------------
-# Countries
-# ---------------------------------------------------------------------------------------------
-
-COUNTRY_ASSIGNMENT_AREA_CRS = "EPSG:6933"
-
-
-def load_countries(path: str | Path = COUNTRIES_GEOJSON) -> gpd.GeoDataFrame:
-    """Country polygons with a 'country' column (Natural Earth admin-0 style GeoJSON)."""
-    path = repo_path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Missing {path}: add a Natural Earth admin-0 GeoJSON to tag cells by country.")
-    frame = gpd.read_file(path)
-    for candidate in ("ADMIN", "NAME", "name", "COUNTRY", "Country"):
-        if candidate in frame.columns:
-            frame = frame.rename(columns={candidate: "country"})
-            break
-    if "country" not in frame.columns:
-        raise ValueError(f"{path} needs a 'country'/'ADMIN' column and valid geometries.")
-    return frame[["country", "geometry"]]
-
-
-def country_lookup(world: gpd.GeoDataFrame, locations: Sequence[tuple[float, float]], cell_size_deg: float = 1.0) -> dict[tuple[float, float], str]:
-    """Each cell's country: the one covering the largest share of the cell's 1-degree box."""
-    lookup = {(float(lat), float(lon)): "" for lat, lon in locations}
-    if not locations or world.empty:
-        return lookup
-    countries = world[["country", "geometry"]].dropna(subset=["geometry"]).copy()
-    if countries.empty:
-        return lookup
-    if countries.crs is None:
-        countries = countries.set_crs("EPSG:4326")
-    # Repair invalid geometries, which can otherwise crash GEOS overlay operations
-    if not countries.geometry.is_valid.all():
-        countries["geometry"] = countries.geometry.buffer(0)
-        countries = countries.dropna(subset=["geometry"])
-        countries = countries[countries.geometry.is_valid].copy()
-        if countries.empty:
-            return lookup
-
-    half = float(cell_size_deg) / 2.0
-    points = [(float(lat), float(lon)) for lat, lon in locations]
-    cells = gpd.GeoDataFrame(
-        {"latitude": [lat for lat, _ in points], "longitude": [lon for _, lon in points]},
-        geometry=[box(lon - half, lat - half, lon + half, lat + half) for lat, lon in points],
-        crs=countries.crs,
-    )
-    candidates = gpd.sjoin(cells, countries, how="left", predicate="intersects")
-    candidates = candidates.dropna(subset=["index_right"]).reset_index().rename(columns={"index": "cell_idx"})
-    if candidates.empty:
-        return lookup
-    countries_equal_area = countries.to_crs(COUNTRY_ASSIGNMENT_AREA_CRS).reset_index(drop=True)
-    candidates_equal_area = gpd.GeoDataFrame(
-        candidates[["cell_idx", "latitude", "longitude", "country", "index_right"]].copy(),
-        geometry=candidates.geometry,
-        crs=cells.crs,
-    ).to_crs(COUNTRY_ASSIGNMENT_AREA_CRS)
-    cell_geometries = gpd.GeoSeries(candidates_equal_area.geometry.reset_index(drop=True), crs=COUNTRY_ASSIGNMENT_AREA_CRS)
-    country_geometries = gpd.GeoSeries(
-        countries_equal_area.geometry.iloc[candidates_equal_area["index_right"].astype(int).to_numpy()].reset_index(drop=True),
-        crs=COUNTRY_ASSIGNMENT_AREA_CRS,
-    )
-    try:
-        overlap_area = cell_geometries.intersection(country_geometries).area
-    except GEOSException:
-        overlap_area = cell_geometries.buffer(0).intersection(country_geometries.buffer(0)).area
-    candidates_equal_area = candidates_equal_area.reset_index(drop=True)
-    candidates_equal_area["overlap_area"] = overlap_area.to_numpy()
-    candidates_equal_area = candidates_equal_area[candidates_equal_area["overlap_area"] > 0]
-    best = candidates_equal_area.sort_values(["cell_idx", "overlap_area"], ascending=[True, False])
-    best = best.drop_duplicates(subset=["cell_idx"], keep="first")
-    for row in best.itertuples(index=False):
-        lookup[(float(row.latitude), float(row.longitude))] = str(row.country) if pd.notna(row.country) else ""
-    return lookup
-
-
-# ---------------------------------------------------------------------------------------------
 # Many cells
 # ---------------------------------------------------------------------------------------------
+
+def covering_countries(locations: Sequence[tuple[float, float]]) -> dict[tuple[float, float], str]:
+    """Each cell's country for the results: the country covering most of the cell
+    (model/countries.py), empty where no country polygon touches it."""
+    from .countries import cell_countries
+
+    table = cell_countries()
+    covered = table[table["assignment"] == "overlap"]["country"]
+    country = dict(zip(((round(lat, 4), round(lon, 4)) for lat, lon in covered.index), covered.to_numpy()))
+    return {(lat, lon): country.get((round(lat, 4), round(lon, 4)), "") for lat, lon in locations}
+
 
 # Inputs inherited by forked pool workers (set by run_surface before the pool starts)
 _WORKER: dict[str, Any] = {}
@@ -505,7 +437,7 @@ def run_surface(
     land_csv: str | Path,
     tech_yaml: str | Path | None = None,
     plant_dir: str | Path | None = None,
-    override_csv: str | Path | None = None,
+    finance_csv: str | Path | None = None,
     interest_rate: float | None = None,
     site_costs_csv: str | Path | None = None,
     weather_dir: str | Path | None = None,
@@ -531,7 +463,7 @@ def run_surface(
         started = time.perf_counter()
         inputs = read_run_inputs(
             settings, land_csv=land_csv, tech_yaml=tech_yaml, plant_dir=plant_dir,
-            override_csv=override_csv, interest_rate=interest_rate, site_costs_csv=site_costs_csv,
+            finance_csv=finance_csv, interest_rate=interest_rate, site_costs_csv=site_costs_csv,
             weather_dir=weather_dir, weather_land_correction=weather_land_correction,
         )
         if locations is None:
@@ -543,7 +475,11 @@ def run_surface(
             hi = float(lon_max) if lon_max is not None else 180.0
             location_list = [(la, lo_) for la, lo_ in location_list if lo <= lo_ < hi]
             LOGGER.info("Longitude filter [%.1f, %.1f): %d locations", lo, hi, len(location_list))
-        countries = country_lookup(load_countries(), location_list)
+        unpriced = {cell: inputs.finance_gaps[cell] for cell in
+                    ((round(lat, 4), round(lon, 4)) for lat, lon in location_list) if cell in (inputs.finance_gaps or {})}
+        if unpriced:
+            raise ValueError(f"The run's finance table leaves {technology.describe_finance_gaps(unpriced)}")
+        countries = covering_countries(location_list)
         LOGGER.info(
             "Inputs read in %.1fs: %d override cells, %d land cells, base network of %d snapshots",
             time.perf_counter() - started, len(inputs.overrides), len(inputs.land), len(inputs.base_network.snapshots),
@@ -790,8 +726,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, help="Run only the first N locations.")
     parser.add_argument("--tech-yaml", help=f"Technology YAML (default {DEFAULT_TECH_YAML.name}).")
     parser.add_argument("--plant-dir", help=f"Plant bundle (default {DEFAULT_PLANT_DIR.name}).")
-    finance = parser.add_mutually_exclusive_group()
-    finance.add_argument("--override-csv", help="Per-cell finance table (interest rates; optionally build multipliers, water).")
+    finance = parser.add_mutually_exclusive_group(required=True)
+    finance.add_argument("--finance-csv", help="Finance table: interest rates by cell (lat, lon) or country (iso3) and technology.")
     finance.add_argument("--interest-rate", type=float, help="One interest rate (a fraction) for every technology and cell.")
     parser.add_argument("--site-costs-csv", help="Site-cost table (model/site_costs.py): multipliers and water price per cell.")
     parser.add_argument("--weather-dir", help="Weather profile folder (default the runs.yaml run_defaults folder).")
@@ -826,7 +762,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     frame = run_surface(
         locations, land_csv=args.land_csv, tech_yaml=args.tech_yaml, plant_dir=args.plant_dir,
-        override_csv=args.override_csv, interest_rate=args.interest_rate, site_costs_csv=args.site_costs_csv,
+        finance_csv=args.finance_csv, interest_rate=args.interest_rate, site_costs_csv=args.site_costs_csv,
         weather_dir=args.weather_dir, weather_land_correction=args.weather_land_correction, settings=settings, output_csv=args.output_csv, quiet=args.quiet, threads_per_worker=args.threads_per_worker,
         num_workers=args.num_workers, lon_min=args.lon_min, lon_max=args.lon_max, fail_fast=args.fail_fast,
     )

@@ -23,7 +23,7 @@ the verification job of `stage_release.sh`, the merge/QA jobs).
 
 1. **Stage a release** from a committed checkout on the Mac, with the ARC SSH socket open:
    `bash arc/stage_release.sh 20261006-keyruns-v1`. It copies the Git-visible source and the
-   generated finance overrides that `runs.yaml` pins (hash-checked), links the shared data,
+   finance tables by cell that `runs.yaml` pins (gitignored; hash-checked), links the shared data,
    verifies the copy against the inventory in a short Slurm job and makes the release
    read-only.
 2. **Land tables** (rarely): `submit_land_center_matrix.sh` runs `jobs/00_build_land_constraints.sh`

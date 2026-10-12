@@ -26,7 +26,7 @@
 #   ammonia storage: lcoa-opt value (47 USD 2018/MWh → 43 EUR 2020/MWh).
 #
 # Build cost splits: DEA 2050 tech_cost/build_cost fractions applied to Way totals.
-# Financial parameters: DEA 2050 interest rates and lifetimes (green-lory defaults).
+# Lifetimes: DEA 2050 (green-lory defaults). Interest rates come from each run (runs.yaml).
 # Land use: DEA 2050 values.
 
 currency: EUR
@@ -53,7 +53,6 @@ techs:
     build_cost_per_mw: 124800      # DEA fraction 65.5%
     land_use_km2_per_mw: 0.01
     lifetime_years: 40
-    interest_rate: 0.1
     fixed_om_fraction: 0.02
   solar_tracking:
     component_type: generator
@@ -63,7 +62,6 @@ techs:
     build_cost_per_mw: 124800      # DEA fraction 54.3%
     land_use_km2_per_mw: 0.02
     lifetime_years: 40
-    interest_rate: 0.1
     fixed_om_fraction: 0.02
   wind:
     component_type: generator
@@ -73,7 +71,6 @@ techs:
     build_cost_per_mw: 76700       # DEA fraction 11.1%
     land_use_km2_per_mw: 0.2
     lifetime_years: 30
-    interest_rate: 0.1
     fixed_om_fraction: 0.02
 
  # -----------------
@@ -87,7 +84,6 @@ techs:
     build_cost_per_mw: 334700      # DEA fraction 50%
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 30
-    interest_rate: 0.1
     fixed_om_fraction: 0.03
     carriers_in: {power: 0.16, hydrogen: 1.13472}
     carriers_out: {ammonia: 1.0}
@@ -107,7 +103,6 @@ techs:
     build_cost_per_mw: 28200       # DEA fraction 10%
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 25
-    interest_rate: 0.1
     fixed_om_fraction: 0.02
     carriers_in: {power: 1.0}           # per MW of power in
     carriers_out: {hydrogen: 0.886509}  # Way 2050 HHV efficiency
@@ -120,7 +115,6 @@ techs:
     build_cost_per_mw: 27500       # DEA fraction 16.6%
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 20
-    interest_rate: 0.1
     fixed_om_fraction: 0.02
     carriers_in: {hydrogen: 1.0, power: 0.05}
     carriers_out: {hydrogen_storage: 1.0}
@@ -133,7 +127,6 @@ techs:
     build_cost_per_mw: 68300       # DEA fraction 20%
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 20
-    interest_rate: 0.1
     fixed_om_fraction: 0.02
     carriers_in: {hydrogen: 1.0}           # per MW of hydrogen in
     carriers_out: {power: 0.540015}        # Way 2050 fuel cell efficiency
@@ -146,7 +139,6 @@ techs:
     build_cost_per_mw: 0.10
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 20
-    interest_rate: 0.05
     fixed_om_fraction: 0.0
     carriers_in: {hydrogen_storage: 1.0}
     carriers_out: {hydrogen: 1.0}
@@ -159,7 +151,6 @@ techs:
     build_cost_per_mw: 30600       # DEA fraction 45.5%
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 30
-    interest_rate: 0.1
     fixed_om_fraction: 0.03
     carriers_in: {power: 1.0}
     carriers_out: {power_storage: 0.98}   # Way 2050 charge efficiency
@@ -172,7 +163,6 @@ techs:
     build_cost_per_mw: 0.50
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 30
-    interest_rate: 0.1
     fixed_om_fraction: 0.0
     carriers_in: {power_storage: 1.0}
     carriers_out: {power: 0.99}           # Way 2050 discharge efficiency
@@ -185,7 +175,6 @@ techs:
     build_cost_per_mw: 20000000
     land_use_km2_per_mw: 0.0000001
     lifetime_years: 1
-    interest_rate: 0.1
     fixed_om_fraction: 0.0
     carriers_in: {ramp_penalty: 1.0}
     carriers_out: {ramp_penalty_dest: 1.0}
@@ -202,7 +191,6 @@ techs:
     build_cost_per_mwh: 20000000
     land_use_km2_per_mwh: 0.0
     lifetime_years: 1
-    interest_rate: 0.1
     fixed_om_fraction: 0.0
   ammonia:
     component_type: store
@@ -212,7 +200,6 @@ techs:
     build_cost_per_mwh: 9
     land_use_km2_per_mwh: 0.00001
     lifetime_years: 30
-    interest_rate: 0.1
     fixed_om_fraction: 0.03
   battery_storage:
     component_type: store
@@ -222,7 +209,6 @@ techs:
     build_cost_per_mwh: 34700      # DEA fraction 52.6%
     land_use_km2_per_mwh: 0.00005
     lifetime_years: 30
-    interest_rate: 0.1
     fixed_om_fraction: 0.029
     standing_loss_fraction_per_day: 0.001 # DEA 2050 Li-ion, as the DEA case (the legacy model had none)
   compressed_hydrogen_store:
@@ -233,5 +219,4 @@ techs:
     build_cost_per_mwh: 6200       # DEA fraction 33.3%
     land_use_km2_per_mwh: 0.0001
     lifetime_years: 30
-    interest_rate: 0.1
     fixed_om_fraction: 0.02

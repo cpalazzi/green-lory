@@ -572,21 +572,13 @@ def _flat_cost_scope_expectations(
     if land.get("included_in_headline") is not False:
         raise ValueError("A missing land-rent input cannot be declared headline-active")
 
-    # the rates come from a finance table (interest-only) or one rate for every technology and cell
+    # the rates come from a finance table (interest rates only) or one rate for every technology and cell
     inputs = manifest.get("inputs", {})
     if finance.get("source") == "interest_rate":
         if not isinstance(inputs.get("interest_rate"), (int, float)):
             raise ValueError("Manifest finance from interest_rate must record inputs.interest_rate")
     else:
-        override_columns = inputs.get("override_csv", {}).get("columns")
-        if not isinstance(override_columns, list):
-            raise ValueError("Manifest must record override CSV column names")
-        normalized_columns = [str(column).strip().lower() for column in override_columns]
-        if normalized_columns != ["lat", "lon", "tech", "interest_rate"]:
-            raise ValueError(
-                "flat_amelired requires an interest-only override CSV; "
-                f"manifest records {override_columns}"
-            )
+        _check_finance_columns(inputs.get("finance_csv", {}).get("columns"))
 
     try:
         build_multiplier = float(build["expected_result_build_cost_multiplier"])
@@ -621,6 +613,22 @@ def _flat_cost_scope_expectations(
         "water_included_in_headline": include_site_costs,
     }
 
+
+
+# Columns a finance table may not carry (they belong to the site-cost table)
+FINANCE_FORBIDDEN_COLUMNS = {"build_cost_multiplier", "equipment_cost_multiplier", "water_cost_usd_per_m3",
+                             "land_cost_usd_per_km2_year"}
+
+
+def _check_finance_columns(columns: Any) -> None:
+    """A finance table is keyed by cell (lat, lon) or by country (iso3), with tech and interest_rate."""
+    if not isinstance(columns, list):
+        raise ValueError("Manifest must record the finance table's column names")
+    names = {str(column).strip().lower() for column in columns}
+    keyed = ({"lat", "lon"} <= names) != ("iso3" in names)
+    if not keyed or not {"tech", "interest_rate"} <= names or names & FINANCE_FORBIDDEN_COLUMNS:
+        raise ValueError(f"The finance table must be keyed by lat, lon or by iso3, with tech and interest_rate "
+                         f"and no site-cost columns; manifest records {columns}")
 
 
 def _site_cost_scope_expectations(manifest: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:

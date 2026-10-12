@@ -19,7 +19,8 @@ def _prepared(n_snapshots, time_step, mode):
     tech = technology.load_tech_inputs(DEFAULT_TECH_YAML)
     network = plant.build_network(n_snapshots, PLANT_DIR, time_step=time_step, temporal_accounting_mode=mode)
     technology.prepare_base_network(network, tech)
-    technology.apply_base_costs(network, tech, time_step=time_step, temporal_accounting_mode=mode)
+    rates = technology.uniform_interest_overrides([(0.0, 0.0)], tech, 0.05)[(0.0, 0.0)]
+    technology.apply_costs(network, tech, rates, time_step=time_step, temporal_accounting_mode=mode)
     return network
 
 
@@ -100,9 +101,9 @@ def test_operating_values_come_from_the_yaml():
 
 def test_the_bundle_needs_the_yaml_values():
     tech = technology.load_tech_inputs(DEFAULT_TECH_YAML)
-    del tech["electrolysis"]["overnight_cost_per_mw"]
+    del tech["electrolysis"]["tech_cost_per_mw"]
     network = plant.build_network(4, PLANT_DIR, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
-    with pytest.raises(ValueError, match="electrolysis.overnight_cost_per_mw"):
+    with pytest.raises(ValueError, match="electrolysis.tech_cost_per_mw"):
         technology.prepare_base_network(network, tech)
 
 

@@ -52,6 +52,7 @@ GEONAMES_AU_FILE = DATA_DIR / "gazetteer" / "geonames_au" / "AU.txt"
 SITE_COSTS_DIR = INPUTS_DIR / "site_costs"
 TECH_DIR = INPUTS_DIR / "tech"
 FINANCE_DIR = INPUTS_DIR / "finance"
+CELLS_DIR = INPUTS_DIR / "cells"
 
 # Defaults: the improved runs' YAML (DEA 2050 costs, co-located land use) and the plant bundle
 DEFAULT_TECH_YAML = TECH_DIR / "tech_config_ammonia_plant_2050_dea_colocated.yaml"

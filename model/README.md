@@ -9,7 +9,7 @@ a run uses them:
 | `parameters.py` | The modelling assumptions other than technology costs and the physical constants, read from `../inputs/parameters.yaml`; every module takes its values from there |
 | `config.py` | Paths (data, inputs, plant bundle), the default YAML and bundle, the slope classes, physical constants |
 | `technology.py` | The technology YAML (with `extends:`): every technology's values onto the plant bundle's network (link efficiencies from each link's recipe, minimum loads, ramp limits, standing losses), annualised costs, and the per-cell override table (interest rates, build-cost multipliers, water and land prices) |
-| `finance.py` | The per-cell interest-rate (WACC) tables runs pin as `finance_csv`: Ameli et al. (2021) by TIAM-UCL region, and nearest-cell fills (`python -m model.finance --help`); a uniform rate needs no table (`interest_rate`) |
+| `countries.py` | Each cell's country, one assignment for finance tables by country, results and supplier tables (`inputs/cells/cell_countries.csv`, `python -m model.countries`) |
 | `weather.py` | Hourly PV and wind profiles of a cell from the NetCDF stack, and block averages for coarser steps |
 | `weather_land.py` | The land correction of the profiles of cells with water: point weights from the lakes database, factors from ERA5 at 0.25 degrees (an ARC job) |
 | `plant.py` | One plant at one cell: the PyPSA network from the plant bundle, its constraints (Haber-Bosch ramps, battery coupling, land in the solve), the Gurobi solve and its acceptance check, the plant results |

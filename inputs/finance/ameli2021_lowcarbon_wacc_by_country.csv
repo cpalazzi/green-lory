@@ -1,0 +1,175 @@
+iso3,country,tech,interest_rate,ameli_region
+AFG,Afghanistan,all,0.068,ODA
+AGO,Angola,all,0.118,AFR
+ALB,Albania,all,0.058,EEU
+ARE,United Arab Emirates,all,0.068,MEA
+ARG,Argentina,all,0.092,CSA
+ARM,Armenia,all,0.058,FSU
+ATF,French Southern and Antarctic Lands,all,0.042,WEU
+AUS,Australia,all,0.061,AUS
+AUT,Austria,all,0.042,WEU
+AZE,Azerbaijan,all,0.058,FSU
+BDI,Burundi,all,0.118,AFR
+BEL,Belgium,all,0.042,WEU
+BEN,Benin,all,0.118,AFR
+BFA,Burkina Faso,all,0.118,AFR
+BGD,Bangladesh,all,0.068,ODA
+BGR,Bulgaria,all,0.058,EEU
+BHS,The Bahamas,all,0.092,CSA
+BIH,Bosnia and Herzegovina,all,0.058,EEU
+BLR,Belarus,all,0.058,FSU
+BLZ,Belize,all,0.092,CSA
+BOL,Bolivia,all,0.092,CSA
+BRA,Brazil,all,0.092,CSA
+BRN,Brunei,all,0.068,ODA
+BTN,Bhutan,all,0.068,ODA
+BWA,Botswana,all,0.118,AFR
+CAF,Central African Republic,all,0.118,AFR
+CAN,Canada,all,0.054,CAN
+CHE,Switzerland,all,0.042,WEU
+CHL,Chile,all,0.092,CSA
+CHN,China,all,0.066,CHI
+CIV,Ivory Coast,all,0.118,AFR
+CMR,Cameroon,all,0.118,AFR
+COD,Democratic Republic of the Congo,all,0.118,AFR
+COG,Republic of the Congo,all,0.118,AFR
+COL,Colombia,all,0.092,CSA
+CRI,Costa Rica,all,0.092,CSA
+CUB,Cuba,all,0.092,CSA
+CYP,Cyprus; Northern Cyprus,all,0.058,EEU
+CZE,Czechia,all,0.058,EEU
+DEU,Germany,all,0.042,WEU
+DJI,Djibouti,all,0.118,AFR
+DNK,Denmark,all,0.042,WEU
+DOM,Dominican Republic,all,0.092,CSA
+DZA,Algeria,all,0.118,AFR
+ECU,Ecuador,all,0.092,CSA
+EGY,Egypt,all,0.118,AFR
+ERI,Eritrea,all,0.118,AFR
+ESH,Western Sahara,all,0.118,AFR
+ESP,Spain,all,0.042,WEU
+EST,Estonia,all,0.058,FSU
+ETH,Ethiopia,all,0.118,AFR
+FIN,Finland,all,0.042,WEU
+FJI,Fiji,all,0.061,AUS
+FLK,Falkland Islands,all,0.092,CSA
+FRA,France,all,0.042,WEU
+GAB,Gabon,all,0.118,AFR
+GBR,United Kingdom,all,0.044,UK
+GEO,Georgia,all,0.058,FSU
+GHA,Ghana,all,0.118,AFR
+GIN,Guinea,all,0.118,AFR
+GMB,Gambia,all,0.118,AFR
+GNB,Guinea-Bissau,all,0.118,AFR
+GNQ,Equatorial Guinea,all,0.118,AFR
+GRC,Greece,all,0.042,WEU
+GRL,Greenland,all,0.054,CAN
+GTM,Guatemala,all,0.092,CSA
+GUY,Guyana,all,0.092,CSA
+HND,Honduras,all,0.092,CSA
+HRV,Croatia,all,0.058,EEU
+HTI,Haiti,all,0.092,CSA
+HUN,Hungary,all,0.058,EEU
+IDN,Indonesia,all,0.068,ODA
+IND,India,all,0.082,IND
+IRL,Ireland,all,0.042,WEU
+IRN,Iran,all,0.068,MEA
+IRQ,Iraq,all,0.068,MEA
+ISL,Iceland,all,0.042,WEU
+ISR,Israel,all,0.068,MEA
+ITA,Italy,all,0.042,WEU
+JAM,Jamaica,all,0.092,CSA
+JOR,Jordan,all,0.068,MEA
+JPN,Japan,all,0.024,JAP
+KAZ,Kazakhstan,all,0.058,FSU
+KEN,Kenya,all,0.118,AFR
+KGZ,Kyrgyzstan,all,0.058,FSU
+KHM,Cambodia,all,0.068,ODA
+KOR,South Korea,all,0.068,SKO
+KWT,Kuwait,all,0.068,MEA
+LAO,Laos,all,0.068,ODA
+LBN,Lebanon,all,0.068,MEA
+LBR,Liberia,all,0.118,AFR
+LBY,Libya,all,0.118,AFR
+LKA,Sri Lanka,all,0.068,ODA
+LSO,Lesotho,all,0.118,AFR
+LTU,Lithuania,all,0.058,FSU
+LUX,Luxembourg,all,0.042,WEU
+LVA,Latvia,all,0.058,FSU
+MAR,Morocco,all,0.118,AFR
+MDA,Moldova,all,0.058,FSU
+MDG,Madagascar,all,0.118,AFR
+MEX,Mexico,all,0.118,MEX
+MKD,North Macedonia,all,0.058,EEU
+MLI,Mali,all,0.118,AFR
+MMR,Myanmar,all,0.068,ODA
+MNE,Montenegro,all,0.058,EEU
+MNG,Mongolia,all,0.066,CHI
+MOZ,Mozambique,all,0.118,AFR
+MRT,Mauritania,all,0.118,AFR
+MWI,Malawi,all,0.118,AFR
+MYS,Malaysia,all,0.068,ODA
+NAM,Namibia,all,0.118,AFR
+NCL,New Caledonia,all,0.042,WEU
+NER,Niger,all,0.118,AFR
+NGA,Nigeria,all,0.118,AFR
+NIC,Nicaragua,all,0.092,CSA
+NLD,Netherlands,all,0.042,WEU
+NOR,Norway,all,0.042,WEU
+NPL,Nepal,all,0.068,ODA
+NZL,New Zealand,all,0.061,AUS
+OMN,Oman,all,0.068,MEA
+PAK,Pakistan,all,0.068,ODA
+PAN,Panama,all,0.092,CSA
+PER,Peru,all,0.092,CSA
+PHL,Philippines,all,0.068,ODA
+PNG,Papua New Guinea,all,0.068,ODA
+POL,Poland,all,0.058,EEU
+PRI,Puerto Rico,all,0.092,CSA
+PRK,North Korea,all,0.068,ODA
+PRT,Portugal,all,0.042,WEU
+PRY,Paraguay,all,0.092,CSA
+PSE,Palestine,all,0.068,MEA
+QAT,Qatar,all,0.068,MEA
+ROU,Romania,all,0.058,EEU
+RUS,Russia,all,0.058,FSU
+RWA,Rwanda,all,0.118,AFR
+SAU,Saudi Arabia,all,0.068,MEA
+SDN,Sudan,all,0.118,AFR
+SEN,Senegal,all,0.118,AFR
+SLB,Solomon Islands,all,0.068,ODA
+SLE,Sierra Leone,all,0.118,AFR
+SLV,El Salvador,all,0.092,CSA
+SOM,Somalia; Somaliland,all,0.118,AFR
+SRB,Republic of Serbia,all,0.058,EEU
+SSD,South Sudan,all,0.118,AFR
+SUR,Suriname,all,0.092,CSA
+SVK,Slovakia,all,0.058,EEU
+SVN,Slovenia,all,0.058,EEU
+SWE,Sweden,all,0.042,WEU
+SWZ,eSwatini,all,0.118,AFR
+SYR,Syria,all,0.068,MEA
+TCD,Chad,all,0.118,AFR
+TGO,Togo,all,0.118,AFR
+THA,Thailand,all,0.068,ODA
+TJK,Tajikistan,all,0.058,FSU
+TKM,Turkmenistan,all,0.058,FSU
+TLS,East Timor,all,0.068,ODA
+TTO,Trinidad and Tobago,all,0.092,CSA
+TUN,Tunisia,all,0.118,AFR
+TUR,Turkey,all,0.068,MEA
+TWN,Taiwan,all,0.068,ODA
+TZA,United Republic of Tanzania,all,0.118,AFR
+UGA,Uganda,all,0.118,AFR
+UKR,Ukraine,all,0.058,FSU
+URY,Uruguay,all,0.092,CSA
+USA,United States of America,all,0.051,USA
+UZB,Uzbekistan,all,0.058,FSU
+VEN,Venezuela,all,0.092,CSA
+VNM,Vietnam,all,0.068,ODA
+VUT,Vanuatu,all,0.068,ODA
+XKO,Kosovo,all,0.058,EEU
+YEM,Yemen,all,0.068,MEA
+ZAF,South Africa,all,0.118,AFR
+ZMB,Zambia,all,0.118,AFR
+ZWE,Zimbabwe,all,0.118,AFR

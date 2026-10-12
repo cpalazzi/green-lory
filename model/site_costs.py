@@ -296,7 +296,7 @@ def load_site_cost_overrides(path: str | Path, tech_names) -> dict:
 
 
 def merge_overrides(finance: dict, site_costs: dict) -> dict:
-    """Finance overrides (interest rates) with site-cost overrides on top, cell by cell."""
+    """The run's interest rates with the site-cost multipliers and water price on top, cell by cell."""
     merged = {}
     for key in set(finance) | set(site_costs):
         cell = {tech: dict(params) for tech, params in finance.get(key, {}).items()}

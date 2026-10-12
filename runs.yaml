@@ -127,7 +127,7 @@ runs:
     tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
-    finance_csv: inputs/finance/amelired_interest_inputs_2050_center.csv  # generated: python -m model.finance fill --table inputs/finance/amelired_interest_inputs_2050.csv
+    finance_csv: inputs/finance/amelired_interest_inputs_2050_center.csv  # by cell, gitignored (inputs/README.md)
     finance_csv_sha256: bddbc6dbd47a2c0b5eb0db3300d2c07dd10ec9bad8baec14e4515667fcf68333
     time_step_h: 1
     temporal_accounting: snapshot_weighted

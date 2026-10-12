@@ -2,17 +2,18 @@
 
 A manifest (``<run dir>/manifest.json``) is byte-immutable. It records the source (commit,
 release inventory), the resolved settings of the run, its cost scope, and the identity of
-every input: sha256 of the technology YAML chain, the plant bundle, the finance (override)
-CSV, the land table and the cell list, and a listing (names, sizes, mtimes) of the weather
-files. ``arc/submit_lory_sequence.sh`` writes it in its prepare job; the merge/QA job verifies
+every input: sha256 of the technology YAML chain, the plant bundle, the finance table (and the
+cell-country table when it is keyed by country), the land table and the cell list, and a
+listing (names, sizes, mtimes) of the weather files. ``arc/submit_lory_sequence.sh`` writes it in its prepare job; the merge/QA job verifies
 the inputs again before it accepts the shards.
 
     python -m arc.manifest write --output <run dir>/manifest.json ...   (every option: --help)
     python -m arc.manifest verify --manifest <run dir>/manifest.json
 
 Two cost scopes. The flat one of the key runs and C1/C2
-(``flat_<finance>_uniform_baseline_water_no_land_rent``): finance from the override CSV (Ameli
-reduced WACC, ``amelired``, or a uniform rate, ``waccN``), uniform baseline water from the YAML,
+(``flat_<finance>_uniform_baseline_water_no_land_rent``): interest rates from the run, one rate
+(``waccN``) or a finance table varying by cell or country (``amelired``, ``ameli``), uniform
+baseline water from the YAML,
 no build or remoteness multipliers, no land rent. The site-cost one of S1/S2
 (``site_costs_<finance>_no_land_rent``, finance also ``ameli``): the same finance, and the
 multipliers and the water price of a site-cost table (model/site_costs.py), whose source price
@@ -35,6 +36,8 @@ import yaml
 
 # The model's assumptions other than technology costs; every run records the file's hash
 PARAMETERS_YAML = Path(__file__).resolve().parents[1] / "inputs" / "parameters.yaml"
+# The cell-country table through which a finance table keyed by country reaches the cells
+CELL_COUNTRIES_CSV = Path(__file__).resolve().parents[1] / "inputs" / "cells" / "cell_countries.csv"
 
 
 PLANT_FILES = (
@@ -67,7 +70,7 @@ def _add_write_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tech-yaml", required=True)
     parser.add_argument("--plant-dir", required=True)
     finance = parser.add_mutually_exclusive_group(required=True)
-    finance.add_argument("--override-csv", help="per-cell finance table")
+    finance.add_argument("--finance-csv", help="finance table, by cell or by country")
     finance.add_argument("--interest-rate", type=float, help="one interest rate for every technology and cell")
     parser.add_argument("--land-csv", required=True)
     parser.add_argument("--weather-dir", required=True)
@@ -252,36 +255,58 @@ def _csv_coordinate_set(
     return coordinates
 
 
-def validate_override_coordinate_coverage(
+def _expected_coordinates(land_csv: Path, locations_csv: Path | None) -> tuple[set, str, Path]:
+    """The cells a run will solve: the explicit cell list, or the land table's active cells."""
+    if locations_csv is not None:
+        return _csv_coordinate_set(locations_csv), "explicit_locations_csv", locations_csv
+    return _csv_coordinate_set(land_csv, active_only=True), "active_land_csv", land_csv
+
+
+def validate_coordinate_coverage(
     *,
-    override_csv: Path,
+    table_csv: Path,
     land_csv: Path,
     locations_csv: Path | None,
 ) -> dict[str, Any]:
-    """Require an override coordinate for every location that will be run."""
+    """Require a row of a per-cell table (the site-cost table) for every location that will be run."""
 
-    override_coordinates = _csv_coordinate_set(override_csv)
-    if locations_csv is not None:
-        expected_coordinates = _csv_coordinate_set(locations_csv)
-        expected_source = "explicit_locations_csv"
-        expected_path = locations_csv
-    else:
-        expected_coordinates = _csv_coordinate_set(land_csv, active_only=True)
-        expected_source = "active_land_csv"
-        expected_path = land_csv
-
-    missing = sorted(expected_coordinates - override_coordinates)
+    table_coordinates = _csv_coordinate_set(table_csv)
+    expected_coordinates, expected_source, expected_path = _expected_coordinates(land_csv, locations_csv)
+    missing = sorted(expected_coordinates - table_coordinates)
     if missing:
         raise ValueError(
-            "Override CSV does not cover every run coordinate: "
-            f"missing={len(missing)} sample={missing[:10]}, "
-            f"override={override_csv}, expected={expected_path}"
+            f"{table_csv} does not cover every run coordinate: "
+            f"missing={len(missing)} sample={missing[:10]}, expected={expected_path}"
         )
     return {
         "expected_source": expected_source,
         "expected_coordinate_count": len(expected_coordinates),
-        "override_coordinate_count": len(override_coordinates),
+        "table_coordinate_count": len(table_coordinates),
         "missing_coordinate_count": 0,
+    }
+
+
+def validate_finance_coverage(
+    *,
+    finance_csv: Path,
+    tech_yaml: Path,
+    land_csv: Path,
+    locations_csv: Path | None,
+) -> dict[str, Any]:
+    """Require an interest rate for every technology at every location that will be run, resolved
+    as the model resolves it (model.technology.finance_overrides)."""
+    from model import technology
+
+    _, key = technology.load_finance_table(finance_csv)
+    expected_coordinates, expected_source, _ = _expected_coordinates(land_csv, locations_csv)
+    _, gaps = technology.finance_overrides(finance_csv, sorted(expected_coordinates), technology.load_tech_inputs(tech_yaml))
+    if gaps:
+        raise ValueError(f"{finance_csv} leaves {technology.describe_finance_gaps(gaps)}")
+    return {
+        "key": key,
+        "expected_source": expected_source,
+        "expected_coordinate_count": len(expected_coordinates),
+        "uncovered_coordinate_count": 0,
     }
 
 
@@ -364,44 +389,19 @@ def flat_finance_token(cost_scope_id: str) -> str:
     return match.group(1)
 
 
-def _uniform_override_rate(override_csv: Path) -> float | None:
-    """Return the single interest rate when the override is uniform, else None.
-
-    Uses the csv module only: the wrapper validates with the login node's plain python."""
-    seen: set[float] = set()
-    with override_csv.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        column = next((c for c in reader.fieldnames or [] if c.strip().lower() == "interest_rate"), None)
-        if column is None:
-            raise ValueError(f"{override_csv} has no interest_rate column")
-        for row in reader:
-            seen.add(round(float(row[column]), 12))
-            if len(seen) > 1:
-                return None
-    if not seen:
-        raise ValueError(f"{override_csv} has no rows")
-    return float(next(iter(seen)))
-
-
-def _check_interest_only(override_csv: Path, cost_scope_id: str) -> None:
-    columns = _csv_columns(override_csv)
-    if [column.lower() for column in columns] != ["lat", "lon", "tech", "interest_rate"]:
-        raise ValueError(
-            f"{cost_scope_id} needs an interest-only override CSV (lat, lon, tech, interest_rate); "
-            f"found {columns} in {override_csv}"
-        )
-
-
 def _finance_scope(
-    finance_token: str, cost_scope_id: str, *, override_csv: Path | None = None, interest_rate: float | None = None
+    finance_token: str, cost_scope_id: str, *, finance_csv: Path | None = None, interest_rate: float | None = None
 ) -> dict[str, Any]:
-    """The finance part of a cost scope: country rates (Ameli) from a finance table, or one
-    uniform rate, given as the run's interest_rate or as a uniform table."""
-    if (override_csv is None) == (interest_rate is None):
+    """The finance part of a cost scope: rates varying by cell or country (Ameli) from a finance
+    table, or one uniform rate, given as the run's interest_rate or as a uniform table."""
+    if (finance_csv is None) == (interest_rate is None):
         raise ValueError("A run takes its interest rates from a finance table or one rate, not both")
-    if override_csv is not None:
-        _check_interest_only(override_csv, cost_scope_id)
-        uniform_rate, source = _uniform_override_rate(override_csv), "override_csv"
+    if finance_csv is not None:
+        from model import technology
+
+        table, _ = technology.load_finance_table(finance_csv)  # checks the table's form
+        rates = table["interest_rate"].round(12).unique()
+        uniform_rate, source = (float(rates[0]) if len(rates) == 1 else None), "finance_csv"
     else:
         uniform_rate, source = float(interest_rate), "interest_rate"
     if finance_token in ("amelired", "ameli"):
@@ -432,7 +432,7 @@ def build_flat_amelired_cost_scope(
     include_site_costs: bool,
     cost_scope_id: str = "flat_amelired_uniform_baseline_water_no_land_rent",
     flat_water_model_currency_per_m3: float | None = None,
-    override_csv: Path | None = None,
+    finance_csv: Path | None = None,
     interest_rate: float | None = None,
 ) -> dict[str, Any]:
     """Structured cost scope for a flat campaign: interest rates only (a table or one rate),
@@ -474,7 +474,7 @@ def build_flat_amelired_cost_scope(
     if not math.isfinite(water_usage) or water_usage <= 0.0:
         raise ValueError("water_usage_m3_per_t_nh3 must be finite and positive")
 
-    finance = _finance_scope(finance_token, cost_scope_id, override_csv=override_csv, interest_rate=interest_rate)
+    finance = _finance_scope(finance_token, cost_scope_id, finance_csv=finance_csv, interest_rate=interest_rate)
     return {
         "schema_version": 1,
         "id": cost_scope_id,
@@ -525,7 +525,7 @@ def build_site_cost_scope(
     include_site_costs: bool,
     cost_scope_id: str,
     source_water_model_currency_per_m3: float | None = None,
-    override_csv: Path | None = None,
+    finance_csv: Path | None = None,
     interest_rate: float | None = None,
 ) -> dict[str, Any]:
     """Structured cost scope of a run with site costs: interest rates only (a table or one rate);
@@ -562,14 +562,15 @@ def build_site_cost_scope(
             value = float(row[column])
             if not math.isfinite(value) or value < 1.0:
                 raise ValueError(f"{site_costs_csv}:{number}: {column}={value} is not a multiplier of at least 1")
-        if float(row["water_cost_usd_per_m3"]) < baseline - 1e-9:
+        # the table rounds both prices alike, so compare with the row's own source price
+        if float(row["water_cost_usd_per_m3"]) < float(row["water_source_cost_usd_per_m3"]) - 1e-9:
             raise ValueError(f"{site_costs_csv}:{number}: the water price is below the source price")
     provenance_path = site_costs_csv.with_name(site_costs_csv.stem + "_provenance.json")
     parameters = json.loads(provenance_path.read_text(encoding="utf-8")).get("parameters") if provenance_path.exists() else None
     return {
         "schema_version": 1,
         "id": cost_scope_id,
-        "finance": _finance_scope(match.group(1), cost_scope_id, override_csv=override_csv, interest_rate=interest_rate),
+        "finance": _finance_scope(match.group(1), cost_scope_id, finance_csv=finance_csv, interest_rate=interest_rate),
         "spatial_build_and_remoteness": {
             "mode": "site_cost_table",
             "source": "site_costs_csv",
@@ -604,11 +605,11 @@ def build_cost_scope(
     cost_scope_id: str,
     flat_water_model_currency_per_m3: float | None = None,
     site_costs_csv: Path | None = None,
-    override_csv: Path | None = None,
+    finance_csv: Path | None = None,
     interest_rate: float | None = None,
 ) -> dict[str, Any]:
     """The cost scope of either kind (module docstring); a site-cost scope needs the table. The
-    finance is a per-cell table (override_csv) or one rate (interest_rate)."""
+    finance is a finance table (finance_csv) or one rate (interest_rate)."""
     if SITE_COSTS_SCOPE_PATTERN.match(cost_scope_id):
         if site_costs_csv is None:
             raise ValueError(f"{cost_scope_id} needs a site-cost table")
@@ -616,14 +617,14 @@ def build_cost_scope(
             tech_yaml=tech_yaml, site_costs_csv=site_costs_csv,
             include_site_costs=include_site_costs, cost_scope_id=cost_scope_id,
             source_water_model_currency_per_m3=flat_water_model_currency_per_m3,
-            override_csv=override_csv, interest_rate=interest_rate,
+            finance_csv=finance_csv, interest_rate=interest_rate,
         )
     if site_costs_csv is not None:
         raise ValueError(f"{cost_scope_id} is a flat scope; a site-cost table cannot be used with it")
     return build_flat_amelired_cost_scope(
         tech_yaml=tech_yaml, include_site_costs=include_site_costs, cost_scope_id=cost_scope_id,
         flat_water_model_currency_per_m3=flat_water_model_currency_per_m3,
-        override_csv=override_csv, interest_rate=interest_rate,
+        finance_csv=finance_csv, interest_rate=interest_rate,
     )
 
 
@@ -688,7 +689,7 @@ def write_manifest(args: argparse.Namespace) -> None:
     output = Path(args.output)
 
     tech_yaml_path = Path(args.tech_yaml)
-    override_csv_path = Path(args.override_csv) if args.override_csv else None
+    finance_csv_path = Path(args.finance_csv) if args.finance_csv else None
     land_csv_path = Path(args.land_csv)
     locations_csv_path = Path(args.locations_csv) if args.locations_csv else None
 
@@ -699,13 +700,15 @@ def write_manifest(args: argparse.Namespace) -> None:
         "weather": _weather_record(Path(args.weather_dir)),
         "parameters": _file_record(PARAMETERS_YAML),
     }
-    if override_csv_path is not None:
-        override_record = _file_record(override_csv_path)
-        override_record["columns"] = _csv_columns(override_csv_path)
-        override_record["coordinate_coverage"] = validate_override_coordinate_coverage(
-            override_csv=override_csv_path, land_csv=land_csv_path, locations_csv=locations_csv_path,
+    if finance_csv_path is not None:
+        finance_record = _file_record(finance_csv_path)
+        finance_record["columns"] = _csv_columns(finance_csv_path)
+        finance_record["coverage"] = validate_finance_coverage(
+            finance_csv=finance_csv_path, tech_yaml=tech_yaml_path, land_csv=land_csv_path, locations_csv=locations_csv_path,
         )
-        inputs["override_csv"] = override_record
+        inputs["finance_csv"] = finance_record
+        if finance_record["coverage"]["key"] == "country":
+            inputs["cell_countries"] = _file_record(CELL_COUNTRIES_CSV)
     else:
         inputs["interest_rate"] = float(args.interest_rate)
     if locations_csv_path is not None:
@@ -713,8 +716,8 @@ def write_manifest(args: argparse.Namespace) -> None:
     site_costs_path = Path(args.site_costs_csv) if args.site_costs_csv else None
     if site_costs_path is not None:
         site_record = _file_record(site_costs_path)
-        site_record["coordinate_coverage"] = validate_override_coordinate_coverage(
-            override_csv=site_costs_path, land_csv=land_csv_path, locations_csv=locations_csv_path,
+        site_record["coordinate_coverage"] = validate_coordinate_coverage(
+            table_csv=site_costs_path, land_csv=land_csv_path, locations_csv=locations_csv_path,
         )
         inputs["site_costs_csv"] = site_record
     if args.weather_land_correction:
@@ -722,7 +725,7 @@ def write_manifest(args: argparse.Namespace) -> None:
 
     cost_scope = build_cost_scope(
         tech_yaml=tech_yaml_path,
-        override_csv=override_csv_path,
+        finance_csv=finance_csv_path,
         interest_rate=args.interest_rate,
         include_site_costs=args.include_site_costs,
         cost_scope_id=args.cost_scope,
@@ -947,7 +950,7 @@ def verify_manifest_inputs(manifest_path: Path) -> dict[str, int]:
     _verify_file_record(inputs.get("land_csv"), "inputs.land_csv")
     verified_file_count += 1
 
-    for name in ("override_csv", "parameters", "locations_csv", "site_costs_csv", "weather_land_correction"):
+    for name in ("finance_csv", "cell_countries", "parameters", "locations_csv", "site_costs_csv", "weather_land_correction"):
         if name in inputs:
             _verify_file_record(inputs[name], f"inputs.{name}")
             verified_file_count += 1

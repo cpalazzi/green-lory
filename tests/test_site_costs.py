@@ -134,10 +134,9 @@ def test_equipment_multiplier_reaches_the_capital_cost():
     network = SimpleNamespace(generators=pd.DataFrame({"capital_cost": [0.0]}, index=["solar"]),
                               links=pd.DataFrame(), stores=pd.DataFrame())
     tech = {"solar": {"component_type": "generator", "tech_cost_per_mw": 100.0, "build_cost_per_mw": 200.0,
-                      "overnight_cost_per_mw": 300.0, "lifetime_years": 20, "interest_rate": 0.1,
-                      "fixed_om_fraction": 0.02}}
-    technology.apply_cell_overrides(
-        network, tech, {"solar": {"equipment_cost_multiplier": 1.1, "build_cost_multiplier": 1.5}},
+                      "overnight_cost_per_mw": 300.0, "lifetime_years": 20, "fixed_om_fraction": 0.02}}
+    technology.apply_costs(
+        network, tech, {"solar": {"interest_rate": 0.1, "equipment_cost_multiplier": 1.1, "build_cost_multiplier": 1.5}},
         time_step=1.0, temporal_accounting_mode="snapshot_weighted")
-    expected = (100.0 * 1.1 + 200.0 * 1.5) * (technology.annuity_factor(0.1, 20) + 0.02)  # the YAML's rate
+    expected = (100.0 * 1.1 + 200.0 * 1.5) * (technology.annuity_factor(0.1, 20) + 0.02)
     assert network.generators.at["solar", "capital_cost"] == pytest.approx(expected)

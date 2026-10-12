@@ -103,7 +103,7 @@ class VerifyCampaignManifestInputsTest(unittest.TestCase):
                         for name, path in plant_paths.items()
                     }
                 },
-                "override_csv": _file_record(override),
+                "finance_csv": _file_record(override),
                 "land_csv": _file_record(land),
                 "locations_csv": _file_record(locations),
                 "weather": _weather_record(weather_dir),
@@ -149,7 +149,7 @@ class VerifyCampaignManifestInputsTest(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(
-                ManifestInputError, "inputs.override_csv SHA-256 changed"
+                ManifestInputError, "inputs.finance_csv SHA-256 changed"
             ):
                 verify_manifest_inputs(manifest_path)
 
@@ -187,7 +187,7 @@ def _finance_csv(path: Path, rates) -> Path:
     return path
 
 
-def _manifest(scope_id, mode, rate=0.05, source="override_csv"):
+def _manifest(scope_id, mode, rate=0.05, source="finance_csv"):
     finance = {"mode": mode, "source": source, "override_column": "interest_rate"}
     if mode == "uniform_wacc":
         finance["rate"] = rate
@@ -200,7 +200,7 @@ def _manifest(scope_id, mode, rate=0.05, source="override_csv"):
             "land_rent": {"mode": "none_zero", "source": "no_land_rent_input", "expected_result_cost_usd_per_km2_year": 0.0, "included_in_headline": False},
         },
         "inputs": ({"interest_rate": rate} if source == "interest_rate"
-                   else {"override_csv": {"columns": ["lat", "lon", "tech", "interest_rate"]}}),
+                   else {"finance_csv": {"columns": ["lat", "lon", "tech", "interest_rate"]}}),
     }
 
 
@@ -248,23 +248,26 @@ class ManifestBuilderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             uniform = _finance_csv(Path(tmp) / "uniform.csv", [0.05, 0.05])
             countries = _finance_csv(Path(tmp) / "countries.csv", [0.05, 0.08])
-            table_scope = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=uniform, include_site_costs=True, cost_scope_id=wacc5)
-            self.assertEqual(table_scope["finance"]["source"], "override_csv")
-            ameli = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=countries, include_site_costs=True)
+            table_scope = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, finance_csv=uniform, include_site_costs=True, cost_scope_id=wacc5)
+            self.assertEqual(table_scope["finance"]["source"], "finance_csv")
+            ameli = build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, finance_csv=countries, include_site_costs=True)
             self.assertEqual(ameli["finance"]["mode"], "ameli_reduced_wacc")
             with self.assertRaises(ValueError):
-                build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=countries, include_site_costs=True, cost_scope_id=wacc5)
+                build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, finance_csv=countries, include_site_costs=True, cost_scope_id=wacc5)
             with self.assertRaisesRegex(ValueError, "not both"):
-                build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, override_csv=uniform, interest_rate=0.05,
+                build_flat_amelired_cost_scope(tech_yaml=DEA_YAML, finance_csv=uniform, interest_rate=0.05,
                                                include_site_costs=True, cost_scope_id=wacc5)
 
 
-def _site_cost_table(path: Path, *, source_price=2.28439325, land_cost=0.0, slope=1.2) -> Path:
+def _site_cost_table(path: Path, *, source_price=2.284393, land_cost=0.0, slope=1.2, water_at_source=None) -> Path:
+    """Two cells as model/site_costs.py writes them (prices rounded to 6 decimals); the second holds
+    its own water source, so pays the source price."""
+    water_at_source = source_price if water_at_source is None else water_at_source
     path.write_text(
         "latitude,longitude,equipment_cost_multiplier,installation_multiplier,slope_multiplier,depth_multiplier,"
         "labour_multiplier,water_source_cost_usd_per_m3,water_cost_usd_per_m3,land_cost_usd_per_km2_year\n"
         f"-23,117,1.05,1.34,{slope},1,1,{source_price},7.2,{land_cost}\n"
-        f"-23,151,1.01,1.09,1,1,1,{source_price},{source_price},{land_cost}\n"
+        f"-23,151,1.01,1.09,1,1,1,{source_price},{water_at_source},{land_cost}\n"
     )
     return path
 
@@ -289,7 +292,7 @@ class SiteCostScopeTest(unittest.TestCase):
 
     def test_site_cost_tables_must_match_the_yaml_and_carry_no_land_rent(self):
         for kwargs, pattern in (({"source_price": 2.0}, "not the YAML baseline"), ({"land_cost": 5.0}, "zero land cost"),
-                                ({"slope": 0.9}, "at least 1")):
+                                ({"slope": 0.9}, "at least 1"), ({"water_at_source": 2.2}, "below the source price")):
             with self.subTest(kwargs=kwargs), tempfile.TemporaryDirectory() as tmp:
                 table = _site_cost_table(Path(tmp) / "site_costs.csv", **kwargs)
                 with self.assertRaisesRegex(ValueError, pattern):

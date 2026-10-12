@@ -1,0 +1,19 @@
+{
+  "written_by": "python -m model.countries",
+  "rows": 54360,
+  "sha256": "fa1e0936ebde742e6cd9297664908f839f091b995c387e33d2470eb7f82407a6",
+  "inputs": {
+    "countries": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/countries.geojson",
+      "sha256": "86057d2fad98ac537a66df1da995d2f7904c2c215457077853087d13fa412487"
+    },
+    "country_reference": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/cells/country_reference_20260928_v1.csv",
+      "sha256": "e2a7bbd54ca8a1f2924d70cf7fc0322558a3ece9b415f261815dbd41e81ef68f"
+    }
+  },
+  "cells_by_assignment": {
+    "nearest": 35775,
+    "overlap": 18585
+  }
+}

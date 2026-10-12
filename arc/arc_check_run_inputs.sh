@@ -7,16 +7,16 @@ cd "$REPO_ROOT"
 
 LOCATIONS_CSV="${1:-${ARC_LOCATIONS_CSV:-}}"
 TECH_YAML="${ARC_TECH_YAML:?ARC_TECH_YAML must name the technology YAML of the run}"
-OVERRIDE_CSV="${ARC_OVERRIDE_CSV:-}"
+FINANCE_CSV="${ARC_FINANCE_CSV:-}"
 LAND_CSV="${ARC_LAND_CSV:?ARC_LAND_CSV must point at a centred land table (cell_anchor=center)}"
 
 echo "Preflight checks"
 echo "  repo:        $REPO_ROOT"
 echo "  tech_yaml:   $TECH_YAML"
-if [[ -n "$OVERRIDE_CSV" ]]; then
-  echo "  override:    $OVERRIDE_CSV"
+if [[ -n "$FINANCE_CSV" ]]; then
+  echo "  finance:     $FINANCE_CSV"
 else
-  echo "  override:    <none>"
+  echo "  finance:     <one interest rate>"
 fi
 echo "  land_csv:    $LAND_CSV"
 [[ -n "$LOCATIONS_CSV" ]] && echo "  locations:   $LOCATIONS_CSV"
@@ -32,8 +32,8 @@ do
   [[ -f "$f" ]] || missing+=("$f")
 done
 
-if [[ -n "$OVERRIDE_CSV" ]]; then
-  [[ -f "$OVERRIDE_CSV" ]] || missing+=("$OVERRIDE_CSV")
+if [[ -n "$FINANCE_CSV" ]]; then
+  [[ -f "$FINANCE_CSV" ]] || missing+=("$FINANCE_CSV")
 fi
 
 WEATHER_DIR="${ARC_WEATHER_DIR:-data/weather_data/salmon2022_pv_wind_2019_hourly_1deg}"

@@ -2,8 +2,8 @@
 # (co-located wind and PV; tracking footprint from Bolinger & Bolinger 2022).
 #
 # Everything else (costs, lifetimes, efficiencies, 2 USD2020/m3 baseline water, 1.5 m3/t)
-# comes from tech_config_ammonia_plant_2050_dea.yaml.  Finance is supplied per cell by
-# the interest-only override CSV of the campaign (uniform 5 % or Ameli reduced WACC).
+# comes from tech_config_ammonia_plant_2050_dea.yaml. Interest rates come from each run
+# (runs.yaml: interest_rate or finance_csv), not from this file.
 extends: tech_config_ammonia_plant_2050_dea.yaml
 # Uniform baseline water price of 2.0 EUR2020 per m3 (decision of 23 Sep 2026: the model
 # currency is EUR).  The site-cost pipeline keeps the spatial input currency (USD2020), so the

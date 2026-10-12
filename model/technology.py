@@ -2,10 +2,10 @@
 
 A technology YAML (inputs/tech/tech_config_*.yaml) lists every plant component under `techs` with
 its overnight cost split into equipment (`tech_cost_per_mw`) and installation, balance of plant
-and grid (`build_cost_per_mw`), its lifetime, fixed O&M as a fraction of capex and a default
-interest rate. `extends: <other.yaml>` makes a YAML a short overlay of another. Top-level keys
-set the model currency, the water use and baseline water price, and the exchange rate of the
-site-cost inputs.
+and grid (`build_cost_per_mw`), their total (`overnight_cost_per_mw`, checked), its lifetime and
+fixed O&M as a fraction of capex. Interest rates come from the run, never from the YAML.
+`extends: <other.yaml>` makes a YAML a short overlay of another. Top-level keys set the model
+currency, the water use and baseline water price, and the exchange rate of the site-cost inputs.
 
 The YAML also gives each link's conversion recipe: `carriers_in` and `carriers_out`, the flows
 by bus at one operating point, in any common unit (per MW of input or per MW of output).
@@ -16,15 +16,15 @@ and, for a store, `standing_loss_fraction_per_day` (apply_operating_parameters).
 supplies only the topology and the formulation devices (prepare_base_network checks that the
 YAML covers every other component).
 
-Costs reach the network in two steps for each cell:
-1. apply_base_costs() annualises every YAML cost with the capital recovery factor plus fixed O&M.
-2. apply_cell_overrides() replaces the interest rate, multiplies the equipment part by the
-   cell's equipment_cost_multiplier and the installation part by its build_cost_multiplier,
-   wherever the cell's overrides give a value.
+Costs reach the network once per cell (apply_costs): each technology's equipment part times the
+cell's equipment_cost_multiplier plus its build part times the build_cost_multiplier, annualised
+at the cell's interest rate with the capital recovery factor plus fixed O&M.
 
-The finance table (columns lat, lon, tech, interest_rate and optionally build_cost_multiplier,
-water_cost_usd_per_m3, land_cost_usd_per_km2_year) is read once and indexed by cell
-(index_override_table, cell_overrides); a site-cost table (model/site_costs.py) adds the
+The cell's interest rates come from the run: one rate for every technology and cell
+(uniform_interest_overrides), or a finance table (finance_overrides). A finance table is keyed
+by cell (lat, lon) or by country (iso3, reaching cells through model/countries.py); each row
+gives one technology's rate, or every other technology's (tech "all"). Every technology at
+every cell a run solves must get a rate. A site-cost table (model/site_costs.py) adds the
 multipliers and the water price.
 
 Links are rated on PyPSA's input side (bus0) while the YAML quotes output capacity, so link
@@ -49,8 +49,10 @@ LOGGER = logging.getLogger(__name__)
 
 # Location-level columns of the override table (not per technology)
 LOCATION_COST_COLUMNS = ("land_cost_usd_per_km2_year", "water_cost_usd_per_m3")
-# What every generator, link and store of a technology YAML must state
-COST_KEYS = ("interest_rate", "lifetime_years", "fixed_om_fraction")
+# What every generator, link and store of a technology YAML must state (the costs by unit:
+# tech_cost_per_mw, build_cost_per_mw and their total overnight_cost_per_mw, or per MWh for stores)
+COST_KEYS = ("lifetime_years", "fixed_om_fraction")
+COSTED_TYPES = ("generator", "link", "store")
 # Operating values a technology may state: the network attribute each sets and the components it
 # applies to. A technology without one has none (no minimum load, no ramp limit, no variable
 # cost, no standing loss).
@@ -133,14 +135,23 @@ def load_tech_inputs(path: str | Path | None) -> dict[str, dict]:
         normalized = normalize_component_name(name)
         if isinstance(raw, dict) and normalized is not None:
             out[normalized] = raw
-    # Every costed component states its finance and O&M: the model has no defaults of its own
-    missing = sorted(
-        f"{name}.{key}" for name, raw in out.items()
-        if str(raw.get("component_type", "")).lower() in {"generator", "link", "store"}
-        for key in COST_KEYS if key not in raw
-    )
-    if missing:
-        raise ValueError(f"Tech YAML {resolved} lacks {', '.join(missing)}")
+    # Every costed component states its costs, lifetime and O&M: the model has no defaults of its own
+    problems = []
+    for name, raw in out.items():
+        component_type = str(raw.get("component_type", "")).lower()
+        if component_type not in COSTED_TYPES:
+            continue
+        unit = "mwh" if component_type == "store" else "mw"
+        keys = (*COST_KEYS, f"tech_cost_per_{unit}", f"build_cost_per_{unit}", f"overnight_cost_per_{unit}")
+        problems += [f"{name}.{key} is missing" for key in keys if key not in raw]
+        if "interest_rate" in raw:
+            problems.append(f"{name}.interest_rate: interest rates come from the run, not the YAML")
+        parts = [raw.get(f"{part}_cost_per_{unit}") for part in ("tech", "build", "overnight")]
+        if None not in parts and abs(float(parts[0]) + float(parts[1]) - float(parts[2])) > 1e-6 * max(1.0, abs(float(parts[2]))):
+            problems.append(f"{name}: tech_cost_per_{unit} + build_cost_per_{unit} = {float(parts[0]) + float(parts[1]):g}, "
+                            f"not overnight_cost_per_{unit} = {float(parts[2]):g}")
+    if problems:
+        raise ValueError(f"Tech YAML {resolved}: {'; '.join(problems)}")
     return out
 
 
@@ -197,7 +208,7 @@ def apply_link_efficiencies(network, tech_inputs: dict[str, dict]) -> None:
 
 
 def check_plant_coverage(network, tech_inputs: dict[str, dict]) -> None:
-    """Every generator, link and store of the bundle except the formulation devices needs its cost
+    """Every generator, link and store of the bundle except the formulation devices needs its costs
     in the YAML, and every link its recipe: the bundle itself holds no technology values."""
     gaps = []
     for component, unit in (("generators", "mw"), ("links", "mw"), ("stores", "mwh")):
@@ -205,8 +216,8 @@ def check_plant_coverage(network, tech_inputs: dict[str, dict]) -> None:
             if name in FORMULATION_DEVICES:
                 continue
             raw = tech_inputs.get(name) or {}
-            if raw.get(f"overnight_cost_per_{unit}") is None:
-                gaps.append(f"{name}.overnight_cost_per_{unit}")
+            if raw.get(f"tech_cost_per_{unit}") is None or raw.get(f"build_cost_per_{unit}") is None:
+                gaps.append(f"{name}.tech_cost_per_{unit}/build_cost_per_{unit}")
             if component == "links" and not (raw.get("carriers_in") and raw.get("carriers_out")):
                 gaps.append(f"{name}.carriers_in/carriers_out")
     if gaps:
@@ -237,7 +248,7 @@ def apply_operating_parameters(network, tech_inputs: dict[str, dict]) -> None:
 
 def prepare_base_network(network, tech_inputs: dict[str, dict]) -> None:
     """Give the bundle's network its technology values: efficiencies and operating values (the
-    costs follow per cell, apply_base_costs and apply_cell_overrides)."""
+    costs follow per cell, apply_costs)."""
     check_plant_coverage(network, tech_inputs)
     apply_link_efficiencies(network, tech_inputs)
     apply_operating_parameters(network, tech_inputs)
@@ -282,27 +293,7 @@ def _set_annual_cost(network, name: str, component_type: str, annual: float, sto
             network.stores.loc[name, "capital_cost"] = annual * store_scale
 
 
-def apply_base_costs(
-    network, tech_inputs: dict[str, dict], *, time_step: float, temporal_accounting_mode: str
-) -> None:
-    """Set every component's capital cost from the YAML's overnight cost and default interest rate."""
-    store_scale = store_cost_scale(time_step, temporal_accounting_mode)
-    for name, raw in tech_inputs.items():
-        component_type = str(raw.get("component_type", "")).lower()
-        unit = "mwh" if component_type == "store" else "mw"
-        overnight = raw.get(f"overnight_cost_per_{unit}")
-        if component_type not in {"generator", "link", "store"} or overnight is None:
-            continue
-        annual = annualised_capital_cost(
-            float(overnight),
-            float(raw["interest_rate"]),
-            float(raw["lifetime_years"]),
-            float(raw["fixed_om_fraction"]),
-        )
-        _set_annual_cost(network, name, component_type, annual, store_scale)
-
-
-def apply_cell_overrides(
+def apply_costs(
     network,
     tech_inputs: dict[str, dict],
     overrides: dict[str, dict[str, float]] | None,
@@ -310,92 +301,134 @@ def apply_cell_overrides(
     time_step: float,
     temporal_accounting_mode: str,
 ) -> None:
-    """Recompute the capital cost of each technology the cell overrides.
+    """Set every technology's capital cost for one cell.
 
-    The overnight cost becomes tech_cost x equipment_cost_multiplier + build_cost x
-    build_cost_multiplier, annualised at the cell's interest rate (the YAML's where the cell
-    sets none). Called after apply_base_costs(); technologies without an override keep their
-    base cost.
+    The overnight cost is tech_cost x equipment_cost_multiplier + build_cost x
+    build_cost_multiplier (multipliers of 1 where the cell has no site costs), annualised at the
+    cell's interest rate, which the run's finance must give for every technology.
     """
-    if not overrides:
-        return
     store_scale = store_cost_scale(time_step, temporal_accounting_mode)
-    for tech, params in overrides.items():
-        if tech == "__location__" or not params:
-            continue
-        name = normalize_component_name(tech)
-        raw = tech_inputs.get(name) if name is not None else None
-        if not raw:
-            continue
+    overrides = overrides or {}
+    for name, raw in tech_inputs.items():
         component_type = str(raw.get("component_type", "")).lower()
-        if component_type not in {"generator", "link", "store"}:
+        if component_type not in COSTED_TYPES:
             continue
+        params = overrides.get(name) or {}
+        if "interest_rate" not in params:
+            raise ValueError(f"No interest rate for {name}: the run's finance must cover every technology")
         unit = "mwh" if component_type == "store" else "mw"
-        tech_cost, build_cost = raw.get(f"tech_cost_per_{unit}"), raw.get(f"build_cost_per_{unit}")
-        if tech_cost is None or build_cost is None:
-            raise ValueError(
-                f"Tech '{name}' must define tech_cost_per_{unit} and build_cost_per_{unit}; "
-                "unsplit overnight-cost inputs are no longer supported."
-            )
-        overnight = (float(tech_cost) * float(params.get("equipment_cost_multiplier", 1.0))
-                     + float(build_cost) * float(params.get("build_cost_multiplier", 1.0)))
+        overnight = (float(raw[f"tech_cost_per_{unit}"]) * float(params.get("equipment_cost_multiplier", 1.0))
+                     + float(raw[f"build_cost_per_{unit}"]) * float(params.get("build_cost_multiplier", 1.0)))
         annual = annualised_capital_cost(
-            overnight,
-            float(params.get("interest_rate", raw["interest_rate"])),
-            float(raw["lifetime_years"]),
-            float(raw["fixed_om_fraction"]),
+            overnight, float(params["interest_rate"]), float(raw["lifetime_years"]), float(raw["fixed_om_fraction"])
         )
         _set_annual_cost(network, name, component_type, annual, store_scale)
 
 
 # ---------------------------------------------------------------------------------------------
-# The per-cell override table
+# Finance: one interest rate per run, or a finance table
 # ---------------------------------------------------------------------------------------------
 
-def load_override_table(path: str | Path | None) -> pd.DataFrame:
-    """The override CSV with lower-case key columns and component names normalised."""
-    if path is None:
-        return pd.DataFrame(columns=["lat", "lon", "tech", "interest_rate"])
-    resolved = repo_path(path)
-    if not resolved.exists():
-        raise FileNotFoundError(f"Requested override CSV not found: {resolved}")
-    frame = pd.read_csv(resolved)
-    columns = {column.lower(): column for column in frame.columns}
-    for required in ("lat", "lon", "tech", "interest_rate"):
-        if required not in columns:
-            raise ValueError(f"Override CSV {resolved} must include '{required}' column (found {list(frame.columns)})")
-    frame = frame.rename(columns={columns[key]: key for key in ("lat", "lon", "tech", "interest_rate")})
-    frame["tech"] = frame["tech"].map(normalize_component_name)
-    return frame
+ALL_TECHNOLOGIES = "all"
+FINANCE_KEYS = {"cell": ("lat", "lon"), "country": ("iso3",)}
+# Columns a finance table may not carry: they belong to the site-cost table
+SITE_COST_COLUMNS = ("build_cost_multiplier", "equipment_cost_multiplier", *LOCATION_COST_COLUMNS)
 
 
 def _cell_key(lat: float, lon: float) -> tuple[float, float]:
     return round(float(lat), 4), round(float(lon), 4)
 
 
-def index_override_table(frame: pd.DataFrame) -> dict[tuple[float, float], dict[str, dict[str, float]]]:
-    """Index an override table by cell: {(lat, lon): {tech: {...}, "__location__": {...}}}."""
-    index: dict[tuple[float, float], dict[str, dict[str, float]]] = {}
-    for _, row in frame.iterrows():
-        entry = index.setdefault(_cell_key(row["lat"], row["lon"]), {})
-        tech = entry.setdefault(row["tech"], {})
-        for column in ("interest_rate", "build_cost_multiplier", "equipment_cost_multiplier"):
-            if column in row.index and pd.notna(row[column]):
-                tech[column] = float(row[column])
-        location = entry.setdefault("__location__", {})
-        for column in LOCATION_COST_COLUMNS:
-            if column in row.index and pd.notna(row[column]):
-                location[column] = float(row[column])
-    for entry in index.values():
-        if not entry.get("__location__"):
-            entry.pop("__location__", None)
-    return index
+def costed_technologies(tech_inputs: dict[str, dict]) -> list[str]:
+    """The technologies that carry a capital cost, so need an interest rate."""
+    return sorted(name for name, raw in tech_inputs.items() if str(raw.get("component_type", "")).lower() in COSTED_TYPES)
 
 
-def uniform_interest_overrides(cells, tech_names, rate: float) -> dict[tuple[float, float], dict[str, dict[str, float]]]:
-    """The override index of a run with one interest rate: every technology at every cell takes
-    it, as a finance table of that rate would set (the cells share one read-only mapping)."""
-    rates = {name: {"interest_rate": float(rate)} for name in sorted(tech_names)}
+def load_finance_table(path: str | Path) -> tuple[pd.DataFrame, str]:
+    """A finance table and its key: "cell" (columns lat, lon) or "country" (iso3).
+
+    Each row gives the interest rate (a fraction) of one technology at a cell or in a country, or,
+    with tech "all", of every technology the table does not name there. Other columns are kept
+    for the reader and ignored, except site-cost columns, which belong to the site-cost table.
+    """
+    resolved = repo_path(path)
+    frame = pd.read_csv(resolved)
+    frame = frame.rename(columns={column: str(column).strip().lower() for column in frame.columns})
+    keyed = [key for key, columns in FINANCE_KEYS.items() if set(columns) <= set(frame.columns)]
+    if len(keyed) != 1:
+        raise ValueError(f"{resolved}: a finance table is keyed either by cell (lat, lon) or by country (iso3)")
+    key = keyed[0]
+    missing = [column for column in ("tech", "interest_rate") if column not in frame.columns]
+    forbidden = [column for column in SITE_COST_COLUMNS if column in frame.columns]
+    if missing or forbidden:
+        raise ValueError(f"{resolved}: missing columns {missing}; site-cost columns {forbidden} belong to the site-cost table")
+    frame = frame[[*FINANCE_KEYS[key], "tech", "interest_rate"]].copy()
+    tech = frame["tech"].astype(str).str.strip()
+    frame["tech"] = [ALL_TECHNOLOGIES if name.lower() == ALL_TECHNOLOGIES else normalize_component_name(name) for name in tech]
+    if key == "country":
+        frame["iso3"] = frame["iso3"].astype(str).str.strip().str.upper()
+    else:
+        frame["lat"], frame["lon"] = frame["lat"].astype(float).round(4), frame["lon"].astype(float).round(4)
+    rates = pd.to_numeric(frame["interest_rate"], errors="coerce")
+    bad = frame[rates.isna() | (rates < 0) | (rates >= 1)]
+    if len(bad):
+        raise ValueError(f"{resolved}: interest_rate must be a fraction in [0, 1); e.g. {bad.head(3).to_dict('records')}")
+    duplicated = frame[frame.duplicated([*FINANCE_KEYS[key], "tech"], keep=False)]
+    if len(duplicated):
+        raise ValueError(f"{resolved}: rows given twice, e.g. {duplicated.head(3).to_dict('records')}")
+    frame["interest_rate"] = rates
+    return frame, key
+
+
+def finance_overrides(path: str | Path, cells, tech_inputs: dict[str, dict]) -> tuple[dict, dict]:
+    """A finance table's interest rates for the cells, and the cells it leaves without one.
+
+    Each technology at a cell takes the rate of its own row for the cell (or the cell's country,
+    model/countries.py), or else the "all" row's. Returns ({cell: {tech: {"interest_rate": r}}},
+    {cell: [technologies without a rate]}); a run must not solve a cell of the second.
+    """
+    table, key = load_finance_table(path)
+    techs = costed_technologies(tech_inputs)
+    unknown = sorted(set(table["tech"]) - set(techs) - {ALL_TECHNOLOGIES})
+    if unknown:
+        raise ValueError(f"{path}: technologies the plant does not have: {unknown}; use {techs} or 'all'")
+    if key == "cell":
+        keys = list(zip(table["lat"], table["lon"]))
+    else:
+        keys = list(table["iso3"])
+        from .countries import cell_countries
+
+        assigned = cell_countries()["iso3"]
+        country_of = dict(zip((_cell_key(lat, lon) for lat, lon in assigned.index), assigned.to_numpy()))
+    specific = {(k, tech): rate for k, tech, rate in zip(keys, table["tech"], table["interest_rate"]) if tech != ALL_TECHNOLOGIES}
+    default = {k: rate for k, tech, rate in zip(keys, table["tech"], table["interest_rate"]) if tech == ALL_TECHNOLOGIES}
+    resolved: dict = {}  # the rates of one key, shared read-only by its cells
+    index, gaps = {}, {}
+    for lat, lon in cells:
+        cell = _cell_key(lat, lon)
+        k = cell if key == "cell" else country_of.get(cell)
+        if k not in resolved:
+            rates = {tech: specific.get((k, tech), default.get(k)) for tech in techs}
+            resolved[k] = ({tech: {"interest_rate": float(rate)} for tech, rate in rates.items() if rate is not None},
+                           [tech for tech, rate in rates.items() if rate is None])
+        rates, missing = resolved[k]
+        if missing:
+            gaps[cell] = missing
+        else:
+            index[cell] = rates
+    return index, gaps
+
+
+def describe_finance_gaps(gaps: dict, limit: int = 5) -> str:
+    examples = "; ".join(f"({lat:g}, {lon:g}): {', '.join(techs)}" for (lat, lon), techs in list(gaps.items())[:limit])
+    count = f"{len(gaps)} cell" + ("" if len(gaps) == 1 else "s")
+    return f"{count} without an interest rate for some technologies, e.g. {examples}"
+
+
+def uniform_interest_overrides(cells, tech_inputs: dict[str, dict], rate: float) -> dict[tuple[float, float], dict[str, dict[str, float]]]:
+    """The interest rates of a run with one rate: every technology at every cell takes it (the
+    cells share one read-only mapping)."""
+    rates = {name: {"interest_rate": float(rate)} for name in costed_technologies(tech_inputs)}
     return {_cell_key(lat, lon): rates for lat, lon in cells}
 
 
@@ -405,7 +438,7 @@ def cell_overrides(index: dict, lat: float, lon: float) -> dict[str, dict[str, f
 
 
 def interest_rates(overrides: dict[str, dict[str, float]] | None) -> dict[str, float]:
-    """The cell's interest rate per component (only those the override table sets)."""
+    """The cell's interest rate per technology."""
     rates = {}
     for tech, params in (overrides or {}).items():
         rate = params.get("interest_rate")

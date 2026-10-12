@@ -281,7 +281,7 @@ print_scenario_summary() {
   echo "  class:       $SCENARIO_CLASS"
   echo "  tech yaml:   $TECH_YAML"
   echo "  plant dir:   $PLANT_DIR"
-  echo "  finance:     ${OVERRIDE_CSV:-interest rate $INTEREST_RATE for every technology and cell}"
+  echo "  finance:     ${FINANCE_CSV:-interest rate $INTEREST_RATE for every technology and cell}"
   echo "  site costs table: ${SITE_COSTS_CSV:-<none: flat build costs and water>}"
   echo "  weather land correction: ${WEATHER_LAND_CORRECTION:-<none: 1-degree profiles as they are>}"
   echo "  land csv:    $LAND_CSV"
@@ -300,7 +300,7 @@ SUBMIT_ENV_VARIABLES=(
   CAMPAIGN_ID RUN_ID RUN_STAGE SOURCE_COMMIT SOURCE_DIFF_SHA256
   SCENARIO_ID SCENARIO_CLASS SCENARIO_DESCRIPTION SCENARIO_JOB_TOKEN
   RUN_DIR MANIFEST_PATH MANIFEST_SHA256
-  TECH_YAML PLANT_DIR PV_POLICY OVERRIDE_CSV INTEREST_RATE SITE_COSTS_CSV LAND_CSV WEATHER_DIR WEATHER_LAND_CORRECTION LOCATIONS_CSV
+  TECH_YAML PLANT_DIR PV_POLICY FINANCE_CSV INTEREST_RATE SITE_COSTS_CSV LAND_CSV WEATHER_DIR WEATHER_LAND_CORRECTION LOCATIONS_CSV
   TIME_STEP MAX_SNAPSHOTS SIMULATED_HOURS LAND_CONSTRAINT CAPACITY_RULE LAND_ALLOCATION
   TEMPORAL_ACCOUNTING_MODE RAMP_LIMIT_BASIS INCLUDE_SITE_COSTS
   NUM_WORKERS THREADS_PER_WORKER SLURM_CPUS SLURM_MEMORY
@@ -473,10 +473,10 @@ validate_release_source_inventory() {
     --inventory "$RELEASE_SOURCE_INVENTORY"
 }
 
-validate_cost_scope_and_override_coverage() {
+validate_cost_scope_and_coverage() {
   "$VALIDATION_PYTHON" - \
     "$TECH_YAML" \
-    "$OVERRIDE_CSV" \
+    "$FINANCE_CSV" \
     "$LAND_CSV" \
     "$LOCATIONS_CSV" \
     "$INCLUDE_SITE_COSTS" \
@@ -490,11 +490,12 @@ import sys
 
 from arc.manifest import (
     build_cost_scope,
-    validate_override_coordinate_coverage,
+    validate_coordinate_coverage,
+    validate_finance_coverage,
 )
 
 tech_yaml = Path(sys.argv[1])
-override_csv = Path(sys.argv[2]) if sys.argv[2] else None
+finance_csv = Path(sys.argv[2]) if sys.argv[2] else None
 land_csv = Path(sys.argv[3])
 locations_csv = Path(sys.argv[4]) if sys.argv[4] else None
 include_site_costs = sys.argv[5] == "1"
@@ -506,7 +507,7 @@ site_costs_csv = Path(sys.argv[9]) if sys.argv[9] else None
 interest_rate = float(sys.argv[10]) if sys.argv[10] else None
 build_cost_scope(
     tech_yaml=tech_yaml,
-    override_csv=override_csv,
+    finance_csv=finance_csv,
     interest_rate=interest_rate,
     include_site_costs=include_site_costs,
     cost_scope_id=cost_scope_id,
@@ -514,32 +515,33 @@ build_cost_scope(
     site_costs_csv=site_costs_csv,
 )
 if locations_csv is not None or land_csv.is_file():
-    for label, table in (("Override", override_csv), ("Site-cost", site_costs_csv)):
-        if table is None:
-            continue
-        coverage = validate_override_coordinate_coverage(
-            override_csv=table,
-            land_csv=land_csv,
-            locations_csv=locations_csv,
+    if finance_csv is not None:
+        coverage = validate_finance_coverage(
+            finance_csv=finance_csv, tech_yaml=tech_yaml, land_csv=land_csv, locations_csv=locations_csv,
+        )
+        print(f"Finance coverage OK ({coverage['key']} table): {coverage['expected_coordinate_count']} cells")
+    if site_costs_csv is not None:
+        coverage = validate_coordinate_coverage(
+            table_csv=site_costs_csv, land_csv=land_csv, locations_csv=locations_csv,
         )
         print(
-            f"{label} coverage OK: "
+            "Site-cost coverage OK: "
             f"{coverage['expected_coordinate_count']} expected coordinates, "
-            f"{coverage['override_coordinate_count']} table coordinates"
+            f"{coverage['table_coordinate_count']} table coordinates"
         )
 elif not dry_run:
-    raise SystemExit(f"Land CSV is required for global override coverage: {land_csv}")
+    raise SystemExit(f"Land CSV is required for global coverage checks: {land_csv}")
 PY
 }
 
 validate_scenario_sources() {
   local required=("$TECH_YAML" "$DIAGNOSTIC_LOCATIONS")
-  if [[ -n "$OVERRIDE_CSV" && -n "$INTEREST_RATE" ]] || [[ -z "$OVERRIDE_CSV" && -z "$INTEREST_RATE" ]]; then
+  if [[ -n "$FINANCE_CSV" && -n "$INTEREST_RATE" ]] || [[ -z "$FINANCE_CSV" && -z "$INTEREST_RATE" ]]; then
     echo "A run sets either a finance table (finance_csv) or one interest rate (interest_rate)" >&2
     return 2
   fi
-  if [[ -n "$OVERRIDE_CSV" ]]; then
-    required+=("$OVERRIDE_CSV")
+  if [[ -n "$FINANCE_CSV" ]]; then
+    required+=("$FINANCE_CSV")
   fi
   if [[ -n "$LOCATIONS_CSV" ]]; then
     required+=("$LOCATIONS_CSV")
@@ -553,8 +555,8 @@ validate_scenario_sources() {
   done
   validate_plant_dir "$PLANT_DIR"
   validate_pinned_sha256 "Land table" "$LAND_CSV" "$EXPECTED_LAND_TABLE_SHA256"
-  if [[ -n "$OVERRIDE_CSV" ]]; then
-    validate_pinned_sha256 "Finance CSV" "$OVERRIDE_CSV" "$EXPECTED_OVERRIDE_CSV_SHA256"
+  if [[ -n "$FINANCE_CSV" ]]; then
+    validate_pinned_sha256 "Finance CSV" "$FINANCE_CSV" "$EXPECTED_FINANCE_CSV_SHA256"
   fi
   if [[ -n "$SITE_COSTS_CSV" ]]; then
     [[ -f "$SITE_COSTS_CSV" ]] || { echo "Required site-cost table not found: $SITE_COSTS_CSV" >&2; return 2; }
@@ -571,7 +573,7 @@ validate_scenario_sources() {
   fi
   validate_release_source_inventory
   validate_explicit_union_area "$LAND_CSV"
-  validate_cost_scope_and_override_coverage
+  validate_cost_scope_and_coverage
 
   if $DRY_RUN; then
     [[ -f "$LAND_CSV" ]] || echo "DRY-RUN NOTE: ARC-only land input is not present locally: $LAND_CSV"
@@ -584,7 +586,7 @@ validate_scenario_sources() {
   env \
     ARC_PYTHON_BIN="$ARC_PYTHON" \
     ARC_TECH_YAML="$TECH_YAML" \
-    ARC_OVERRIDE_CSV="$OVERRIDE_CSV" \
+    ARC_FINANCE_CSV="$FINANCE_CSV" \
     ARC_LAND_CSV="$LAND_CSV" \
     ARC_WEATHER_DIR="$WEATHER_DIR" \
     ARC_LOCATIONS_CSV="$LOCATIONS_CSV" \
@@ -632,8 +634,8 @@ manifest_command() {
   if [[ -n "$RELEASE_SOURCE_INVENTORY" ]]; then
     MANIFEST_COMMAND+=(--release-source-inventory "$RELEASE_SOURCE_INVENTORY")
   fi
-  if [[ -n "$OVERRIDE_CSV" ]]; then
-    MANIFEST_COMMAND+=(--override-csv "$OVERRIDE_CSV")
+  if [[ -n "$FINANCE_CSV" ]]; then
+    MANIFEST_COMMAND+=(--finance-csv "$FINANCE_CSV")
   else
     MANIFEST_COMMAND+=(--interest-rate "$INTEREST_RATE")
   fi
@@ -674,7 +676,7 @@ submit_or_plan_jobs() {
     "ARC_TECH_YAML=$TECH_YAML"
     "ARC_PLANT_DIR=$PLANT_DIR"
     "ARC_PV_POLICY=$PV_POLICY"
-    "ARC_OVERRIDE_CSV=$OVERRIDE_CSV"
+    "ARC_FINANCE_CSV=$FINANCE_CSV"
     "ARC_INTEREST_RATE=$INTEREST_RATE"
     "ARC_SITE_COSTS_CSV=$SITE_COSTS_CSV"
     "ARC_LAND_CSV=$LAND_CSV"

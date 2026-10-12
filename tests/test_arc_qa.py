@@ -11,7 +11,7 @@ import unittest
 
 import pandas as pd
 
-from arc.manifest import validate_override_coordinate_coverage
+from arc.manifest import validate_coordinate_coverage, validate_finance_coverage
 from arc.qa import (
     EXPECTED_RENEWABLE_UNION_METHOD,
     EXPECTED_RENEWABLE_UNION_METHOD_VERSION,
@@ -43,7 +43,7 @@ class CampaignQaTest(unittest.TestCase):
             "run_id": "run-1",
             "scenario": {"id": scenario},
             "inputs": {
-                "override_csv": {
+                "finance_csv": {
                     "columns": ["lat", "lon", "tech", "interest_rate"]
                 }
             },
@@ -65,7 +65,7 @@ class CampaignQaTest(unittest.TestCase):
                 "id": "flat_amelired_uniform_baseline_water_no_land_rent",
                 "finance": {
                     "mode": "ameli_reduced_wacc",
-                    "source": "override_csv",
+                    "source": "finance_csv",
                     "override_column": "interest_rate",
                 },
                 "spatial_build_and_remoteness": {
@@ -232,84 +232,84 @@ class CampaignQaTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     _run(args)
 
-    def test_qa_rejects_spatial_columns_in_flat_override_manifest(self):
+    def test_qa_rejects_site_cost_columns_in_a_finance_table(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             args, _ = self._fixture(root)
             manifest_path = Path(args.manifest)
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            manifest["inputs"]["override_csv"]["columns"].append(
+            manifest["inputs"]["finance_csv"]["columns"].append(
                 "build_cost_multiplier"
             )
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-            with self.assertRaisesRegex(ValueError, "interest-only override CSV"):
+            with self.assertRaisesRegex(ValueError, "no site-cost columns"):
                 _run(args)
 
 
-class OverrideCoverageTest(unittest.TestCase):
-    def _write_override(self, path: Path, coordinates: list[tuple[float, float]]) -> None:
-        pd.DataFrame(
-            [
-                {"lat": lat, "lon": lon, "tech": "wind", "interest_rate": 0.051}
-                for lat, lon in coordinates
-            ]
-        ).to_csv(path, index=False)
+class CoverageTest(unittest.TestCase):
+    def _write_table(self, path: Path, coordinates: list[tuple[float, float]]) -> None:
+        pd.DataFrame([{"latitude": lat, "longitude": lon, "value": 1.0} for lat, lon in coordinates]).to_csv(path, index=False)
 
-    def test_explicit_location_coverage_accepts_override_superset(self):
+    def test_explicit_location_coverage_accepts_a_table_superset(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            override = root / "override.csv"
-            locations = root / "locations.csv"
-            land = root / "unused-land.csv"
-            self._write_override(override, [(0.0, 0.0), (1.0, 1.0)])
+            table, locations = root / "site_costs.csv", root / "locations.csv"
+            self._write_table(table, [(0.0, 0.0), (1.0, 1.0)])
             pd.DataFrame([{"lat": 1.0, "lon": 1.0}]).to_csv(locations, index=False)
-
-            report = validate_override_coordinate_coverage(
-                override_csv=override,
-                land_csv=land,
-                locations_csv=locations,
-            )
-
-            self.assertEqual(report["expected_coordinate_count"], 1)
-            self.assertEqual(report["override_coordinate_count"], 2)
+            report = validate_coordinate_coverage(table_csv=table, land_csv=root / "unused-land.csv", locations_csv=locations)
+            self.assertEqual((report["expected_coordinate_count"], report["table_coordinate_count"]), (1, 2))
 
     def test_active_global_land_coverage_ignores_zero_capacity_cells(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            override = root / "override.csv"
-            land = root / "land.csv"
-            self._write_override(override, [(0.0, 0.0)])
-            pd.DataFrame(
-                [
-                    {"latitude": 0.0, "longitude": 0.0, "max_capacity_mw": 1.0},
-                    {"latitude": 1.0, "longitude": 1.0, "max_capacity_mw": 0.0},
-                ]
-            ).to_csv(land, index=False)
+            table, land = root / "site_costs.csv", root / "land.csv"
+            self._write_table(table, [(0.0, 0.0)])
+            pd.DataFrame([
+                {"latitude": 0.0, "longitude": 0.0, "max_capacity_mw": 1.0},
+                {"latitude": 1.0, "longitude": 1.0, "max_capacity_mw": 0.0},
+            ]).to_csv(land, index=False)
+            report = validate_coordinate_coverage(table_csv=table, land_csv=land, locations_csv=None)
+            self.assertEqual((report["expected_source"], report["expected_coordinate_count"]), ("active_land_csv", 1))
 
-            report = validate_override_coordinate_coverage(
-                override_csv=override,
-                land_csv=land,
-                locations_csv=None,
-            )
-
-            self.assertEqual(report["expected_source"], "active_land_csv")
-            self.assertEqual(report["expected_coordinate_count"], 1)
-
-    def test_missing_override_coordinate_fails_preflight(self):
+    def test_missing_coordinate_fails_preflight(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            override = root / "override.csv"
-            locations = root / "locations.csv"
-            self._write_override(override, [(0.0, 0.0)])
+            table, locations = root / "site_costs.csv", root / "locations.csv"
+            self._write_table(table, [(0.0, 0.0)])
             pd.DataFrame([{"lat": 2.0, "lon": 2.0}]).to_csv(locations, index=False)
-
             with self.assertRaisesRegex(ValueError, "missing=1"):
-                validate_override_coordinate_coverage(
-                    override_csv=override,
-                    land_csv=root / "unused.csv",
-                    locations_csv=locations,
-                )
+                validate_coordinate_coverage(table_csv=table, land_csv=root / "unused.csv", locations_csv=locations)
+
+
+class FinanceCoverageTest(unittest.TestCase):
+    TECH_YAML = Path(__file__).resolve().parents[1] / "inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml"
+
+    def _check(self, rows, locations=((-23.0, -69.0), (-23.0, 117.0))):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            finance, cells = root / "finance.csv", root / "locations.csv"
+            pd.DataFrame(rows).to_csv(finance, index=False)
+            pd.DataFrame([{"lat": lat, "lon": lon} for lat, lon in locations]).to_csv(cells, index=False)
+            return validate_finance_coverage(finance_csv=finance, tech_yaml=self.TECH_YAML, land_csv=root / "unused.csv",
+                                             locations_csv=cells)
+
+    def test_a_country_table_with_defaults_covers_the_cells(self):
+        report = self._check([
+            {"iso3": "CHL", "tech": "all", "interest_rate": 0.09},
+            {"iso3": "CHL", "tech": "solar", "interest_rate": 0.07},
+            {"iso3": "AUS", "tech": "all", "interest_rate": 0.06},
+        ])
+        self.assertEqual((report["key"], report["expected_coordinate_count"]), ("country", 2))
+
+    def test_a_country_without_rates_fails_preflight(self):
+        with self.assertRaisesRegex(ValueError, r"1 cell without an interest rate.*\(-23, 117\)"):
+            self._check([{"iso3": "AUS", "tech": "solar", "interest_rate": 0.06},
+                         {"iso3": "CHL", "tech": "all", "interest_rate": 0.09}])
+
+    def test_unknown_technology_names_are_refused(self):
+        with self.assertRaisesRegex(ValueError, "technologies the plant does not have"):
+            self._check([{"iso3": "CHL", "tech": "onshore_wind", "interest_rate": 0.09}])
 
 
 # --- the land-table gate --------------------------------------------------------------------

@@ -286,11 +286,11 @@ class CostSplitTest(unittest.TestCase):
                 "tech_cost_per_mwh": 60.0,
                 "build_cost_per_mwh": 40.0,
                 "lifetime_years": 20.0,
-                "interest_rate": 0.05,
                 "fixed_om_fraction": 0.0,
             }
         }
-        splits = cost_splits(network, tech_inputs, None, time_step=4.0, temporal_accounting_mode="legacy_scaled")
+        overrides = {"compressed_hydrogen_store": {"interest_rate": 0.05}}
+        splits = cost_splits(network, tech_inputs, overrides, time_step=4.0, temporal_accounting_mode="legacy_scaled")
         self.assertAlmostEqual(splits["build_cost_multiplier"], 1.0)
 
 

@@ -547,12 +547,18 @@ All runs:
   328.26 EUR/t in the key run). The electrolysis variable cost of 0.537 EUR/MWh, in the bundle
   since January 2026 with no source (DEA gives none, the legacy model had none), is dropped at
   your request: full-year LCOA falls by 4.53 EUR/t in the key run (1.3-1.6 %) and 4.3 EUR/t in
-  the reconciling run.
+  the reconciling run. Finance: interest rates come only from the run, one rate or a finance table
+  by country (`iso3`) or by cell, per technology or `all`; every technology at every cell run must
+  get a rate (`inputs/README.md`, finance). Country tables reach the cells through
+  `inputs/cells/cell_countries.csv`, which also gives the results' countries. The YAMLs' own
+  rates (10 %) and `model/finance.py` with the TIAM-UCL region tables are gone; Ameli's
+  low-carbon and reduced series are kept as country tables in `inputs/finance/`.
 - **Open, for you** (8 October):
   1. two step-3 points of section 3: the nearly inactive slope factor (no change proposed) and
      the water source price in EUR (the remoteness table, GHD 2025, was decided on 8 October);
-  2. S2 interest rates (step 5): each cell's country as the surface assigns it (largest
-     overlap), sea cells from the nearest land cell (`python -m model.finance ameli`);
+  2. S2 interest rates (step 5): Ameli's low-carbon series by country
+     (`inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv`, D5), or your collaborator's
+     technology-specific rates as a finance table by country;
   3. network equations for the campaign (step 5): corrected (`legacy_gpo --corrected`,
      recommended; the archived-table control A2c gives 261.64 USD/t against A2's 260.94,
      Australia unchanged, ships calling at 1,190 ports against 808) or as deposited;

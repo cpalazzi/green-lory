@@ -5,7 +5,7 @@
 #
 # The release is green-lory-releases/<release-id>/ on ARC: the Git-visible source
 # (tracked plus untracked-but-not-ignored files, without results/, the spatial cost
-# CSVs and the weather data), the generated finance overrides that runs.yaml pins
+# CSVs and the weather data), the finance tables by cell that runs.yaml pins
 # (gitignored, so copied explicitly after checking their sha256), source_inventory.json
 # (arc/release.py), RELEASE_NOTES.md (commit, dirty state, extras), and data/ links to
 # the shared inputs in green-lory/data/ (DATA_LINKS: what surfaces and the land build read).
@@ -62,7 +62,7 @@ if "${SSH[@]}" test -e "$RELEASE"; then echo "refusing to overwrite $RELEASE" >&
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
-# Generated finance overrides pinned by runs.yaml: copied when gitignored, after a hash check.
+# Finance tables by cell pinned by runs.yaml: copied when gitignored, after a hash check.
 "$PY" - "$STAGE/extras.txt" <<'PY'
 import hashlib, subprocess, sys
 from pathlib import Path
@@ -77,7 +77,7 @@ for run_id, run in load_runs().items():
     if not ignored:
         continue  # tracked or untracked-visible: already in the inventory
     if not Path(path).is_file():
-        sys.exit(f"{run_id}: {path} is missing; rebuild it with python -m model.finance (see its --help)")
+        sys.exit(f"{run_id}: {path} is missing; it is generated outside the repository (inputs/README.md, finance)")
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     if digest != expected:
         sys.exit(f"{run_id}: {path} has sha256 {digest}, runs.yaml pins {expected}")

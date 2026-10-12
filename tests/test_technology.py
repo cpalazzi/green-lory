@@ -53,86 +53,88 @@ def test_annuity_factor():
     assert technology.annualised_capital_cost(1000.0, 0.05, 20, 0.02) == pytest.approx(1000 * (0.0802425872 + 0.02))
 
 
-def _override_table():
-    return pd.DataFrame({
-        "lat": [1.0, 1.0, 2.0],
-        "lon": [3.0, 3.0, 4.0],
-        "tech": ["Solar", "electrolysis", "solar"],
-        "interest_rate": [0.06, 0.07, 0.05],
-        "build_cost_multiplier": [1.5, None, 1.0],
-        "water_cost_usd_per_m3": [3.0, 3.0, None],
-    })
+def _solar_network():
+    return SimpleNamespace(generators=pd.DataFrame({"capital_cost": [0.0]}, index=["solar"]),
+                           links=pd.DataFrame(), stores=pd.DataFrame())
 
 
-def test_override_table_is_indexed_by_cell(tmp_path):
-    path = tmp_path / "overrides.csv"
-    _override_table().to_csv(path, index=False)
-    index = technology.index_override_table(technology.load_override_table(path))
-    cell = technology.cell_overrides(index, 1.0, 3.0)
-    assert cell["solar"] == {"interest_rate": 0.06, "build_cost_multiplier": 1.5}
-    assert cell["electrolysis"] == {"interest_rate": 0.07}
-    assert cell["__location__"] == {"water_cost_usd_per_m3": 3.0}
-    assert "__location__" not in technology.cell_overrides(index, 2.0, 4.0)
-    assert technology.cell_overrides(index, 9.0, 9.0) is None
-    assert technology.interest_rates(cell) == {"solar": 0.06, "electrolysis": 0.07}
+SOLAR = {"solar": {"component_type": "generator", "tech_cost_per_mw": 100.0, "build_cost_per_mw": 200.0,
+                   "overnight_cost_per_mw": 300.0, "lifetime_years": 20, "fixed_om_fraction": 0.0}}
 
 
-def test_one_rate_gives_the_overrides_of_a_uniform_table(tmp_path):
-    techs = ["wind", "solar", "electrolysis"]
-    cells = [(-23.0, 117.0), (-22.0, 117.0)]
-    path = tmp_path / "uniform.csv"
-    pd.DataFrame([{"lat": lat, "lon": lon, "tech": tech, "interest_rate": 0.05}
-                  for lat, lon in cells for tech in sorted(techs)]).to_csv(path, index=False)
-    from_table = technology.index_override_table(technology.load_override_table(path))
-    assert technology.uniform_interest_overrides(cells, techs, 0.05) == from_table
-
-
-def test_cell_override_multiplies_only_the_installation_part():
-    network = SimpleNamespace(generators=pd.DataFrame({"capital_cost": [0.0]}, index=["solar"]),
-                              links=pd.DataFrame(), stores=pd.DataFrame())
-    tech = {"solar": {"component_type": "generator", "tech_cost_per_mw": 100.0, "build_cost_per_mw": 200.0,
-                      "overnight_cost_per_mw": 300.0, "lifetime_years": 20, "interest_rate": 0.1,
-                      "fixed_om_fraction": 0.0}}
-    technology.apply_base_costs(network, tech, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
-    assert network.generators.at["solar", "capital_cost"] == pytest.approx(300.0 * technology.annuity_factor(0.1, 20))
-    technology.apply_cell_overrides(network, tech, {"solar": {"interest_rate": 0.05, "build_cost_multiplier": 1.5}},
-                                    time_step=1.0, temporal_accounting_mode="snapshot_weighted")
+def test_costs_take_the_cells_interest_rate_and_multipliers():
+    network = _solar_network()
+    technology.apply_costs(network, SOLAR, {"solar": {"interest_rate": 0.05, "build_cost_multiplier": 1.5}},
+                           time_step=1.0, temporal_accounting_mode="snapshot_weighted")
     expected = (100.0 + 200.0 * 1.5) * technology.annuity_factor(0.05, 20)
     assert network.generators.at["solar", "capital_cost"] == pytest.approx(expected)
 
 
-# --- finance tables (model/finance.py) --------------------------------------------------------
-
-def test_tiam_regions_of_countries():
-    from model import finance
-
-    assert finance.tiam_region("Australia") == "AUS"
-    assert finance.tiam_region("Chile") == "CSA"
-    assert finance.tiam_region("Mongolia") == "CHI"
-    assert finance.tiam_region("Greenland") == "CAN"
-    for nothing in (None, float("nan"), "", "Antarctica", "Atlantis"):
-        assert finance.tiam_region(nothing) == finance.UNASSIGNED
+def test_costs_need_an_interest_rate_from_the_run():
+    with pytest.raises(ValueError, match="No interest rate for solar"):
+        technology.apply_costs(_solar_network(), SOLAR, {"solar": {"build_cost_multiplier": 1.5}},
+                               time_step=1.0, temporal_accounting_mode="snapshot_weighted")
 
 
-def test_ameli_rates_follow_the_scenario():
-    from model import finance
+def test_yamls_give_no_interest_rates_and_consistent_totals(tmp_path):
+    base = "techs:\n  solar: {component_type: generator, tech_cost_per_mw: 100, build_cost_per_mw: 200, " \
+           "overnight_cost_per_mw: %s, lifetime_years: 20, fixed_om_fraction: 0%s}\n"
+    (tmp_path / "rate.yaml").write_text(base % (300, ", interest_rate: 0.1"))
+    with pytest.raises(ValueError, match="interest rates come from the run"):
+        technology.load_tech_inputs(tmp_path / "rate.yaml")
+    (tmp_path / "total.yaml").write_text(base % (310, ""))
+    with pytest.raises(ValueError, match="not overnight_cost_per_mw = 310"):
+        technology.load_tech_inputs(tmp_path / "total.yaml")
 
-    rates = finance.ameli_rates(pd.Series(["Australia", "Morocco", ""]), "low-carbon-regional")
-    assert list(rates.tiam_region_code) == ["AUS", "AFR", finance.UNASSIGNED]
-    assert rates.interest_rate.iloc[0] == pytest.approx(0.061) and rates.interest_rate.iloc[1] == pytest.approx(0.118)
-    assert pd.isna(rates.interest_rate.iloc[2])
-    assert finance.ameli_rates(pd.Series(["Morocco"]), "reduced").interest_rate.iloc[0] == pytest.approx(0.051)
+
+# --- finance tables ---------------------------------------------------------------------------
+
+TECHS = {name: {"component_type": kind} for name, kind in
+         (("solar", "generator"), ("wind", "generator"), ("battery_storage", "store"))}
 
 
-def test_nearest_fill():
-    from model import finance
+def _finance(tmp_path, rows):
+    path = tmp_path / "finance.csv"
+    pd.DataFrame(rows).to_csv(path, index=False)
+    return path
 
-    cells = pd.DataFrame({"lat": [0.0, 0.0, 10.0], "lon": [0.0, 1.0, 0.0]})
-    covered = cells.iloc[[0, 2]].merge(pd.DataFrame({"tech": sorted(finance.TECHNOLOGIES)}), how="cross")
-    covered["interest_rate"] = 0.05
-    covered.loc[covered.lat == 10.0, "interest_rate"] = 0.09
-    filled, fills = finance.fill_from_nearest(cells, covered)
-    assert len(filled) == 3 * len(finance.TECHNOLOGIES)
-    assert (filled[(filled.lat == 0.0) & (filled.lon == 1.0)].interest_rate == 0.05).all()  # nearest is (0, 0)
-    assert list(fills[["source_lat", "source_lon"]].iloc[0]) == [0.0, 0.0]
-    assert fills.distance_km.iloc[0] == pytest.approx(111.19, abs=0.01)
+
+def test_a_finance_table_by_cell_with_defaults(tmp_path):
+    path = _finance(tmp_path, [
+        {"lat": 1, "lon": 3, "tech": "all", "interest_rate": 0.06},
+        {"lat": 1, "lon": 3, "tech": "Solar", "interest_rate": 0.04, "source": "a note the model ignores"},
+        {"lat": 2, "lon": 4, "tech": "solar", "interest_rate": 0.05},
+    ])
+    index, gaps = technology.finance_overrides(path, [(1.0, 3.0), (2.0, 4.0)], TECHS)
+    assert technology.interest_rates(technology.cell_overrides(index, 1.0, 3.0)) == {
+        "battery_storage": 0.06, "solar": 0.04, "wind": 0.06}
+    assert gaps == {(2.0, 4.0): ["battery_storage", "wind"]}
+    assert "1 cell without an interest rate" in technology.describe_finance_gaps(gaps)
+
+
+def test_a_finance_table_by_country_reaches_its_cells(tmp_path):
+    path = _finance(tmp_path, [{"iso3": "chl", "tech": "all", "interest_rate": 0.09},
+                               {"iso3": "CHL", "tech": "wind", "interest_rate": 0.08}])
+    index, gaps = technology.finance_overrides(path, [(-23.0, -69.0), (-23.0, 117.0)], TECHS)
+    assert technology.interest_rates(technology.cell_overrides(index, -23.0, -69.0)) == {
+        "battery_storage": 0.09, "solar": 0.09, "wind": 0.08}
+    assert list(gaps) == [(-23.0, 117.0)]  # Australia has no rows
+
+
+@pytest.mark.parametrize("rows,message", [
+    ([{"lat": 1, "lon": 3, "iso3": "CHL", "tech": "all", "interest_rate": 0.06}], "either by cell"),
+    ([{"iso3": "CHL", "tech": "onshore_wind", "interest_rate": 0.06}], "technologies the plant does not have"),
+    ([{"iso3": "CHL", "tech": "all", "interest_rate": 6}], r"fraction in \[0, 1\)"),
+    ([{"iso3": "CHL", "tech": "all", "interest_rate": 0.06}] * 2, "rows given twice"),
+    ([{"iso3": "CHL", "tech": "all", "interest_rate": 0.06, "build_cost_multiplier": 1.2}], "belong to the site-cost table"),
+])
+def test_malformed_finance_tables_are_refused(tmp_path, rows, message):
+    with pytest.raises(ValueError, match=message):
+        technology.finance_overrides(_finance(tmp_path, rows), [(-23.0, -69.0)], TECHS)
+
+
+def test_one_rate_equals_a_table_of_that_rate(tmp_path):
+    cells = [(-23.0, 117.0), (-22.0, 117.0)]
+    path = _finance(tmp_path, [{"lat": lat, "lon": lon, "tech": "all", "interest_rate": 0.05} for lat, lon in cells])
+    index, gaps = technology.finance_overrides(path, cells, TECHS)
+    assert not gaps and technology.uniform_interest_overrides(cells, TECHS, 0.05) == index

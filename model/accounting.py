@@ -83,7 +83,7 @@ def cost_splits(
         build_total_base = float(build_cost) * capacity
         build_total = build_total_base * multiplier
         lifetime = float(raw["lifetime_years"])
-        rate = float(params.get("interest_rate", raw["interest_rate"]))
+        rate = float(params["interest_rate"])  # the run's finance covers every technology
         fom = float(raw["fixed_om_fraction"])
         if lifetime <= 0:
             continue

@@ -327,11 +327,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     write_json(args.output / "manifest.json", manifest)
     land_table = land.load_land_table(args.land, tech)
+    land_lookup = land.index_land_table(land_table)
+    interest, _ = technology.finance_overrides(ROOT / "inputs/finance/amelired_interest_inputs_2050.csv", land_lookup, tech)
     STATE.update(config=experiment, output=args.output, pv_policy=args.pv_policy, tech=tech,
                  meta=technology.load_tech_meta(tech_path), land_allocation=land_allocation,
-                 land_lookup=land.index_land_table(land_table),
-                 interest=technology.index_override_table(
-                     technology.load_override_table(ROOT / "inputs/finance/amelired_interest_inputs_2050.csv")))
+                 land_lookup=land_lookup, interest=interest)
     STATE["weather"] = weather.ProfileStack(args.weather_run / "weather_used")
     STATE["base"] = plant.build_network(8760, plant_dir, time_step=1.0, temporal_accounting_mode="snapshot_weighted")
     technology.prepare_base_network(STATE["base"], tech)

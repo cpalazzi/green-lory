@@ -78,11 +78,12 @@ fixed-tilt PV only as in the key runs:
 ```bash
 python -m model.surface \
   --land-csv results/campaigns/land_center_20260923_v1/max_capacities_center_20pct_slope15.csv \
-  --locations-csv <cells.csv> --max-snapshots 168 --pv-policy fixed \
+  --locations-csv <cells.csv> --max-snapshots 168 --pv-policy fixed --interest-rate 0.05 \
   --output-csv results/scratch/smoke.csv --quiet
 ```
 
-Without `--override-csv` the YAML's own WACC applies. The regression test runs the three focal
+Interest rates come only from the run: `--interest-rate` or `--finance-csv` (a table by country
+or by cell, `inputs/README.md`). The regression test runs the three focal
 cells of the key run and the reconciling run against the accepted results:
 `python -m pytest -m slow` (needs Gurobi and the data).
 

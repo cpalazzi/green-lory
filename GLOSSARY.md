@@ -69,7 +69,7 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `tech_yaml` | Technology and cost YAML in `inputs/tech/`; may `extends:` another YAML, whose values it overrides |
 | `plant_dir` | Plant bundle, see [Plant bundles](#plant-bundles) |
 | `pv_policy` | PV offered to the optimiser: `fixed` (fixed tilt only) or `both` (fixed and single-axis tracking) |
-| `finance_csv`, `finance_csv_sha256` | Interest-only override CSV: `interest_rate` per cell and technology (`--override-csv`); the hash pins the file. A run sets this or `interest_rate` |
+| `finance_csv`, `finance_csv_sha256` | Finance table: interest rates by country (`iso3`) or by cell (`lat, lon`), per technology or `all` (`--finance-csv`; `inputs/README.md`); the hash pins the file. A run sets this or `interest_rate` |
 | `interest_rate` | One interest rate (a fraction, e.g. 0.05) for every technology at every cell (`--interest-rate`), instead of a finance table |
 | `site_costs_csv`, `site_costs_csv_sha256` | Optional site-cost table of the run's land table (`green-lory site-costs`): equipment and build multipliers and the water price per cell (`--site-costs-csv`); runs without it are flat |
 | `weather_land_correction`, `weather_land_correction_sha256` | Optional factors that rescale the profiles of cells with water to their land (`model/weather_land.py`, `--weather-land-correction`); runs before October 2026 have none |
@@ -100,7 +100,7 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `--temporal-accounting-mode` | `snapshot_weighted`, `legacy_scaled` | How energy and cost are integrated over snapshots longer than one hour. `legacy_scaled` reproduces the archived lcoa-opt arithmetic and is used only for the replication. |
 | `--ramp-limit-basis` | `per_hour`, `legacy_per_snapshot` | Whether Haber-Bosch ramp limits are per hour or per snapshot (replication only). |
 | `--exclude-site-costs` | flag | Keeps water and land rent out of the headline LCOA (replication only). |
-| `--override-csv` | path | Per-cell, per-technology `interest_rate` (and optionally build multipliers, water, land rent). Interest-only files are the *flat* cases. |
+| `--finance-csv` / `--interest-rate` | path / fraction | The run's interest rates: a finance table by country or by cell, per technology or `all` (`inputs/README.md`), or one rate for every technology and cell. One of the two is required. |
 | `--land-csv` | path | Land table from `model/land_table.py`; its `land_competition_fraction` column is the share of suitable land open to ammonia (2 % or 20 %). |
 | `--locations-csv` / `--global-locations` | path | Restricts the run to listed `lat,lon` cells (the key runs use onshore cells with suitable land). |
 | `--pv-policy` (`pv_policy` in `runs.yaml`) | `both`, `fixed`, `tracking` | Which PV the plant may build; `fixed` switches tracking PV off. |
@@ -161,7 +161,7 @@ efficiencies and the tracking flag; the September reports name them.
 | Way 2050 | Technology costs after Way et al. (2022), 2050 values, as implemented in lcoa-opt; green-lory's EUR2020 version is `inputs/tech/tech_config_ammonia_plant_2050_way_eur.yaml` (overnight costs reverse-engineered from the lcoa-opt workbook) |
 | x_Cost, `xcost45` | The lcoa-opt cost workbook `x_Cost_Forecasting_20230831.xlsx`, RCP4.5 sheet, 2050 column: the Way-based CAPEX that the frozen legacy model reads |
 | DEA 2050 | Danish Energy Agency technology catalogue, 2050 values (`inputs/tech/tech_config_ammonia_plant_2050_dea.yaml`) |
-| Ameli reduced WACC | Country WACC from Ameli et al. (2021) Fig. 2, reduced case, by TIAM-UCL region (`model/finance.py`; `python -m model.finance ameli --scenario reduced`) |
+| Ameli reduced WACC | Country WACC from Ameli et al. (2021) Fig. 2, reduced case, by TIAM-UCL region (`inputs/finance/ameli2021_reduced_wacc_by_country.csv`) |
 | Workbook annuity | The legacy model's single annuity-due factor 0.1143 (8 %, 20 years, 2 % O&M) applied to every technology; green-lory annualises per technology with its own lifetime and O&M (`glannuity` in a legacy id) |
 | Nominal compressor, bundled H2 storage | The legacy cost convention: hydrogen-compressor CAPEX nominal only, compression cost bundled into the hydrogen-store cost. The reconciling run uses it |
 | Explicit compressor, DEA tank | The improved convention: the compressor costed explicitly and the store at the DEA 2050 tank-only cost, so compression is not counted twice |
