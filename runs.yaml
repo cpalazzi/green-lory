@@ -280,10 +280,102 @@ runs:
     weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
     weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
     notes: >-
-      Global stage over the 16,885 run cells
-      (land_center_slope20_20261008_v2/locations_onshore_suitable_center_20261008.csv). Step 4 of
-      the plan compares C1 and C2 on the 1,317 validation cells
-      (inputs/cells/validation_cells_step4.csv).
+      Not run globally: dropped from the campaign on 14 October 2026, after step 4 measured the
+      four-hour effect against C2 on the 1,317 validation cells (inputs/cells/validation_cells_step4.csv,
+      CAMPAIGN_PLAN.md section 4): LCOA 2.1 % lower at the median, supply 11 % higher in all.
+
+  gl_dea2050_wacc5_bspat_wspat_land20oct_fixed:
+    role: campaign S1 (site costs)
+    runner: green_lory
+    description: >-
+      Campaign S1 (site costs, hourly): as C2, with each cell's build costs (equipment by distance to
+      the nearest port; installation by travel time to a town, GHD 2025, x slope) and water price (the
+      2 EUR2020/m3 source price at the nearest sea, lake or large river, plus a pipeline) from the
+      site-cost table of the October 20 % land build
+    results_class: 50_campaign
+    job_token: camp-s1
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed
+    interest_rate: 0.05  # every technology at every cell
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price; each cell adds its pipeline
+    cost_scope: site_costs_wacc5_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_center_20pct_slope20.csv
+    site_costs_csv_sha256: 6958217394947fda9f8c846505a8e8f445760ba6f32dab5617421b3323dbf0aa
+    land_share: 0.20
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
+    land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
+    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+    notes: >-
+      Water enters the LCOA after the solve, as a cost per tonne, so S1 also gives the build-only and
+      water-only cases without another solve: build only is S1 with C2's water, water only is C2 with
+      S1's water.
+
+  gl_dea2050_amelilc_bflat_wflat_land20oct_fixed:
+    role: campaign F (finance only)
+    runner: green_lory
+    description: >-
+      Campaign F (finance only, hourly): as C2, with Ameli et al.'s (2021) low-carbon (current) WACC by
+      country for every technology instead of a uniform 5 %
+    results_class: 50_campaign
+    job_token: camp-f
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed
+    finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
+    finance_csv_sha256: 0eddcae64bcfc6ee6fa6b6cf0e78885ba45670cca3e6079c9e4e4b03adc9865e
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0
+    cost_scope: flat_ameli_uniform_baseline_water_no_land_rent
+    land_share: 0.20
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
+    land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
+    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+
+  gl_dea2050_amelilc_bspat_wspat_land20oct_fixed:
+    role: campaign S2 (site costs and finance)
+    runner: green_lory
+    description: >-
+      Campaign S2 (site costs and finance, hourly): S1's build costs and water with F's interest rates
+      (Ameli et al.'s 2021 low-carbon WACC by country)
+    results_class: 50_campaign
+    job_token: camp-s2
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed
+    finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
+    finance_csv_sha256: 0eddcae64bcfc6ee6fa6b6cf0e78885ba45670cca3e6079c9e4e4b03adc9865e
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price; each cell adds its pipeline
+    cost_scope: site_costs_ameli_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_center_20pct_slope20.csv
+    site_costs_csv_sha256: 6958217394947fda9f8c846505a8e8f445760ba6f32dab5617421b3323dbf0aa
+    land_share: 0.20
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
+    land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
+    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
 
 
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above

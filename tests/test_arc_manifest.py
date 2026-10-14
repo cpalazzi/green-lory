@@ -228,6 +228,7 @@ class ManifestBuilderTest(unittest.TestCase):
     def test_tokens(self):
         self.assertEqual(flat_finance_token("flat_wacc5_uniform_baseline_water_no_land_rent"), "wacc5")
         self.assertEqual(flat_finance_token("flat_amelired_uniform_baseline_water_no_land_rent"), "amelired")
+        self.assertEqual(flat_finance_token("flat_ameli_uniform_baseline_water_no_land_rent"), "ameli")
 
     def test_the_rates_must_agree_with_the_declared_finance(self):
         wacc5 = "flat_wacc5_uniform_baseline_water_no_land_rent"

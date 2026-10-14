@@ -65,8 +65,8 @@ copies the one a run pins into its release after checking the hash.
 
 | File | What it is | Used by |
 |---|---|---|
-| `ameli2021_lowcarbon_wacc_by_country.csv` | Ameli et al. (2021) low-carbon (current) weighted average cost of capital, read from the bubble labels of Fig. 2 for the 16 regions of the TIAM-UCL model and given to each region's countries (`ameli_region`); one rate for all technologies, 174 countries | the planned S2 run (decision D5) |
-| `ameli2021_reduced_wacc_by_country.csv` | The same for Ameli's reduced series (5.1 % in most regions) | the reduced-WACC sensitivity |
+| `ameli2021_lowcarbon_wacc_by_country.csv` | Ameli et al. (2021) low-carbon (current) weighted average cost of capital, read from the bubble labels of Fig. 2 for the 16 regions of the TIAM-UCL model and given to each region's countries (`ameli_region`); one rate for all technologies, 174 countries, plus a row `ATA` for the one run cell assigned to Antarctica (55 S 36 W, South Georgia, a UK territory missing from `data/countries.geojson`), which takes the UK's rate | the finance runs F and S2 (decision D5) |
+| `ameli2021_reduced_wacc_by_country.csv` | The same for Ameli's reduced series (5.1 % in most regions), with the same `ATA` row | the reduced-WACC sensitivity |
 | `amelired_interest_inputs_2050.csv` (by cell, gitignored) | Ameli reduced rates for 52,704 cells and 15 technologies, built in June 2026 for the replication of the legacy model (25 MB). Tracked until 9 October 2026: `git show 79b72f2:inputs/amelired_interest_inputs_2050.csv` recovers it | the reconciling run; the supply pilot |
 | `amelired_interest_inputs_2050_center.csv` (by cell, gitignored) | The table above extended to the 54,360 cells of the September centred land table, each missing cell taking the rates of the nearest covered cell (23 MB) | the Ameli key run of September |
 | `amelired_interest_fill_2050_center.csv` (gitignored) | The 1,656 cells that fill added, with the cell each copies and the distance | review |
@@ -91,7 +91,7 @@ port distances, water), the remoteness fit and the site-cost table of the Octobe
 | `cell_countries.csv` | Each cell's country for the 54,360 cells of the land tables: the country covering most of the cell in `data/countries.geojson` (`assignment` overlap), else the country of the nearest such cell, with the distance (`nearest`: small islands missing from the map, and the sea; 653 of the 16,885 run cells). ISO codes from the reference below (`python -m model.countries`) | finance tables by country; the results' country column (overlap cells only) |
 | `country_reference_20260928_v1.csv` | 194 country names with their ISO 3166 alpha-3 codes: the September export's 177 and the aliases its provenance file lists | the cell-country table; the supplier export (`model/suppliers.py --country-reference`) |
 | `diagnostic_cells.csv` | Three cells (Atacama, north-west Australia, central Australia) | the smoke and diagnostic stages (`arc/submit_lory_sequence.sh`) |
-| `validation_cells_step4.csv` | 1,317 cells: Australia's 786 run cells of the October land table and 562 of the 563 cells of the legacy sample (`legacy_lcoa/cells_sample_v1.csv`; one has no suitable land), 31 in both (`group`) | the four-hour against hourly comparison of campaign step 4 (`--global-locations`) |
+| `validation_cells_step4.csv` | 1,317 cells (`group`): all of Australia's 786 run cells of the October land table, and 562 of the 563 cells of the legacy sample (`legacy_lcoa/cells_sample_v1.csv`: the three focal cells plus 80 cells from each 10-degree band of absolute latitude between 0 and 70 degrees, drawn on 15 September 2026 from the 15,377 cells of the published supplier table; one has no suitable land in October); 31 cells are in both | the four-hour against hourly comparison of campaign step 4 (`--global-locations`) |
 
 ## Left at the top level
 

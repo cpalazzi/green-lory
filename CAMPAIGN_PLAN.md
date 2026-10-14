@@ -478,10 +478,109 @@ Done and still to do in this step (8 October):
 
 - The D9 literature check: compressor cost, storage basis, Haber-Bosch flexibility (30 % minimum
   load, ramps of 40 % of capacity per hour, the legacy model's values); any change goes into the
-  YAML with its source.
+  YAML with its source. **Done and decided 14 October** (decisions at the end of this item).
+  Each candidate value was solved locally with C2's settings on six cells:
+  three inland (Chile 23 S 69 W, Pilbara 23 S 117 E, central Australia 21 S 135 E) and three on
+  the coast (Gladstone 23 S 151 E, Perth 32 S 115 E, Ningaloo 22 S 114 E).
+  - **Two basis errors in `inputs/tech/tech_config_ammonia_plant_2050_dea.yaml`.**
+    - Hydrogen tank: DEA sheet 151a gives costs per MWh of hydrogen on LHV (33.3 kWh/kg), but
+      the store's bus is on HHV (39.4 kWh/kg). 15,300 becomes 12,900 EUR/MWh.
+    - Haber-Bosch: DEA sheet 5.4 gives costs per MW of ammonia on LHV (5.24 MWh/t), but the
+      ammonia bus is on HHV (6.25 MWh/t). The ASU mark-up is DEA's 1.09; the YAML's 1.106 was
+      1.09 times the 2030 YAML's rounding of 1.380 to 1.4. 957,000 becomes 790,600 EUR/MW.
+      Sheet 5.4 says its costs are in 2015 EUR, but that note predates the catalogue's update to
+      2020 prices: every value on the sheet is a 2015 value times 1.0634. So no price-year
+      change is needed.
+    - Together the two fixes lower LCOA by 14 to 16 EUR/t, nearly the same in every cell.
+  - **The ammonia tank misconverts its source.** 521.74 EUR/MWh (3,261 EUR/t) comes from
+    Fletcher et al. (2023, Queensland green ammonia value chain, p. 35 and Table 54): "A value of
+    3000 AUD/t is assumed in this study". The report gives a range of 1,500 to 6,000 AUD/t, and
+    the 3,000 is an installed cost. The old conversion made three errors: it read AUD as USD,
+    divided by 6.25 MWh/t, and then added a 25 % build mark-up. The correct conversion is
+    3,000 AUD/t x 0.7 USD/AUD (the report's rate) x 258.811/292.655 (US CPI, 2022 to 2020)
+    / 1.142196 USD/EUR = 1,626 EUR2020/t, or 260 EUR/MWh. The report's own range gives a
+    sensitivity of 130 to 520 EUR/MWh. With the basis fixes, LCOA falls by 16 to 26 EUR/t, and
+    tanks grow by 2 to 6 % (5 to 27 days of output).
+  - **Haber-Bosch flexibility.**
+    - The 30 % minimum load is an assumption in Fletcher et al. (2023, p. 35), with no source.
+      DEA sheet 5.4, which already supplies the model's Haber-Bosch cost, gives 20 % for 2050
+      (range 10 to 30 %) and notes that conventional loops reach 30 % without changes. Moving to
+      20 % changes nothing at the inland solar cells and lowers LCOA by 2 to 7 EUR/t elsewhere,
+      most on the windy coasts.
+    - No source gives a ramp of 40 %/h; the legacy model applied 0.4 per four-hour step. At
+      hourly steps the ramp limit never binds: the results are identical without it, at both 30 %
+      and 20 % minimum load.
+  - **The compressor's cost and electricity assume different inlet pressures.**
+    - 165,300 EUR/MW is DEA 151a's compressor, its 2030 value scaled by DEA's 2050/2030 ratio.
+      DEA's own 2050 figure, 191.4 EUR/kW of output on LHV, is 161.8 on HHV, within 2 % of the
+      YAML. It describes a five-stage compressor from about 1 bar to 200 bar, which uses 9.1 % of
+      the hydrogen's HHV (DEA's 90.2 % round trip).
+    - The YAML's 5 % electricity is instead Fletcher et al.'s 2.016 kWh/kg, which suits a
+      pressurised electrolyser outlet. Our DEA electrolysis sheet does not state an outlet
+      pressure.
+    - Atmospheric outlet (DEA 151a's cost and electricity together): +0.1 to +0.9 EUR/t.
+    - 30-bar outlet (about 95 EUR/kW and 4 %): -10 EUR/t at the inland solar cells and -1 to
+      -6 at the coasts. The 95 scales the compression cost in DEA's newer electrolysis sheet
+      (30 to 80 bar, August 2026) to 250 bar, so this option would need that sheet to replace
+      ours.
+    - The compressor cost is the strongest single lever: doubling it raises the inland solar
+      cells by 19 to 22 EUR/t; halving it lowers them by 11.
+
+  | LCOA, EUR/t | Chile | Pilbara | central Aus. | Gladstone | Perth | Ningaloo | coast - inland |
+  |---|---|---|---|---|---|---|---|
+  | C2 as run | 324 | 347 | 284 | 352 | 322 | 326 | 15.2 |
+  | + basis fixes | 309 | 331 | 270 | 337 | 306 | 311 | 14.8 |
+  | + tank 260 EUR/MWh | 301 | 324 | 268 | 328 | 296 | 300 | 10.6 |
+  | + minimum load 20 % | 301 | 324 | 266 | 327 | 289 | 297 | 7.4 |
+  | + compressor from 1 bar (DEA pair) | 302 | 324 | 266 | 327 | 289 | 297 | 7.0 |
+  | or + compressor from 30 bar | 291 | 314 | 264 | 321 | 287 | 294 | 11.2 |
+
+  - Sources for these values: the DEA sheets and Fletcher et al. (2023), both already in Zotero.
+    The other literature consulted only served to check that these values are not outliers.
+  - **Decided 14 October**, in `inputs/tech/tech_config_ammonia_plant_2050_dea.yaml` (so every
+    `gl_*` run):
+    - the two basis fixes;
+    - the tank at 260 EUR/MWh;
+    - DEA 151a's compressor with its own electricity use: 161,800 EUR/MW, all equipment
+      (the sheet's installation row is already in the store), and 0.0914 MWh per MWh;
+    - minimum load 20 % (DEA);
+    - ramps kept, at 20 % of capacity per hour. This is the manufacturers' figure in Armijo and
+      Philibert (2020, p. 1550, from interviews); the IEA's Ammonia Technology Roadmap (2021,
+      p. 102) uses the same. Both are already in Zotero.
+
+    The key run's regression rows were regenerated: full-year LCOA -21.7 (Chile), -22.2
+    (Pilbara) and -18.7 (central Australia) EUR/t. The ramp limit barely binds: these match
+    the six-cell results without it. The Way YAMLs of the replication runs keep the published
+    values, and C2's validation run of 12 October predates the change.
 - 4 h against 1 h on Australia's 565 eligible cells and the 563-cell legacy sample, both with the
-  improved plant, to measure the resolution effect before the global runs.
-- PV profiles above 1.0 (AC/DC basis).
+  improved plant, to measure the resolution effect before the global runs. **Done 14 October** on
+  ARC (release `20261012-validation-v1`, campaign `validation_step4_20261012_v1`, htc jobs
+  9082565-75, both QA passed; smoke and diagnostic stages passed on 12 October): C1 (4 h) against
+  C2 (1 h) on 1,317 cells (`inputs/cells/validation_cells_step4.csv`: Australia's 786 run cells,
+  562 cells of the legacy sample). The 4 h step lowers LCOA in every cell, by 0.2 % to 5.1 %
+  (median 2.1 %, mean 8.5 EUR/t), and keeps the ranking (Spearman 0.994). It raises the supply
+  on the cells' land by 11 % in all (median 2.3 %, 95th percentile 47 %): with the variability
+  averaged out the plant builds less wind (median share of capacity 0.23 to 0.17) and less
+  battery (median 20 %), and where wind land was binding more capacity fits. At 500 Mt/yr of the
+  sample's supply the 4 h curve is 8.4 EUR/t (2.7 %) lower. Results and the comparison in
+  `results/campaigns/validation_step4_20261012_v1/` (`comparison/`).
+  How the 1,317 cells were chosen (`inputs/cells/validation_cells_step4.csv`, column `group`):
+  every one of Australia's 786 run cells in the October land table (cells whose country in
+  `inputs/cells/cell_countries.csv` is Australia), to see the effect where it matters most for the
+  networks; and the 563-cell legacy sample of 15 September 2026 (`legacy_lcoa/cells_sample_v1.csv`),
+  the three focal cells plus 80 cells drawn from each 10-degree band of absolute latitude from 0 to
+  70 degrees (both hemispheres pooled) among the 15,377 cells of the published supplier table, to
+  cover all climates evenly; 562 of the 563 have suitable land in the October table, and 31 cells
+  are in both groups. The legacy sample weighs each latitude band equally, not by area or supply,
+  and has no cell poleward of 70 degrees; the script that drew it was not kept, the file records
+  the cells. The results below hold for each group separately (Australia: LCOA -1.9 % at the
+  median; legacy sample: -2.5 %).
+  **Decision (14 October): C1 is dropped from the global campaign for now**; the four-hour effect
+  is the one measured here, on the sample, and the hourly run (C2) is the base.
+- PV profiles above 1.0 (AC/DC basis). Checked 12 October: over the 16,885 run cells, output above
+  1.0 is 0.006 % of fixed-tilt PV energy (0.05 % for tracking), at most 1.8 % in one cell of the
+  high Andes (28 S, 69 W; tracking 4.9 %): negligible for the fixed-tilt campaign, no clipping
+  proposed.
 - **Review:** the validation note, before the campaign.
 
 ## 5. Campaign
@@ -493,13 +592,20 @@ All runs:
 
 | Run | Step | Build | Water | Finance | Network |
 |---|---|---|---|---|---|
-| C1 flat, 4 h | 4 h | flat | flat 2 EUR/m³ | uniform 5 % | yes |
-| C2 flat, 1 h (base) | 1 h | flat | flat | uniform 5 % | yes |
-| S1 spatial | 1 h | equipment by port; installation by city x slope (x depth, x labour = 1) | spatial | uniform 5 % | yes |
-| S2 spatial + finance | 1 h | as S1 | spatial | Ameli low-carbon | yes |
+| C1 flat, 4 h: dropped for now (14 Oct); step 4 measured the four-hour effect on 1,317 cells | 4 h | flat | flat 2 EUR/m³ | uniform 5 % | no |
+| C2 flat, 1 h (base): `gl_dea2050_wacc5_bflat_wflat_land20oct_fixed` | 1 h | flat | flat | uniform 5 % | yes |
+| S1 spatial: `gl_dea2050_wacc5_bspat_wspat_land20oct_fixed` | 1 h | equipment by port; installation by city x slope (x depth, x labour = 1) | spatial | uniform 5 % | yes |
+| F finance only: `gl_dea2050_amelilc_bflat_wflat_land20oct_fixed` (added 14 Oct) | 1 h | flat | flat | Ameli low-carbon by country | no |
+| S2 spatial + finance: `gl_dea2050_amelilc_bspat_wspat_land20oct_fixed` | 1 h | as S1 | spatial | Ameli low-carbon by country (decided 14 Oct, until the collaborator's table) | yes |
+| Build only, water only | derived from S1 and C2 | as S1 / flat | flat / spatial | uniform 5 % | no |
 | 2 % variants | derived | | | | C2, S2 |
 
-- **Order:** new land build (about 4-8 h on ARC) → C1 → C2 → S1 → S2, each after your go-ahead →
+- **Design (14 October):** the paper (green-serval) asks what spatially varying water, build
+  and finance costs do to the global cost of green ammonia. C2, S1, F and S2 give each factor
+  alone and together. Water enters the LCOA after the solve, as a cost per tonne, so S1 also
+  gives build only (S1 with C2's water) and water only (C2 with S1's water) without another
+  solve. F against S2 shows how finance and site costs interact.
+- **Order:** new land build (done 8 October) → C2, S1, F, S2, each after your go-ahead →
   supplier contracts → networks at the 1 % tolerance, run from a green-porpoise release
   (`legacy_gpo/arc/`).
 - **Compute:** about 1 h on four 48-core jobs per hourly surface of about 17,000 cells (less at
@@ -553,17 +659,17 @@ All runs:
   `inputs/cells/cell_countries.csv`, which also gives the results' countries. The YAMLs' own
   rates (10 %) and `model/finance.py` with the TIAM-UCL region tables are gone; Ameli's
   low-carbon and reduced series are kept as country tables in `inputs/finance/`.
-- **Open, for you** (8 October):
-  1. two step-3 points of section 3: the nearly inactive slope factor (no change proposed) and
-     the water source price in EUR (the remoteness table, GHD 2025, was decided on 8 October);
-  2. S2 interest rates (step 5): Ameli's low-carbon series by country
-     (`inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv`, D5), or your collaborator's
-     technology-specific rates as a finance table by country;
-  3. network equations for the campaign (step 5): corrected (`legacy_gpo --corrected`,
-     recommended; the archived-table control A2c gives 261.64 USD/t against A2's 260.94,
-     Australia unchanged, ships calling at 1,190 ports against 808) or as deposited;
-  4. supplier-site storage in the corrected networks (step 5): drop it (recommended; the plant
-     LCOA already holds its ammonia tank; about 1 USD/t, no change to the network);
+- **14 October:** decided in green-porpoise (the network project, `legacy_gpo/`): the campaign's
+  networks use the corrected equations (`--corrected`) and keep the published week of storage at
+  each supplier (0.99 USD/t with the corrected unit, the same for every supplier, so no change to
+  flows; it partly overlaps the plant's own ammonia tank, which the paper states). C1 is dropped
+  from the global campaign (section 4). The step-4 literature check (D9) started.
+- **14 October, later:** D9 decided (section 4) and the campaign approved: "Go ahead commit and
+  submit all" (C2, S1, F and S2, section 5). That go-ahead also settles the two step-3 points of
+  section 3 as proposed: no change to the nearly inactive slope factor, and the water source
+  price at 2 EUR2020/m3 at sea, lakes and rivers. S2's interest rates are Ameli's low-carbon
+  series by country for now (`inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv`); the
+  collaborator's technology-specific rates replace them when their table arrives.
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release

@@ -108,9 +108,9 @@ def _add_write_arguments(parser: argparse.ArgumentParser) -> None:
         type=_cost_scope_id,
         required=True,
         help=(
-            "flat_<finance>_uniform_baseline_water_no_land_rent with finance 'amelired' "
-            "(Ameli reduced WACC by country) or 'waccN' (uniform N percent), or "
-            "site_costs_<finance>_no_land_rent (finance also 'ameli') with --site-costs-csv."
+            "flat_<finance>_uniform_baseline_water_no_land_rent or site_costs_<finance>_no_land_rent "
+            "(with --site-costs-csv), finance 'amelired' (Ameli reduced WACC by country), 'ameli' "
+            "(another Ameli series by country, e.g. low-carbon) or 'waccN' (uniform N percent)."
         ),
     )
     parser.add_argument(
@@ -356,7 +356,7 @@ def _tech_yaml_record(path: Path) -> dict[str, Any]:
 
 
 FLAT_COST_SCOPE_PATTERN = re.compile(
-    r"^flat_(amelired|wacc\d+(?:p\d+)?)_uniform_baseline_water_no_land_rent$"
+    r"^flat_(amelired|ameli|wacc\d+(?:p\d+)?)_uniform_baseline_water_no_land_rent$"
 )
 
 
@@ -437,7 +437,8 @@ def build_flat_amelired_cost_scope(
 ) -> dict[str, Any]:
     """Structured cost scope for a flat campaign: interest rates only (a table or one rate),
     uniform baseline water, no build/remoteness multipliers, no land rent. Finance is Ameli
-    reduced WACC (``amelired``) or a uniform rate (``waccN``, checked against the run's rates)."""
+    reduced WACC (``amelired``), another Ameli series by country (``ameli``) or a uniform rate
+    (``waccN``, checked against the run's rates)."""
     finance_token = flat_finance_token(cost_scope_id)
     resolved_config, _ = _load_tech_chain(tech_yaml)
 

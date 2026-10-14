@@ -11,9 +11,10 @@ changing the choice needs only post-processing of the existing key surfaces or a
 | Choice | Decision | Since | Where it is set |
 |---|---|---|---|
 | Technology costs | DEA 2050; Way 2050 only for the reconciling run | 16 Sep | `tech_yaml` in `runs.yaml` |
+| Plant values checked (D9) | DEA costs per unit of hydrogen or ammonia converted from LHV to the model's HHV buses (hydrogen tank, Haber-Bosch); ammonia tank 260 EUR/MWh (Fletcher et al. 2023, 3,000 AUD/t); DEA's compressor with its own electricity use (161.8 kEUR/MW, 9.1 %); Haber-Bosch minimum load 20 % (DEA) and ramps 20 %/h (Armijo and Philibert 2020); key-run LCOA -19 to -22 EUR/t at the focal cells | 14 Oct | `inputs/tech/tech_config_ammonia_plant_2050_dea.yaml`; `CAMPAIGN_PLAN.md` section 4 |
 | Currency | EUR2020 for LCOA; supplier contracts in USD2018, the network model's currency | 23 Sep | result columns, contract export |
-| Finance | uniform 5 % WACC as the base; Ameli reduced WACC by country as a sensitivity (it moves the median LCOA by under 1 %) | 5 Oct | `interest_rate` (uniform) or `finance_csv` (by country) in `runs.yaml` |
-| Time resolution | hourly, one weather year (2019) | Sep | `time_step_h` |
+| Finance | uniform 5 % WACC as the base; Ameli low-carbon WACC by country in the campaign's finance runs (F, S2) until the collaborator's technology-specific table; Ameli reduced WACC by country moved the median LCOA by under 1 % (key run 2) | 5 Oct, 14 Oct | `interest_rate` (uniform) or `finance_csv` (by country) in `runs.yaml` |
+| Time resolution | hourly, one weather year (2019); a four-hour step lowers LCOA by 2.1 % at the median and raises supply by 11 % (step 4, 1,317 sampled cells: Australia and a latitude-stratified global sample), so it is not used | Sep, 14 Oct | `time_step_h` |
 | Weather of coastal cells | the 1-degree profiles average the cell, sea included; for the campaign the profiles of cells with at least 1 % water are rescaled to their land with ERA5 at 0.25 degrees | 8 Oct | `weather_land_correction`; thresholds in `inputs/parameters.yaml` (weather) |
 | PV | fixed tilt only; tracking-only is a named sensitivity; the optimiser does not choose between them | 16 Sep | `pv_policy`, plant bundle |
 | Tracking footprint | 1.458 x the fixed-tilt area (Bolinger and Bolinger 2022) | 16 Sep | `inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml` |

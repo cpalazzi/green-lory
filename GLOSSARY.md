@@ -122,7 +122,7 @@ pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run
 | `gl`, `ll`, `gpo` | green-lory plant model, legacy-lcoa plant model, green-porpoise network |
 | `rep_...` | the reconciling run, which keeps its September id (`rep` for replication mode) |
 | `dea2050`, `dea2030`, `way2050`, `xcost45` | technology cost basis (see [Sources and terms](#sources-and-terms)) |
-| `wacc5`, `ameli`, `amelired` | uniform 5 % WACC, or Ameli reduced WACC by country |
+| `wacc5`, `ameli`, `amelired`, `amelilc` | uniform 5 % WACC; Ameli reduced WACC by country (`ameli` in key run 2, `amelired` in the reconciling run); Ameli low-carbon (current) WACC by country (campaign runs F and S2) |
 | `bflat`, `bspat` | build-cost multiplier 1 everywhere, or depth x remoteness x labour |
 | `wflat`, `wspat`, `wnone` | uniform baseline water (2 EUR2020/m³ from 24 Sep 2026), spatial water, no water cost |
 | `land20c`, `land2c`, `land20oct`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`c` centred build of 23 Sep 2026, `oct` the October build of 8 Oct 2026 with slope classes up to 20 degrees and protected land counted on land only, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |
@@ -162,6 +162,7 @@ efficiencies and the tracking flag; the September reports name them.
 | x_Cost, `xcost45` | The lcoa-opt cost workbook `x_Cost_Forecasting_20230831.xlsx`, RCP4.5 sheet, 2050 column: the Way-based CAPEX that the frozen legacy model reads |
 | DEA 2050 | Danish Energy Agency technology catalogue, 2050 values (`inputs/tech/tech_config_ammonia_plant_2050_dea.yaml`) |
 | Ameli reduced WACC | Country WACC from Ameli et al. (2021) Fig. 2, reduced case, by TIAM-UCL region (`inputs/finance/ameli2021_reduced_wacc_by_country.csv`) |
+| Ameli low-carbon WACC | Country WACC from Ameli et al. (2021) Fig. 2, low-carbon (current) case, by TIAM-UCL region (`inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv`) |
 | Workbook annuity | The legacy model's single annuity-due factor 0.1143 (8 %, 20 years, 2 % O&M) applied to every technology; green-lory annualises per technology with its own lifetime and O&M (`glannuity` in a legacy id) |
 | Nominal compressor, bundled H2 storage | The legacy cost convention: hydrogen-compressor CAPEX nominal only, compression cost bundled into the hydrogen-store cost. The reconciling run uses it |
 | Explicit compressor, DEA tank | The improved convention: the compressor costed explicitly and the store at the DEA 2050 tank-only cost, so compression is not counted twice |

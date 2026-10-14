@@ -538,13 +538,13 @@ def _flat_cost_scope_expectations(
         raise ValueError("Manifest is missing structured cost_scope metadata")
     scope_id = str(scope.get("id"))
     scope_match = re.match(
-        r"^flat_(amelired|wacc\d+(?:p\d+)?)_uniform_baseline_water_no_land_rent$", scope_id
+        r"^flat_(amelired|ameli|wacc\d+(?:p\d+)?)_uniform_baseline_water_no_land_rent$", scope_id
     )
     if scope_match is None:
         raise ValueError(f"Unsupported manifest cost scope: {scope.get('id')!r}")
 
     finance = scope.get("finance", {})
-    expected_mode = "ameli_reduced_wacc" if scope_match.group(1) == "amelired" else "uniform_wacc"
+    expected_mode = {"amelired": "ameli_reduced_wacc", "ameli": "ameli_wacc"}.get(scope_match.group(1), "uniform_wacc")
     if finance.get("mode") != expected_mode:
         raise ValueError(f"Manifest cost scope {scope_id} must declare finance mode {expected_mode}")
     if expected_mode == "uniform_wacc" and not isinstance(finance.get("rate"), (int, float)):
