@@ -28,13 +28,13 @@ def test_circular_extends_is_rejected(tmp_path):
         technology.tech_yaml_files(tmp_path / "a.yaml")
 
 
-@pytest.mark.parametrize("yaml_name,expected", [
+@pytest.mark.parametrize("yaml_name,expected,compression_power", [
     ("tech_config_ammonia_plant_2050_dea_colocated.yaml",
-     {"electrolysis": 0.84, "battery_pcs_charge": 0.96, "battery_pcs_discharge": 0.96, "hydrogen_fuel_cell": 0.5}),
+     {"electrolysis": 0.84, "battery_pcs_charge": 0.96, "battery_pcs_discharge": 0.96, "hydrogen_fuel_cell": 0.5}, 0.0914),
     ("tech_config_ammonia_plant_2050_way_eur.yaml",
-     {"electrolysis": 0.886509, "battery_pcs_charge": 0.98, "battery_pcs_discharge": 0.99, "hydrogen_fuel_cell": 0.540015}),
+     {"electrolysis": 0.886509, "battery_pcs_charge": 0.98, "battery_pcs_discharge": 0.99, "hydrogen_fuel_cell": 0.540015}, 0.05),
 ])
-def test_link_efficiencies_come_from_the_yaml_recipe(yaml_name, expected):
+def test_link_efficiencies_come_from_the_yaml_recipe(yaml_name, expected, compression_power):
     from model import plant
     from model.config import DEFAULT_PLANT_DIR
 
@@ -43,7 +43,7 @@ def test_link_efficiencies_come_from_the_yaml_recipe(yaml_name, expected):
     for name, value in expected.items():
         assert network.links.at[name, "efficiency"] == value  # exact: the recipes carry these numbers
     # Three-port links: compression draws power, synthesis draws hydrogen
-    assert (network.links.at["hydrogen_compression", "efficiency"], network.links.at["hydrogen_compression", "efficiency2"]) == (1.0, -0.05)
+    assert (network.links.at["hydrogen_compression", "efficiency"], network.links.at["hydrogen_compression", "efficiency2"]) == (1.0, -compression_power)
     assert (network.links.at["ammonia_synthesis", "efficiency"], network.links.at["ammonia_synthesis", "efficiency2"]) == (6.25, -7.092)
 
 

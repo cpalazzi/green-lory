@@ -91,9 +91,9 @@ def test_legacy_mode_scales_store_and_variable_costs():
 
 def test_operating_values_come_from_the_yaml():
     network = _prepared(4, 1.0, "snapshot_weighted")
-    assert network.links.at["ammonia_synthesis", "p_min_pu"] == 0.3
-    assert network.links.at["ammonia_synthesis", "ramp_limit_up"] == 0.4
-    assert network.links.at["ammonia_synthesis", "ramp_limit_down"] == 0.4
+    assert network.links.at["ammonia_synthesis", "p_min_pu"] == 0.2
+    assert network.links.at["ammonia_synthesis", "ramp_limit_up"] == 0.2
+    assert network.links.at["ammonia_synthesis", "ramp_limit_down"] == 0.2
     # 0.1 % a day, which PyPSA applies hour by hour
     assert (1 - network.stores.at["battery_storage", "standing_loss"]) ** 24 == pytest.approx(0.999, rel=1e-12)
     assert network.stores.at["compressed_hydrogen_store", "standing_loss"] == 0.0

@@ -9,7 +9,12 @@ heating value, and the electrolysis variable cost of 0.537 EUR/MWh, which had no
 dropped (-4.5 EUR/t in the key run, -4.3 in the reconciling run). With the old loss and demand
 forced back, the code reproduced the earlier baseline of 7 October 2026 exactly; that
 baseline's full-year LCOA equals the accepted ARC surfaces to within 5e-5 (the solver
-tolerance).
+tolerance). The key run's rows were regenerated again on 14 October 2026 for the values of
+campaign check D9 in the DEA 2050 YAML (hydrogen tank and Haber-Bosch costs on the HHV basis,
+the ammonia tank from its source in AUD, DEA's compressor with its own electricity use,
+Haber-Bosch minimum load 0.2 and ramps 0.2 per hour): full-year LCOA -21.7 EUR/t in Chile,
+-22.2 in the Pilbara and -18.7 in central Australia. The reconciling run, on the Way YAML, is
+unchanged.
 
 The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells) with a
 15-degree slope limit, against tests/regression/land_center_100pct_lat_m24_m22.csv. That file

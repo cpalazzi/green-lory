@@ -13,21 +13,27 @@
 #     data_sheets_for_renewable_fuels (2).xlsx → "5.4 Hydrogen to Ammonia"
 #   Battery:
 #     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "180 Lithium Ion Battery"
-#   H2 tanks:
+#   H2 tanks and hydrogen compressor:
 #     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "151a Hydrogen Storage - Tanks"
+#   Ammonia tank: Fletcher et al. (2023), Queensland green ammonia value chain (CAEEPR
+#     Working Paper 2023-16), p. 35 and Table 54
 #
 # Methodology:
 #   Generators: total investment and component breakdown read directly from DEA 2050
 #     column. tech_cost = equipment-centric rows; build_cost = civil/install/soft/grid.
 #   Links: DEA gives EUR/kW_input for electrolysis (converted to output basis via HHV
-#     efficiency) and M€/MW_NH3_output for ammonia synthesis (scaled by same ASU markup
-#     factor used in 2030 YAML). For hydrogen compression and battery PCS, costs derived
-#     from DEA 2050/2030 ratios applied to 2030 YAML values.
+#     efficiency), cost per t/day of ammonia for ammonia synthesis and EUR/kW of hydrogen
+#     output for the compressor (both converted to the HHV buses below). For battery PCS,
+#     costs derived from DEA 2050/2030 ratios applied to 2030 YAML values.
 #   Stores: DEA component costs read directly (battery: energy + 50% other project
 #     costs at 1h reference; H2 tanks: tanks + installation rows).
 #
-# Components without DEA 2050 data (hydrogen fuel cell, ammonia storage) retain 2030
-# values. Efficiency and carrier coefficients updated where DEA provides 2050 values.
+# Energy basis: the hydrogen and ammonia buses are on HHV (39.4 kWh/kg H2, 6.25 MWh/t NH3).
+# DEA states hydrogen on LHV (33.3 kWh/kg) and ammonia on LHV (5.24 MWh/t), so DEA costs per
+# unit of hydrogen or ammonia are converted (campaign check D9, 14 October 2026).
+#
+# The hydrogen fuel cell has no DEA 2050 data and retains 2030 values. Efficiency and carrier
+# coefficients updated where DEA provides 2050 values.
 #
 # All costs are EUR per MW (power devices) or per MWh (energy storage) overnight CAPEX.
 # For link components, enter costs on an output (bus1) basis.
@@ -84,10 +90,15 @@ techs:
  # -----------------
   ammonia_synthesis:
     component_type: link
-    source_note: DEA 2050 Hydrogen to Ammonia (sheet "5.4 Hydrogen to Ammonia", 2050 column; 0.865 M€/MW_NH3 × ASU markup 1.106 consistent with 2030 YAML derivation)
-    overnight_cost_per_mw: 957000 # EUR/MW — DEA 865,125 × 1.106 (same ASU/markup as 2030 YAML). Note cost decline is from economy of scale (2290 TPD vs 458 TPD in 2030), not tech change.
-    tech_cost_per_mw: 478500 # 50% equipment (DEA row 24)
-    build_cost_per_mw: 478500 # 50% installation (DEA row 25)
+    source_note: DEA 2050 Hydrogen to Ammonia (sheet "5.4 Hydrogen to Ammonia", 2050 column; 0.18889 MEUR2020 per t/day of ammonia output x ASU mark-up 1.09, on the HHV bus)
+    # EUR/MW of ammonia on HHV: 188,887 EUR per t/day x 24 / 6.25 MWh/t x 1.09 (DEA's mark-up for
+    # an ASU, sheet row 30) = 790,606. DEA's 0.865 MEUR/MW is per MW on LHV (5.24 MWh/t), which the
+    # YAML applied to the HHV bus with a mark-up of 1.106 until 14 October 2026 (957,000).
+    # The sheet is in 2020 EUR (catalogue update of August 2023); its note I ("2015-EUR") is older.
+    # Cost decline to 2050 is from economy of scale (2290 TPD vs 458 TPD in 2030), not tech change.
+    overnight_cost_per_mw: 790600 # EUR/MW
+    tech_cost_per_mw: 395300 # 50% equipment (DEA row 24)
+    build_cost_per_mw: 395300 # 50% installation (DEA row 25)
     land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 30
     fixed_om_fraction: 0.03 # DEA: 3% of CAPEX
@@ -95,12 +106,13 @@ techs:
     carriers_out: {ammonia: 1.0}
     overall_efficiency: 0.772 # DEA: ammonia output unchanged at 82.3% of total input
     # Operation: minimum load and ramp limits, fractions of capacity per hour (per snapshot
-    # under the legacy ramp basis); the legacy model's values
-    # (legacy_lcoa/source/94de8ce/Basic_ammonia_plant/links.csv), to be checked against the
-    # literature in campaign step 4 (D9)
-    min_load_fraction: 0.3
-    ramp_limit_up: 0.4
-    ramp_limit_down: 0.4
+    # under the legacy ramp basis). Minimum load: DEA sheet 5.4, "Minimum operation capacity"
+    # 0.2 for 2050 (range 0.1-0.3). Ramps: 20 % of nominal per hour, from manufacturer
+    # interviews (Armijo and Philibert 2020, Int. J. Hydrogen Energy 45, p. 1550). Until
+    # 14 October 2026 the legacy model's 0.3 and 0.4 (campaign check D9).
+    min_load_fraction: 0.2
+    ramp_limit_up: 0.2
+    ramp_limit_down: 0.2
   electrolysis:
     component_type: link
     source_note: DEA 2050 AEC 1 GW (sheet "1.1 AEC 1 GW", 2050 column; 275 EUR/kW_input ÷ 0.84 HHV eff = 327k EUR/MW_output)
@@ -115,16 +127,22 @@ techs:
     overall_efficiency: 0.84 # HHV basis; DEA 2050 stack+BOP = 47.6 kWh/kgH2, H2 HHV = 39.4 kWh/kg
   hydrogen_compression:
     component_type: link
-    source_note: DEA 2050 H2 storage tanks (compressor component, DEA 2050/2030 ratio 8,481/25,434 = 0.333 applied to 2030 YAML)
-    overnight_cost_per_mw: 165300 # EUR/MW
-    tech_cost_per_mw: 137800 # compressor + tank component shares (ratio-scaled)
-    build_cost_per_mw: 27500 # installation/equipment/manhours share (ratio-scaled)
+    source_note: DEA 2050 H2 storage tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; "Custom compressor component" 191.43 EUR/kW of hydrogen output on LHV, on the HHV bus)
+    # A five-stage compressor from about 1 bar to the 200 bar tanks. 191.43 EUR/kW on LHV x
+    # 33.3/39.4 = 161.8 EUR/kW on HHV, all equipment: the sheet's installation row is in the
+    # store's build cost. Electricity: DEA's 2050 round trip of 90.24 % (1/0.9024 - 1 = 0.1081
+    # MWh per MWh of hydrogen on LHV, 0.0914 on HHV). Until 14 October 2026: 165,300 EUR/MW
+    # (the 2030 YAML scaled by DEA's 2050/2030 ratio) with 0.05 MWh/MWh, the Queensland report's
+    # 2.016 kWh/kg for a pressurised outlet (campaign check D9).
+    overnight_cost_per_mw: 161800 # EUR/MW
+    tech_cost_per_mw: 161800 # compressor component
+    build_cost_per_mw: 0 # installation is in compressed_hydrogen_store's build cost
     land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 20
     fixed_om_fraction: 0.02
-    carriers_in: {hydrogen: 1.0, power: 0.05}
+    carriers_in: {hydrogen: 1.0, power: 0.0914}
     carriers_out: {hydrogen_storage: 1.0}
-    overall_efficiency: 0.9523809524
+    overall_efficiency: 0.9162543
   hydrogen_fuel_cell:
     component_type: link
     source_note: fuelCell (no DEA 2050 line available; retains 2030 values) # TODO(data): replace with DEA fuel-cell CAPEX breakdown when available
@@ -200,10 +218,15 @@ techs:
     fixed_om_fraction: 0.0
   ammonia:
     component_type: store
-    source_note: (no DEA 2050 value available; retains 2030 values) # TODO(data): replace with DEA ammonia storage CAPEX when available
-    overnight_cost_per_mwh: 521.73912 # EUR/MWh
-    tech_cost_per_mwh: 417.3913
-    build_cost_per_mwh: 104.34782
+    source_note: Fletcher et al. (2023), p. 35 and Table 54 ("A value of 3000 AUD/t is assumed in this study", installed; range 1,500-6,000 AUD/t); DEA has no ammonia tank
+    # 3,000 AUD/t x 0.7 USD/AUD (the report's rate) x 258.811/292.655 (US CPI-U, 2022 to 2020)
+    # / 1.142196 USD/EUR (2020) = 1,626 EUR2020/t of capacity = 260 EUR/MWh at 6.25 MWh/t.
+    # Until 14 October 2026: 521.74 EUR/MWh, the same source read as USD and given a 25 % build
+    # mark-up on top of its installed cost (campaign check D9). Lifetime and fixed O&M are the
+    # 2030 YAML's (the Calliope model's, after Cesaro's thesis).
+    overnight_cost_per_mwh: 260 # EUR/MWh
+    tech_cost_per_mwh: 208 # 80 % of the installed cost (estimated split)
+    build_cost_per_mwh: 52 # 20 %
     land_use_km2_per_mwh: 0.00001
     lifetime_years: 30
     fixed_om_fraction: 0.03
@@ -219,10 +242,12 @@ techs:
     standing_loss_fraction_per_day: 0.001 # DEA 2050 Li-ion: energy losses during storage 0.1 %/day (range 0.05-0.2)
   compressed_hydrogen_store:
     component_type: store
-    source_note: DEA 2050 Hydrogen Storage Tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; tanks + installation rows)
-    overnight_cost_per_mwh: 15300 # EUR/MWh — DEA tanks (10,177) + installation (5,089) ≈ 15,266, rounded
-    tech_cost_per_mwh: 10200 # Type I tanks from DEA row 28
-    build_cost_per_mwh: 5100 # Installation, equipment, manhours from DEA row 29
+    source_note: DEA 2050 Hydrogen Storage Tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; tanks + installation rows, per MWh on LHV, on the HHV bus)
+    # DEA tanks (10,177) + installation (5,089) = 15,266 EUR per MWh of hydrogen on LHV
+    # (33.3 kWh/kg); x 33.3/39.4 = 12,903 per MWh on HHV. 15,300 until 14 October 2026 (D9).
+    overnight_cost_per_mwh: 12900 # EUR/MWh
+    tech_cost_per_mwh: 8600 # Type I tanks, DEA row 28 (10,177 x 33.3/39.4)
+    build_cost_per_mwh: 4300 # Installation, equipment, manhours, DEA row 29 (5,089 x 33.3/39.4)
     land_use_km2_per_mwh: 0.0001 # Nominal
     lifetime_years: 30
     fixed_om_fraction: 0.02
