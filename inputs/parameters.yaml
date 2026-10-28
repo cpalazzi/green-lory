@@ -104,8 +104,9 @@ site_costs:
   # Table 8.3) or aurecon2024 (Aurecon 2024, Table 11-1); chosen 8 October 2026
   remoteness_source: ghd2025
   # Build-cost factor of each slope class (land.slope_class_upper_deg): none up to 8.5 degrees,
-  # then the middle of NREL's hilly (1.1-1.5) and mountainous (1.2-2.0) civil-works multipliers
-  # (Lopez et al. 2025, Table 12); decided 7 October 2026
+  # then the middle of NREL's hilly (1.1-1.5) and mountainous (1.2-2.0) cost multipliers for
+  # transmission lines (Lopez et al. 2025, Table 12), applied by analogy, since no published
+  # multiplier covers wind or solar farms by slope; decided 7 October 2026
   slope_class_factors: [1.0, 1.3, 1.6]
   # The technologies whose build cost the slope factor scales
   slope_techs: [solar, solar_tracking, wind]
