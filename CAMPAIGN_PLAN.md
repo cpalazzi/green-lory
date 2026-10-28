@@ -678,6 +678,16 @@ All runs:
   water per tonne rises by 0.24 to 1.65 EUR/t (median 0.35) over the run cells. The global runs
   submitted on 15 October used 1.5; water is added after the solve, so their LCOA is recomputed
   exactly.
+- **28 October:** the ammonia tank is 80.3 EUR/MWh (502 EUR2020/t) instead of 260, aligned
+  with green-caribou: Cesaro (2022, Table 5.2), 0.56 USD2019/kg, the low end of the
+  0.561-1.062 USD2019/kg in Nayak-Luke et al. (2021); Fletcher et al.'s 3,000 AUD/t is an
+  assumption at the top of the literature. The campaign of 15 October (C2, S1, F, S2) used 260,
+  so its runs no longer match their definitions; they are rerun with the collaborator's finance
+  rates. From the campaign results, the median LCOA falls by 6 to 11 EUR/t across the four runs
+  (bounded by the same design with the cheaper tank and by a free tank, which local re-solves
+  of 310 cells of C2 showed to save the tank's cost plus a median 0.2 EUR/t, at most 4.5).
+  Key-run LCOA at the focal cells: -5.5 (Chile), -5.6 (Pilbara), -1.8 EUR/t (central
+  Australia).
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release

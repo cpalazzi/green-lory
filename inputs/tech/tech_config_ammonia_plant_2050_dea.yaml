@@ -15,8 +15,9 @@
 #     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "180 Lithium Ion Battery"
 #   H2 tanks and hydrogen compressor:
 #     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "151a Hydrogen Storage - Tanks"
-#   Ammonia tank: Fletcher et al. (2023), Queensland green ammonia value chain (CAEEPR
-#     Working Paper 2023-16), p. 35 and Table 54
+#   Ammonia tank: Cesaro (2022), The Role of Green Ammonia in Decarbonised Energy Systems
+#     (DPhil thesis, Oxford), Table 5.2 (p. 130); Nayak-Luke et al. (2021), Techno-economic
+#     aspects of production, storage and distribution of ammonia, p. 198 (as green-caribou)
 #
 # Methodology:
 #   Generators: total investment and component breakdown read directly from DEA 2050
@@ -224,15 +225,18 @@ techs:
     fixed_om_fraction: 0.0
   ammonia:
     component_type: store
-    source_note: Fletcher et al. (2023), p. 35 and Table 54 ("A value of 3000 AUD/t is assumed in this study", installed; range 1,500-6,000 AUD/t); DEA has no ammonia tank
-    # 3,000 AUD/t x 0.7 USD/AUD (the report's rate) x 258.811/292.655 (US CPI-U, 2022 to 2020)
-    # / 1.142196 USD/EUR (2020) = 1,626 EUR2020/t of capacity = 260 EUR/MWh at 6.25 MWh/t.
-    # Until 14 October 2026: 521.74 EUR/MWh, the same source read as USD and given a 25 % build
-    # mark-up on top of its installed cost (campaign check D9). Lifetime and fixed O&M are the
-    # 2030 YAML's (the Calliope model's, after Cesaro's thesis).
-    overnight_cost_per_mwh: 260 # EUR/MWh
-    tech_cost_per_mwh: 208 # 80 % of the installed cost (estimated split)
-    build_cost_per_mwh: 52 # 20 %
+    source_note: Cesaro (2022), Table 5.2 (p. 130), installed refrigerated storage 0.56 USD2019/kg NH3, 3 % fixed O&M, 30 years; the low end of the 0.561-1.062 USD2019/kg in Nayak-Luke et al. (2021, p. 198), whose central 0.81 is for a 25,000 t tank; DEA has no ammonia tank
+    # 0.56 USD2019/kg x 0.8933 EUR/USD (ECB, 2019) x 1.003 (euro-area HICP, 2019 to 2020)
+    # = 501.8 EUR2020/t of capacity = 80.3 EUR/MWh at 6.25 MWh/t: the value and conversion of
+    # green-caribou (green_caribou/analytical_inputs.py), aligned on 28 October 2026. The plant's
+    # tanks hold weeks of output, larger than the 25,000 t tank behind the review's central value.
+    # 14-28 October 2026: 260 EUR/MWh (1,626 EUR2020/t), the 3,000 AUD/t that Fletcher et al.
+    # (2023, CAEEPR Working Paper 2023-16, p. 35 and Table 54) assume within 1,500-6,000 AUD/t,
+    # the top of the literature with the IEA's terminal tanks. Until 14 October 2026:
+    # 521.74 EUR/MWh, that source read as USD with a 25 % build mark-up (campaign check D9).
+    overnight_cost_per_mwh: 80.3 # EUR/MWh
+    tech_cost_per_mwh: 64.2 # 80 % of the installed cost (estimated split)
+    build_cost_per_mwh: 16.1 # 20 %
     land_use_km2_per_mwh: 0.00001
     lifetime_years: 30
     fixed_om_fraction: 0.03
