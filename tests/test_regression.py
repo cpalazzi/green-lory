@@ -14,7 +14,9 @@ campaign check D9 in the DEA 2050 YAML (hydrogen tank and Haber-Bosch costs on t
 the ammonia tank from its source in AUD, DEA's compressor with its own electricity use,
 Haber-Bosch minimum load 0.2 and ramps 0.2 per hour): full-year LCOA -21.7 EUR/t in Chile,
 -22.2 in the Pilbara and -18.7 in central Australia. The reconciling run, on the Way YAML, is
-unchanged.
+unchanged. On 15 October 2026 the water use became 1.62 m3 per tonne (DEA 2050 electrolysis)
+instead of 1.5: the key run's LCOA rises by exactly 0.24 EUR/t (0.12 m3 at 2 EUR/m3), since
+water is added after the solve.
 
 The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells) with a
 15-degree slope limit, against tests/regression/land_center_100pct_lat_m24_m22.csv. That file

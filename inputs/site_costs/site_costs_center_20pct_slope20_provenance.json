@@ -1,7 +1,7 @@
 {
   "written_by": "python -m model.site_costs",
   "rows": 18039,
-  "sha256": "6958217394947fda9f8c846505a8e8f445760ba6f32dab5617421b3323dbf0aa",
+  "sha256": "3218a8ecd4432dc5afb47eca20bc5ae3f5abe8cbb4c728dd50dc3e986a4323b9",
   "currency": "USD2020",
   "inputs": {
     "land_table": {
@@ -10,7 +10,7 @@
     },
     "tech_yaml": {
       "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml",
-      "sha256": "b6d1a5518f1481a3ea38f264035c1acb1e3c97460f2ffa9ada85f38bcf55b86d"
+      "sha256": "22cbbff4a6d96251d5a072b1f6494f23d23739d07c0f0bf33985d1586479ca75"
     },
     "cell_geography": {
       "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/cell_geography.csv",
@@ -23,7 +23,7 @@
   },
   "parameters_yaml": {
     "path": "inputs/parameters.yaml",
-    "sha256": "678a7d872e8b5f9bc3c65e8102e8dab4fda6bd1a7460c20322a6b615128e3bc4"
+    "sha256": "66ed0f3bdb3a3639c6476c90f9657a68d5a145382248a7cc873f75235d525b69"
   },
   "parameters": {
     "land_cells_beyond_the_geography": 1788,
@@ -49,13 +49,13 @@
     "water_source_usd_per_m3": 2.28439325,
     "water_pipeline": {
       "diameter_mm": 304.8,
-      "velocity_m_per_s": 0.6518757799915127,
-      "friction_head_m_per_km": 1.740600321006135,
+      "velocity_m_per_s": 0.7040258423908337,
+      "friction_head_m_per_km": 2.007242548895892,
       "pipe_usd2020_per_km": 307356.960582661,
-      "stations_usd2020_per_km": 55338.79543919218,
-      "capital_usd_per_m3_km": 0.01746000224648389,
-      "energy_usd_per_m3_km": 0.0005059344933057831,
-      "flow_m3_per_year": 1500000.0
+      "stations_usd2020_per_km": 63816.13485282184,
+      "capital_usd_per_m3_km": 0.01671739537167274,
+      "energy_usd_per_m3_km": 0.0005834385008790726,
+      "flow_m3_per_year": 1620000.0
     },
     "pipeline_materials_share": 0.3
   }

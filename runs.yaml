@@ -305,7 +305,7 @@ runs:
     water_eur2020_per_m3: 2.0  # the source price; each cell adds its pipeline
     cost_scope: site_costs_wacc5_no_land_rent
     site_costs_csv: inputs/site_costs/site_costs_center_20pct_slope20.csv
-    site_costs_csv_sha256: 6958217394947fda9f8c846505a8e8f445760ba6f32dab5617421b3323dbf0aa
+    site_costs_csv_sha256: 3218a8ecd4432dc5afb47eca20bc5ae3f5abe8cbb4c728dd50dc3e986a4323b9
     land_share: 0.20
     land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
     land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
@@ -367,7 +367,7 @@ runs:
     water_eur2020_per_m3: 2.0  # the source price; each cell adds its pipeline
     cost_scope: site_costs_ameli_no_land_rent
     site_costs_csv: inputs/site_costs/site_costs_center_20pct_slope20.csv
-    site_costs_csv_sha256: 6958217394947fda9f8c846505a8e8f445760ba6f32dab5617421b3323dbf0aa
+    site_costs_csv_sha256: 3218a8ecd4432dc5afb47eca20bc5ae3f5abe8cbb4c728dd50dc3e986a4323b9
     land_share: 0.20
     land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
     land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb

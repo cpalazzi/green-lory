@@ -670,6 +670,14 @@ All runs:
   price at 2 EUR2020/m3 at sea, lakes and rivers. S2's interest rates are Ameli's low-carbon
   series by country for now (`inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv`); the
   collaborator's technology-specific rates replace them when their table arrives.
+- **15 October:** water use 1.62 m3 per tonne of ammonia instead of 1.5, which had no source and
+  was below the stoichiometric 1.59 m3/t (`inputs/tech/tech_config_ammonia_plant_2050_dea.yaml`):
+  DEA's 2050 electrolysers use 9.0 kg of water per kg of hydrogen (IEA 2019: about 9 litres),
+  at 0.18 t of hydrogen per tonne; air-cooled, treatment losses not counted. The site-cost table
+  was regenerated for the larger flow (pipeline 1.73 instead of 1.80 USD2020/m3 per 100 km);
+  water per tonne rises by 0.24 to 1.65 EUR/t (median 0.35) over the run cells. The global runs
+  submitted on 15 October used 1.5; water is added after the solve, so their LCOA is recomputed
+  exactly.
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release

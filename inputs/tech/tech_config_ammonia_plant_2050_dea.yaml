@@ -46,7 +46,13 @@ spatial_cost_price_year: 2020
 spatial_cost_to_model_currency: 0.875506
 
 # Global water and land cost parameters
-water_usage_m3_per_t_nh3: 1.5 # Process + cooling water per tonne of ammonia
+# Water consumed per tonne of ammonia: DEA 2050 alkaline electrolysis (renewable fuels sheet
+# "1.1 AEC 1 GW", 2050 column) uses 208.33 kg of ultrapure water per MWh of electricity and makes
+# 23.148 kg of hydrogen, 9.0 kg of water per kg (stoichiometry 8.94; IEA, The Future of Hydrogen,
+# 2019, p. 43: "around 9 litres"), times 0.18 t of hydrogen per tonne of ammonia (sheet 5.4) =
+# 1.62 m3/t. Air-cooled plant; losses in water treatment are not counted. Until 15 October 2026
+# 1.5 m3/t, which had no source and was below the stoichiometric 1.59 m3/t.
+water_usage_m3_per_t_nh3: 1.62
 # Baseline desalination cost (coastal reference). In the spatial runs it is also the source price at
 # permanent lakes: lake water could be treated more cheaply, but the desalination price is kept
 # as a shadow price that protects freshwater for other uses (decision of 7 Oct 2026).
