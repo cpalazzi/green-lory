@@ -22,7 +22,7 @@ class SupplierExportTests(unittest.TestCase):
     def test_units_and_capacity(self):
         result = convert(pd.DataFrame([self.row]), self.reference).iloc[0]
         self.assertEqual(result.Index, "-23_-69_1000000.0")
-        self.assertAlmostEqual(result.LCOA, 200.)
+        self.assertAlmostEqual(result.LCOA, 180.48 / (1 / 1.1810 * 1.012 * 1.003))  # USD2018, the shared currency rule
         self.assertEqual(result.Max_capacity, 2.5)
         self.assertAlmostEqual(result.Electricity_Cost_Frac, 30/180.48)
 

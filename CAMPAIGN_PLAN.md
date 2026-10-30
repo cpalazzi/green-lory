@@ -730,8 +730,13 @@ All runs:
     were escalated with the US CPI instead: the regenerated site-cost table (S1 and S2 pin its
     new hash) has pipelines 0.5 % cheaper, at most 0.14 USD/m3. The supplier table for the
     green-porpoise network model (each cell's LCOA and capacity in USD2018, the network model's
-    currency; `model/suppliers.py`) stays at the Way factor (0.9024 EUR2020 per USD2018) until
-    decided: the shared rule gives 0.8595, which would raise every supplier's LCOA by 5 %.
+    currency; `model/suppliers.py`) follows the same rule from 30 October (0.8595 EUR2020 per
+    USD2018 instead of the Way factor 0.9024): every supplier's LCOA is 5 % higher in USD2018.
+- **30 October, evening:** C2, S1, F and S2 reran from release `20261030-campaign-v1`
+  (campaign `campaign_20261030_v1`): smoke and diagnostic QA passed for all four, and the
+  diagnostic cells match local solves to 2e-5. The global jobs of S1, F and S2 were cancelled
+  before they started, to add a cold uplift to the site costs and offshore sites first; C2's
+  global stage finishes (jobs 13578378-82), as the onshore reference for both.
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release

@@ -4,9 +4,10 @@
   schema (``Index``, ``LCOA`` in USD2018, ``Max_capacity`` in Mt/yr of a 1 Mt reference plant,
   ``iso3``, ...), written as ``suppliers_USD2018.csv`` with ``suppliers_USD2018_provenance.json``
   beside it: the input paths and hashes, the currency conversion, the capacity cutoff and every
-  exclusion, and the CSV's hash, which green-porpoise checks before a network run. Costs use the
-  inverse of the documented Way conversion (USD2018 x 0.9024 = EUR2020); no live exchange rate.
-  The surface itself is never changed.
+  exclusion, and the CSV's hash, which green-porpoise checks before a network run. Costs are
+  converted from EUR2020 to USD2018 by the shared currency rule (inputs/parameters.yaml,
+  currency): 0.8595 EUR2020 per USD2018; exports before 30 October 2026 used the Way YAML's
+  0.9024. The surface itself is never changed.
 - ``derive``: a land-share variant of a QA-passed surface without a new solve. Under
   ``land_constraint: after_solve`` the plant design and LCOA do not depend on the land share;
   only the scaled-design capacities do, and linearly. So the 2 % variant of a 20 % surface is
@@ -35,8 +36,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .parameters import eur2020_per
+
 CAPACITY = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
-EUR2020_PER_USD2018 = .9024
+# EUR2020 per USD2018 by the shared currency rule: the ECB's 2018 rate, then euro-area inflation
+# to 2020 (0.8595). The Way YAML's 0.9024 (US inflation to 2020, then the 2020 rate) until
+# 30 October 2026; the legacy runs and the reconciliation keep it.
+EUR2020_PER_USD2018 = eur2020_per("USD", 2018)
 ELECTRICITY_COSTS = [f"lcoa_tech_{technology}_eur_per_t" for technology in ("wind", "solar", "solar_tracking")]
 CAPACITY_PREFIX = "scaled_design_max_"  # every column the land share scales
 SUPPLIER_TABLE = "suppliers_USD2018.csv"
@@ -203,7 +209,7 @@ def export(args):
         "exporter_sha256": digest(__file__),
         "currency": "USD", "price_year": 2018, "source_currency": "EUR", "source_price_year": 2020,
         "source_to_output_factor": 1 / EUR2020_PER_USD2018,
-        "conversion_basis": "Inverse of Way YAML documented USD2018-to-EUR2020 factor 0.9024; no live FX conversion",
+        "conversion_basis": "Shared currency rule (model.parameters.eur2020_per): ECB 2018 annual rate, then euro-area HICP 2018 to 2020",
         "capacity_source_column": CAPACITY, "capacity_units": "Mt_NH3_per_year (1 Mt reference multiplier)",
         "capacity_rule": manifest["execution"]["capacity_rule"],
         "electricity_cost_fraction_basis": "Wind + fixed-PV + tracking-PV annualised generation cost / headline LCOA; excludes storage and conversion plant",
