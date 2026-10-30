@@ -30,7 +30,7 @@ def test_circular_extends_is_rejected(tmp_path):
 
 @pytest.mark.parametrize("yaml_name,expected,compression_power", [
     ("tech_config_ammonia_plant_2050_dea_colocated.yaml",
-     {"electrolysis": 0.84, "battery_pcs_charge": 0.96, "battery_pcs_discharge": 0.96, "hydrogen_fuel_cell": 0.5}, 0.0914),
+     {"electrolysis": 1 / 1.2083785, "battery_pcs_charge": 0.96, "battery_pcs_discharge": 0.96, "hydrogen_fuel_cell": 0.5}, 0.0914),
     ("tech_config_ammonia_plant_2050_way_eur.yaml",
      {"electrolysis": 0.886509, "battery_pcs_charge": 0.98, "battery_pcs_discharge": 0.99, "hydrogen_fuel_cell": 0.540015}, 0.05),
 ])

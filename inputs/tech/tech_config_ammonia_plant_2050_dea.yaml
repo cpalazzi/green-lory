@@ -15,26 +15,32 @@
 #     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "180 Lithium Ion Battery"
 #   H2 tanks and hydrogen compressor:
 #     Technology_datasheet_for_energy_storage – 0010 (2).xlsx → "151a Hydrogen Storage - Tanks"
-#   Ammonia tank: Cesaro (2022), The Role of Green Ammonia in Decarbonised Energy Systems
-#     (DPhil thesis, Oxford), Table 5.2 (p. 130); Nayak-Luke et al. (2021), Techno-economic
-#     aspects of production, storage and distribution of ammonia, p. 198 (as green-caribou)
+#   Ammonia tank: IEA (2019), The Future of Hydrogen, assumptions annex, p. 7 (import terminal),
+#     as in green-caribou
 #
+# Values aligned with green-caribou (green_caribou/analytical_inputs.py) on 29 October 2026:
+# electrolyser efficiency and O&M, battery cost split, hydrogen tank and compressor, ammonia tank;
+# the compressor's lifetime and O&M on 30 October 2026.
+# All in EUR2020; the DEA workbooks are already in 2020 prices (their August 2023 update).
 # Methodology:
 #   Generators: total investment and component breakdown read directly from DEA 2050
 #     column. tech_cost = equipment-centric rows; build_cost = civil/install/soft/grid.
 #   Links: DEA gives EUR/kW_input for electrolysis (converted to output basis via HHV
 #     efficiency), cost per t/day of ammonia for ammonia synthesis and EUR/kW of hydrogen
-#     output for the compressor (both converted to the HHV buses below). For battery PCS,
-#     costs derived from DEA 2050/2030 ratios applied to 2030 YAML values.
-#   Stores: DEA component costs read directly (battery: energy + 50% other project
-#     costs at 1h reference; H2 tanks: tanks + installation rows).
+#     output for the compressor (both converted to the HHV buses below); DEA's power
+#     component per MW for the battery PCS.
+#   Stores: DEA component costs read directly (battery: energy component plus all other
+#     project costs, DEA note M; H2 tanks: tanks + installation rows, corrected for the sheet's
+#     double price update).
 #
 # Energy basis: the hydrogen and ammonia buses are on HHV (39.4 kWh/kg H2, 6.25 MWh/t NH3).
 # DEA states hydrogen on LHV (33.3 kWh/kg) and ammonia on LHV (5.24 MWh/t), so DEA costs per
 # unit of hydrogen or ammonia are converted (campaign check D9, 14 October 2026).
 #
 # The hydrogen fuel cell has no DEA 2050 data and retains 2030 values. Efficiency and carrier
-# coefficients updated where DEA provides 2050 values.
+# coefficients updated where DEA provides 2050 values, except the Haber-Bosch electricity
+# (0.16 MWh per MWh of ammonia, the legacy model's), which with green-caribou's 30-bar feed
+# compressor gives about the same electricity per tonne as DEA's synthesis loop and ASU.
 #
 # All costs are EUR per MW (power devices) or per MWh (energy storage) overnight CAPEX.
 # For link components, enter costs on an output (bus1) basis.
@@ -122,31 +128,45 @@ techs:
     ramp_limit_down: 0.2
   electrolysis:
     component_type: link
-    source_note: DEA 2050 AEC 1 GW (sheet "1.1 AEC 1 GW", 2050 column; 275 EUR/kW_input ÷ 0.84 HHV eff = 327k EUR/MW_output)
-    overnight_cost_per_mw: 327000 # EUR/MW_H2_out — DEA 275,000 EUR/MW_input ÷ 0.84 HHV efficiency
-    tech_cost_per_mw: 294300 # 90% equipment share (DEA row 34)
-    build_cost_per_mw: 32700 # 10% installation share (DEA row 35)
+    source_note: DEA 2050 AEC 1 GW (sheet "1.1 AEC 1 GW", 2050 column; 275 EUR/kW_input x 47.61/39.4 = 332.3k EUR/MW of hydrogen output on HHV)
+    # Efficiency: 39.4 kWh/kg (HHV) / 47.61 kWh/kg (row 11, stack + balance of plant) = 0.8276,
+    # 0.700 on LHV as in green-caribou. Until 29 October 2026 0.84, the sum of rows 14 and 15 as
+    # DEA's note G says; but row 15 (14.12 %) is on the stack-level 43.2 kWh/kg of row 10.
+    # Fixed O&M: DEA row 36, 4 % (note S: "Stack replacement costs are not included"); 2 % until
+    # 29 October 2026, on the mistaken reading that DEA's 4 % includes replacement. Neither model
+    # costs stack replacement (row 23: every 101,500 h; row 27: 65.5 EUR/kW stack).
+    overnight_cost_per_mw: 332300 # EUR/MW_H2_out — DEA 275,000 EUR/MW_input x 1.2084
+    tech_cost_per_mw: 299070 # 90% equipment share (DEA row 34)
+    build_cost_per_mw: 33230 # 10% installation share (DEA row 35)
     land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 25
-    fixed_om_fraction: 0.02 # Consistent with 2030 YAML (DEA reports 4% but includes replacement provisions)
-    carriers_in: {power: 1.1904761904761905} # 1/0.84 — DEA 2050 HHV efficiency (LHV 69.9% + HHV delta 14.1% ≈ 84%)
+    fixed_om_fraction: 0.04 # DEA row 36
+    carriers_in: {power: 1.2083785} # 47.61011378 / 39.4 MWh of electricity per MWh of hydrogen (HHV)
     carriers_out: {hydrogen: 1.0}
-    overall_efficiency: 0.84 # HHV basis; DEA 2050 stack+BOP = 47.6 kWh/kgH2, H2 HHV = 39.4 kWh/kg
+    overall_efficiency: 0.8275553 # HHV basis, 1 / 1.2083785
   hydrogen_compression:
     component_type: link
-    source_note: DEA 2050 H2 storage tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; "Custom compressor component" 191.43 EUR/kW of hydrogen output on LHV, on the HHV bus)
-    # A five-stage compressor from about 1 bar to the 200 bar tanks. 191.43 EUR/kW on LHV x
-    # 33.3/39.4 = 161.8 EUR/kW on HHV, all equipment: the sheet's installation row is in the
-    # store's build cost. Electricity: DEA's 2050 round trip of 90.24 % (1/0.9024 - 1 = 0.1081
-    # MWh per MWh of hydrogen on LHV, 0.0914 on HHV). Until 14 October 2026: 165,300 EUR/MW
-    # (the 2030 YAML scaled by DEA's 2050/2030 ratio) with 0.05 MWh/MWh, the Queensland report's
-    # 2.016 kWh/kg for a pressurised outlet (campaign check D9).
-    overnight_cost_per_mw: 161800 # EUR/MW
-    tech_cost_per_mw: 161800 # compressor component
+    source_note: DEA 2050 H2 storage tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; "Custom compressor component" 191.43 EUR/kW of hydrogen output on LHV / 1.0634, on the HHV bus)
+    # A five-stage compressor from about 1 bar to the 200 bar tanks. DEA derives its 191.43 EUR/kW
+    # on LHV from the compressor row (27), and the sheet's 2030 and 2050 component rows carry the
+    # 2020 price update (x 1.0634) twice: each is the 2020 value x a round factor x 1.0634, while
+    # the totals (row 24: 21,000 x 1.0634 in 2050) and fixed O&M carry it once. So 191.43 / 1.0634
+    # = 180.02 EUR/kW on LHV, x 33.3/39.4 = 152.1 EUR/kW on HHV, all equipment: the sheet's
+    # installation row is in the store's build cost. 161.8 from 14 to 29 October 2026.
+    # Electricity: DEA's 2050 round trip of 90.24 % (1/0.9024 - 1 = 0.1081 MWh per MWh of
+    # hydrogen on LHV, 0.0914 on HHV). Until 14 October 2026: 165,300 EUR/MW (the 2030 YAML
+    # scaled by DEA's 2050/2030 ratio) with 0.05 MWh/MWh, the Queensland report's 2.016 kWh/kg
+    # for a pressurised outlet (campaign check D9).
+    # Lifetime and O&M: the compressor row of DEA's component table (151a text, Table 7, p. 107
+    # of the catalogue), as in green-caribou; the sheet's 30 years (2030-2050) is the lifetime of
+    # the whole storage system. 20 years and 2 % until 30 October 2026, carried over from the
+    # 2030 YAML without a source.
+    overnight_cost_per_mw: 152100 # EUR/MW
+    tech_cost_per_mw: 152100 # compressor component
     build_cost_per_mw: 0 # installation is in compressed_hydrogen_store's build cost
     land_use_km2_per_mw: 0.0000001 # Minimal
-    lifetime_years: 20
-    fixed_om_fraction: 0.02
+    lifetime_years: 25 # DEA 151a Table 7
+    fixed_om_fraction: 0.012 # DEA 151a Table 7: 6,000 EUR a year on a 500,000 EUR compressor
     carriers_in: {hydrogen: 1.0, power: 0.0914}
     carriers_out: {hydrogen_storage: 1.0}
     overall_efficiency: 0.9162543
@@ -176,13 +196,17 @@ techs:
     overall_efficiency: 1.0
   battery_pcs_charge:
     component_type: link
-    source_note: DEA 2050 Lithium Ion Battery (power component 72k + 50% of other project costs 60k, 1-hour allocation)
-    overnight_cost_per_mw: 132000 # DEA row 27 col 2050 = 0.072 MEUR/MW power + 0.5 × 0.12 MEUR/MWh other
-    tech_cost_per_mw: 72000 # PCS/inverter from DEA row 27
-    build_cost_per_mw: 60000 # 50% allocation of DEA "other project costs" to MW asset
+    source_note: DEA 2050 Lithium Ion Battery (power component 72k EUR/MW, row 27; the other project costs are on the energy store, note M)
+    # 72,000 EUR per MW of AC power, entered per MW of output (/ 0.96) so that the charging
+    # link, sized by its input, costs 72,000 per MW. Until 29 October 2026 132,000 per MW of
+    # output: the power component plus half of DEA's other project costs, which scale with
+    # energy (note M; row 25's 4-hour system, 192 EUR/kWh = 54 + 72/4 + 120, puts them there).
+    overnight_cost_per_mw: 75000 # EUR/MW_out
+    tech_cost_per_mw: 75000 # PCS/inverter from DEA row 27
+    build_cost_per_mw: 0
     land_use_km2_per_mw: 0.0000001 # Minimal
-    lifetime_years: 30 # DEA 2050 row 18 = 30 years (up from 25 in 2030)
-    fixed_om_fraction: 0.03 # Rounded up DEA (2.9% of system cost)
+    lifetime_years: 30 # DEA 2050 row 18
+    fixed_om_fraction: 0.029 # DEA: 2.9 % of system cost
     carriers_in: {power: 1.0}
     carriers_out: {power_storage: 0.96} # DEA 2050 AC round-trip 92% → sqrt(0.92) ≈ 0.96 per direction
     overall_efficiency: 0.96
@@ -225,39 +249,46 @@ techs:
     fixed_om_fraction: 0.0
   ammonia:
     component_type: store
-    source_note: Cesaro (2022), Table 5.2 (p. 130), installed refrigerated storage 0.56 USD2019/kg NH3, 3 % fixed O&M, 30 years; the low end of the 0.561-1.062 USD2019/kg in Nayak-Luke et al. (2021, p. 198), whose central 0.81 is for a 25,000 t tank; DEA has no ammonia tank
-    # 0.56 USD2019/kg x 0.8933 EUR/USD (ECB, 2019) x 1.003 (euro-area HICP, 2019 to 2020)
-    # = 501.8 EUR2020/t of capacity = 80.3 EUR/MWh at 6.25 MWh/t: the value and conversion of
-    # green-caribou (green_caribou/analytical_inputs.py), aligned on 28 October 2026. The plant's
-    # tanks hold weeks of output, larger than the 25,000 t tank behind the review's central value.
-    # 14-28 October 2026: 260 EUR/MWh (1,626 EUR2020/t), the 3,000 AUD/t that Fletcher et al.
-    # (2023, CAEEPR Working Paper 2023-16, p. 35 and Table 54) assume within 1,500-6,000 AUD/t,
-    # the top of the literature with the IEA's terminal tanks. Until 14 October 2026:
-    # 521.74 EUR/MWh, that source read as USD with a 25 % build mark-up (campaign check D9).
-    overnight_cost_per_mwh: 80.3 # EUR/MWh
-    tech_cost_per_mwh: 64.2 # 80 % of the installed cost (estimated split)
-    build_cost_per_mwh: 16.1 # 20 %
+    source_note: IEA (2019), The Future of Hydrogen, assumptions annex, p. 7, import terminal, USD2017 97 million per tank of 56,700 t of ammonia (20 days of storage); 4 % O&M as for the export terminals; 30-year system life; DEA has no ammonia tank
+    # 97e6 / 56,700 t = 1,710.8 USD2017/t x 1/1.1297 EUR/USD (ECB, 2017) x 1.018 x 1.012 x 1.003
+    # (euro-area HICP, 2017 to 2020) = 1,564.8 EUR2020/t of capacity = 250.4 EUR/MWh at
+    # 6.25 MWh/t: the value and conversion of green-caribou, which since 28 October 2026 takes
+    # its ammonia and liquid hydrogen tanks from this one source. The IEA's export-terminal tank
+    # costs more per tonne (USD 68 million for 34,100 t).
+    # History: 80.3 EUR/MWh on 28 October 2026 (Cesaro 2022, 0.56 USD2019/kg, green-caribou's
+    # earlier value); 260 from 14 October (Fletcher et al. 2023, CAEEPR Working Paper 2023-16,
+    # 3,000 AUD/t); before that 521.74, Fletcher et al. read as USD with a 25 % build mark-up
+    # (campaign check D9).
+    overnight_cost_per_mwh: 250.4 # EUR/MWh
+    tech_cost_per_mwh: 200.3 # 80 % of the installed cost (estimated split)
+    build_cost_per_mwh: 50.1 # 20 %
     land_use_km2_per_mwh: 0.00001
     lifetime_years: 30
-    fixed_om_fraction: 0.03
+    fixed_om_fraction: 0.04
   battery_storage:
     component_type: store
-    source_note: DEA 2050 Lithium Ion Battery (energy component 54k + 50% of other project costs 60k, 1-hour allocation)
-    overnight_cost_per_mwh: 114000 # EUR/MWh — DEA row 26 col 2050 = 0.054 MEUR/MWh energy + 0.5 × 0.12 MEUR/MWh other
+    source_note: DEA 2050 Lithium Ion Battery (energy component 54k + other project costs 120k EUR/MWh, rows 26 and 28; note M)
+    overnight_cost_per_mwh: 174000 # EUR/MWh; 114,000 until 29 October 2026 (half the other costs)
     tech_cost_per_mwh: 54000 # Battery energy component from DEA row 26
-    build_cost_per_mwh: 60000 # 50% allocation of DEA "other project costs" to MWh asset
+    build_cost_per_mwh: 120000 # DEA "other project costs" (construction, entrepreneur), row 28
     land_use_km2_per_mwh: 0.00005 # Nominal
-    lifetime_years: 30 # DEA 2050 row 18 = 30 years (up from 25 in 2030)
+    lifetime_years: 30 # DEA 2050 row 18
     fixed_om_fraction: 0.029 # DEA: 2.9% of system cost
     standing_loss_fraction_per_day: 0.001 # DEA 2050 Li-ion: energy losses during storage 0.1 %/day (range 0.05-0.2)
   compressed_hydrogen_store:
     component_type: store
     source_note: DEA 2050 Hydrogen Storage Tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; tanks + installation rows, per MWh on LHV, on the HHV bus)
     # DEA tanks (10,177) + installation (5,089) = 15,266 EUR per MWh of hydrogen on LHV
-    # (33.3 kWh/kg); x 33.3/39.4 = 12,903 per MWh on HHV. 15,300 until 14 October 2026 (D9).
-    overnight_cost_per_mwh: 12900 # EUR/MWh
-    tech_cost_per_mwh: 8600 # Type I tanks, DEA row 28 (10,177 x 33.3/39.4)
-    build_cost_per_mwh: 4300 # Installation, equipment, manhours, DEA row 29 (5,089 x 33.3/39.4)
+    # (33.3 kWh/kg), divided by 1.0634 because the 2050 component rows carry the 2020 price
+    # update twice (see hydrogen_compression) = 14,356 = 9,570.6 + 4,785.3, which with the
+    # compressor's 7,975.5 sums to the sheet's total of 22,331.4. x 33.3/39.4 = 12,133 per MWh
+    # on HHV. 12,900 from 14 to 29 October 2026; 15,300 before (D9). green-caribou takes the
+    # same 14,356 on LHV (since 29 October 2026; 13,850 before).
+    # Fixed O&M: DEA's system O&M over the system total, 425.36 / 22,331.4 = 1.9 % a year, as in
+    # green-caribou; 2 % until 29 October 2026.
+    overnight_cost_per_mwh: 12133 # EUR/MWh
+    tech_cost_per_mwh: 8089 # Type I tanks, DEA row 28 (10,177 / 1.0634 x 33.3/39.4)
+    build_cost_per_mwh: 4044 # Installation, equipment, manhours, DEA row 29 (5,089 / 1.0634 x 33.3/39.4)
     land_use_km2_per_mwh: 0.0001 # Nominal
     lifetime_years: 30
-    fixed_om_fraction: 0.02
+    fixed_om_fraction: 0.019

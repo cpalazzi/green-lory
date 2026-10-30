@@ -19,7 +19,13 @@ instead of 1.5: the key run's LCOA rises by exactly 0.24 EUR/t (0.12 m3 at 2 EUR
 water is added after the solve. On 28 October 2026 the ammonia tank became 80.3 EUR/MWh
 (502 EUR2020/t, Cesaro 2022, the value of green-caribou) instead of 260 (Fletcher et al. 2023),
 and the key run's rows were regenerated: full-year LCOA -5.5 EUR/t in Chile, -5.6 in the
-Pilbara and -1.8 in central Australia.
+Pilbara and -1.8 in central Australia. On 29 October 2026 the inputs shared with green-caribou
+were aligned (ammonia tank 250.4 EUR/MWh from the IEA's import terminal, electrolyser
+efficiency 0.828 and O&M 4 %, DEA's battery cost split, hydrogen tank and compressor without
+DEA's double price update): full-year LCOA +27.9 EUR/t in Chile, +23.4 in the Pilbara and
++13.5 in central Australia. On 30 October 2026 the compressor's lifetime became 25 years and its
+fixed O&M 1.2 % (DEA 151a, Table 7): -3.5 EUR/t in Chile, -3.2 in the Pilbara and -0.5 in
+central Australia.
 
 The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells) with a
 15-degree slope limit, against tests/regression/land_center_100pct_lat_m24_m22.csv. That file

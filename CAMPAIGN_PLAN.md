@@ -608,8 +608,8 @@ All runs:
 - **Order:** new land build (done 8 October) → C2, S1, F, S2, each after your go-ahead →
   supplier contracts → networks at the 1 % tolerance, run from a green-porpoise release
   (`legacy_gpo/arc/`).
-- **Compute:** about 1 h on four 48-core jobs per hourly surface of about 17,000 cells (less at
-  4 h), and 1-2 h per network.
+- **Compute:** 1.5-5 h on each of four 48-core jobs per hourly surface of about 17,000 cells
+  (the global stage of 15 October), and 1-2 h per network.
 - Every run is defined in `runs.yaml` with a run-store row before submission.
 - **Check:** QA gates as now; the coast/inland and focal-cell tables for each run.
 
@@ -688,6 +688,30 @@ All runs:
   of 310 cells of C2 showed to save the tank's cost plus a median 0.2 EUR/t, at most 4.5).
   Key-run LCOA at the focal cells: -5.5 (Chile), -5.6 (Pilbara), -1.8 EUR/t (central
   Australia).
+- **29 October:** the inputs shared with green-caribou aligned, all in EUR2020 (green-caribou
+  had moved its ammonia tank to the IEA's import-terminal tank on 28 October):
+  - ammonia tank 250.4 EUR/MWh (IEA 2019 assumptions annex, p. 7: USD2017 97 million for
+    56,700 t, 1,565 EUR2020/t), 4 % O&M;
+  - electrolyser efficiency 0.828 on HHV (39.4 / 47.61 kWh/kg; DEA's note G adds a row on the
+    stack-level consumption) and fixed O&M 4 % (DEA row 36, which excludes stack replacement);
+  - battery: DEA's other project costs all on the energy store (note M), the PCS at 72 EUR/kW;
+  - hydrogen tank 12,133 EUR/MWh and compressor 152.1 EUR/kW on HHV, 6 % lower: DEA sheet
+    151a's 2030 and 2050 component rows carry the 2020 price update (x 1.0634) twice, its totals
+    and O&M once.
+
+  Key-run LCOA at the focal cells: +27.9 (Chile), +23.4 (Pilbara), +13.5 EUR/t (central
+  Australia). The 28 October bounds no longer apply; C2, S1, F and S2 are rerun.
+- **30 October:** the hydrogen compressor's lifetime is 25 years and its fixed O&M 1.2 %, the
+  compressor row of DEA's component table (151a text, Table 7, p. 107: 6,000 EUR a year on a
+  500,000 EUR compressor), as in green-caribou since 29 October. The sheet's 30 years is the
+  lifetime of the whole storage system; the 20 years and 2 % used until now came from the 2030
+  YAML without a source. Key-run LCOA at the focal cells: -3.5 (Chile), -3.2 (Pilbara),
+  -0.5 EUR/t (central Australia). green-caribou's DEA price-year corrections of 29 October
+  need nothing more here: green-lory's Haber-Bosch cost is DEA's 0.18889 MEUR2020 per t/day
+  with only DEA's ASU mark-up (no currency factor), its hydrogen tank and compressor were
+  corrected on 29 October, and it uses neither DEA's ammonia carrier sheet nor PyPSA
+  technology-data. Still open: compression ahead of Haber-Bosch
+  (MODEL_CHOICES.md, inputs shared with green-caribou).
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release
