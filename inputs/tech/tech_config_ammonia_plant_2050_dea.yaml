@@ -38,9 +38,14 @@
 # unit of hydrogen or ammonia are converted (campaign check D9, 14 October 2026).
 #
 # The hydrogen fuel cell has no DEA 2050 data and retains 2030 values. Efficiency and carrier
-# coefficients updated where DEA provides 2050 values, except the Haber-Bosch electricity
-# (0.16 MWh per MWh of ammonia, the legacy model's), which with green-caribou's 30-bar feed
-# compressor gives about the same electricity per tonne as DEA's synthesis loop and ASU.
+# coefficients updated where DEA provides 2050 values.
+#
+# Pressure: the electrolyser delivers hydrogen at about 30 bar, as the DEA catalogue assumes
+# (renewable fuels, chapter 1.1, p. 30: "both AEC and PEMEC technology can deliver hydrogen at
+# pressures as high as 30 bar, which can be sufficient for many Power-to-X (PtX) applications
+# (e.g., ammonia ..."; sheet 5.4, note C: "Assumption of higher pressure electrolysis"). So
+# ammonia synthesis takes it without a feed compressor, and the storage compressor raises it
+# from 30 to 200 bar. Decided on 30 October 2026 for green-lory and green-caribou.
 #
 # All costs are EUR per MW (power devices) or per MWh (energy storage) overnight CAPEX.
 # For link components, enter costs on an output (bus1) basis.
@@ -115,9 +120,16 @@ techs:
     land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 30
     fixed_om_fraction: 0.03 # DEA: 3% of CAPEX
-    carriers_in: {power: 0.16, hydrogen: 1.13472}
+    # Electricity: DEA's synthesis loop takes 0.053 of the total input (0.18 t of hydrogen x
+    # 33.3 MWh/t / 0.947 = 6.329 MWh of input per tonne, so 0.3355 MWh/t; the text's Table 1,
+    # pp. 212-213, puts it in the syngas and make-up compressor and refrigeration of a 150 bar
+    # loop), and the ASU 0.25 MWh per tonne of nitrogen at 0.839 t/t (0.2098 MWh/t): 0.5452 MWh/t,
+    # 0.0872 MWh per MWh of ammonia on HHV. The feed arrives at the electrolyser's 30 bar (see the
+    # header), so no feed compressor. Until 30 October 2026 0.16 MWh/MWh (1.0 MWh/t), the legacy
+    # model's value.
+    carriers_in: {power: 0.0872338, hydrogen: 1.13472}
     carriers_out: {ammonia: 1.0}
-    overall_efficiency: 0.772 # DEA: ammonia output unchanged at 82.3% of total input
+    overall_efficiency: 0.8183615 # HHV, 1 / (1.13472 + 0.0872338)
     # Operation: minimum load and ramp limits, fractions of capacity per hour (per snapshot
     # under the legacy ramp basis). Minimum load: DEA sheet 5.4, "Minimum operation capacity"
     # 0.2 for 2050 (range 0.1-0.3). Ramps: 20 % of nominal per hour, from manufacturer
@@ -146,30 +158,34 @@ techs:
     overall_efficiency: 0.8275553 # HHV basis, 1 / 1.2083785
   hydrogen_compression:
     component_type: link
-    source_note: DEA 2050 H2 storage tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; "Custom compressor component" 191.43 EUR/kW of hydrogen output on LHV / 1.0634, on the HHV bus)
-    # A five-stage compressor from about 1 bar to the 200 bar tanks. DEA derives its 191.43 EUR/kW
+    source_note: DEA 2050 H2 storage tanks (sheet "151a Hydrogen Storage - Tanks", 2050 column; "Custom compressor component" 191.43 EUR/kW of hydrogen output on LHV / 1.0634, on the HHV bus, scaled to a 30 bar inlet)
+    # DEA's is a five-stage compressor from about 1 bar to the 200 bar tanks. DEA derives its 191.43 EUR/kW
     # on LHV from the compressor row (27), and the sheet's 2030 and 2050 component rows carry the
     # 2020 price update (x 1.0634) twice: each is the 2020 value x a round factor x 1.0634, while
     # the totals (row 24: 21,000 x 1.0634 in 2050) and fixed O&M carry it once. So 191.43 / 1.0634
     # = 180.02 EUR/kW on LHV, x 33.3/39.4 = 152.1 EUR/kW on HHV, all equipment: the sheet's
     # installation row is in the store's build cost. 161.8 from 14 to 29 October 2026.
     # Electricity: DEA's 2050 round trip of 90.24 % (1/0.9024 - 1 = 0.1081 MWh per MWh of
-    # hydrogen on LHV, 0.0914 on HHV). Until 14 October 2026: 165,300 EUR/MW (the 2030 YAML
-    # scaled by DEA's 2050/2030 ratio) with 0.05 MWh/MWh, the Queensland report's 2.016 kWh/kg
-    # for a pressurised outlet (campaign check D9).
+    # hydrogen on LHV, 0.0914 on HHV).
+    # Inlet at 30 bar: the electrolyser delivers about 30 bar (see the header), so the cost and
+    # the electricity are scaled by isothermal work, ln(200/30) / ln(200) = 0.358, as green-caribou
+    # scales DEA's compressor to other pressures: 54,461 EUR/MW and 0.0327 MWh/MWh. With a 1 bar
+    # inlet, 152,100 and 0.0914 on 29 October 2026. Until 14 October 2026: 165,300 EUR/MW (the
+    # 2030 YAML scaled by DEA's 2050/2030 ratio) with 0.05 MWh/MWh, the Queensland report's
+    # 2.016 kWh/kg for a pressurised outlet (campaign check D9).
     # Lifetime and O&M: the compressor row of DEA's component table (151a text, Table 7, p. 107
     # of the catalogue), as in green-caribou; the sheet's 30 years (2030-2050) is the lifetime of
     # the whole storage system. 20 years and 2 % until 30 October 2026, carried over from the
     # 2030 YAML without a source.
-    overnight_cost_per_mw: 152100 # EUR/MW
-    tech_cost_per_mw: 152100 # compressor component
+    overnight_cost_per_mw: 54461 # EUR/MW, 152,100 x 0.358
+    tech_cost_per_mw: 54461 # compressor component
     build_cost_per_mw: 0 # installation is in compressed_hydrogen_store's build cost
     land_use_km2_per_mw: 0.0000001 # Minimal
     lifetime_years: 25 # DEA 151a Table 7
     fixed_om_fraction: 0.012 # DEA 151a Table 7: 6,000 EUR a year on a 500,000 EUR compressor
-    carriers_in: {hydrogen: 1.0, power: 0.0914}
+    carriers_in: {hydrogen: 1.0, power: 0.0327}
     carriers_out: {hydrogen_storage: 1.0}
-    overall_efficiency: 0.9162543
+    overall_efficiency: 0.9683354 # 1 / 1.0327
   hydrogen_fuel_cell:
     component_type: link
     source_note: fuelCell (no DEA 2050 line available; retains 2030 values) # TODO(data): replace with DEA fuel-cell CAPEX breakdown when available

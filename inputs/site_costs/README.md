@@ -50,6 +50,10 @@ The pipeline from the nearest source is costed with the Texas Water Development 
 Costing Model (2018 unit costs, rural soil) for one plant's 1.62 million m3 a year: the
 least-cost standard diameter is 305 mm (12 inches; 0.70 m/s), a booster station every 70 km, 30 % (pipe)
 and 35 % (stations) engineering and contingencies, 1 % and 2.5 % O&M a year, friction pumping
-at 0.08 USD/kWh, 5 % over 45 years (pipe) and 20 years (stations), USD of December 2017
-escalated to 2020 with the US CPI: 1.73 USD2020 per m3 and 100 km at multipliers of 1
-(1.80 at the 1.5 million m3 a year used until 15 October 2026).
+at 0.08 USD/kWh, 5 % over 45 years (pipe) and 20 years (stations): 1.72 USD2020 per m3 and
+100 km at multipliers of 1. The dollars (December 2017 for the unit costs, taken as 2017; 2018
+for the power cost) are converted by the shared currency rule (`currency` in
+`inputs/parameters.yaml`: the price year's ECB rate, then euro-area inflation to 2020) and
+stated in USD2020 at the 2020 rate, the site-cost currency. Until 30 October 2026 the unit costs
+were escalated with the US CPI and the power cost was not converted: 1.73 (1.80 at the
+1.5 million m3 a year used until 15 October 2026).

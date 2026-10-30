@@ -44,6 +44,33 @@ def parameter(key: str) -> Any:
     return copy.deepcopy(node)
 
 
+MODEL_PRICE_YEAR = 2020
+
+
+def eur2020_per(currency: str, year: int) -> float:
+    """EUR2020 per unit of `currency` in prices of `year` (inputs/parameters.yaml, currency).
+
+    The year's ECB rate first, then euro-area inflation to 2020. Dividing a EUR2020 result by
+    this factor states it in `currency` of `year`.
+    """
+    code = currency.strip().upper()
+    if code == "EUR":
+        factor = 1.0
+    elif code == "USD":
+        rates = parameter("currency.usd_per_eur")
+        if year not in rates:
+            raise KeyError(f"no USD rate for {year} in {PARAMETERS_YAML} (currency.usd_per_eur)")
+        factor = 1.0 / float(rates[year])
+    else:
+        raise ValueError(f"no exchange rate for {currency!r}: add it to currency in {PARAMETERS_YAML}")
+    inflation = parameter("currency.eur_inflation")
+    for later in range(year + 1, MODEL_PRICE_YEAR + 1):
+        factor *= 1.0 + float(inflation[later])
+    for later in range(MODEL_PRICE_YEAR + 1, year + 1):
+        factor /= 1.0 + float(inflation[later])
+    return factor
+
+
 def keys_read() -> set[str]:
     """The dotted keys read so far in this process."""
     return set(_KEYS_READ)

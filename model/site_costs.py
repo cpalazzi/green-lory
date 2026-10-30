@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from .config import DEFAULT_TECH_YAML, SITE_COSTS_DIR, SLOPE_CLASS_COLUMNS, repo_path
-from .parameters import file_record, parameter
+from .parameters import eur2020_per, file_record, parameter
 
 CELL_GEOGRAPHY_CSV = SITE_COSTS_DIR / "cell_geography.csv"
 ONSHORE_LAND_PCT_MIN = 1e-6
@@ -87,7 +87,11 @@ PUMP_EFFICIENCY = float(_PIPELINE["pump_efficiency"])
 PIPELINE_DISCOUNT_RATE = float(_PIPELINE["discount_rate"])
 PIPE_LIFETIME_YEARS = float(_PIPELINE["pipe_lifetime_years"])
 PUMP_LIFETIME_YEARS = float(_PIPELINE["pump_lifetime_years"])
-USD_DEC2017_TO_USD2020 = float(_PIPELINE["cpi_2020"]) / float(_PIPELINE["cpi_dec2017"])
+# The pipeline is costed in the site-cost currency, USD2020, which the model converts to EUR2020
+# at the 2020 rate; so each UCM value is brought to EUR2020 by the shared currency rule from its
+# price year, then stated in USD2020
+UCM_COST_TO_USD2020 = eur2020_per("USD", int(_PIPELINE["unit_cost_price_year"])) / eur2020_per("USD", 2020)
+UCM_POWER_TO_USD2020 = eur2020_per("USD", int(_PIPELINE["power_price_year"])) / eur2020_per("USD", 2020)
 REFERENCE_AMMONIA_T_PER_YEAR = float(parameter("plant.reference_output_mt_per_year")) * 1e6
 PIPELINE_MATERIALS_SHARE = float(_PIPELINE["materials_share"])
 
@@ -159,13 +163,13 @@ def water_pipeline_cost(flow_m3_per_year: float) -> dict:
         # Hazen-Williams friction loss, metric form (head in m, flow in m3/s, diameter in m)
         head_m_per_km = 1000.0 * 10.67 * flow ** 1.852 / (HAZEN_WILLIAMS_C ** 1.852 * diameter_m ** 4.87)
         pipe_usd_per_km = (usd_per_m * 1000.0 * (1.0 + UCM_PIPE_ENGINEERING_CONTINGENCY)
-                           + UCM_ENVIRONMENTAL_USD_PER_KM) * USD_DEC2017_TO_USD2020
+                           + UCM_ENVIRONMENTAL_USD_PER_KM) * UCM_COST_TO_USD2020
         stations_usd_per_km = (head_m_per_km / BOOSTER_HEAD_M * UCM_BOOSTER_STATION_USD
-                               * (1.0 + UCM_OTHER_ENGINEERING_CONTINGENCY) * USD_DEC2017_TO_USD2020)
+                               * (1.0 + UCM_OTHER_ENGINEERING_CONTINGENCY) * UCM_COST_TO_USD2020)
         capital_per_year = (pipe_usd_per_km * (_annuity(PIPELINE_DISCOUNT_RATE, PIPE_LIFETIME_YEARS) + UCM_PIPE_OM_FRACTION)
                             + stations_usd_per_km * (_annuity(PIPELINE_DISCOUNT_RATE, PUMP_LIFETIME_YEARS) + UCM_PUMP_OM_FRACTION))
         pump_kw = WATER_DENSITY_KG_PER_M3 * GRAVITY_M_PER_S2 * flow * head_m_per_km / PUMP_EFFICIENCY / 1000.0
-        energy_per_year = pump_kw * 8760.0 * UCM_POWER_USD_PER_KWH
+        energy_per_year = pump_kw * 8760.0 * UCM_POWER_USD_PER_KWH * UCM_POWER_TO_USD2020
         options.append({
             "diameter_mm": diameter_mm,
             "velocity_m_per_s": flow / (math.pi * diameter_m ** 2 / 4.0),

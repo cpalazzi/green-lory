@@ -1,7 +1,7 @@
 {
   "written_by": "python -m model.site_costs",
   "rows": 18039,
-  "sha256": "3218a8ecd4432dc5afb47eca20bc5ae3f5abe8cbb4c728dd50dc3e986a4323b9",
+  "sha256": "a7fe35abdb7c56945ae538e31bd6d98a7d5479f1b81fe70a98efe1784d7169c0",
   "currency": "USD2020",
   "inputs": {
     "land_table": {
@@ -23,7 +23,7 @@
   },
   "parameters_yaml": {
     "path": "inputs/parameters.yaml",
-    "sha256": "66ed0f3bdb3a3639c6476c90f9657a68d5a145382248a7cc873f75235d525b69"
+    "sha256": "0f2666188f78d5a15680cca2c15f9403b739829d68882b4759292818ce23bc07"
   },
   "parameters": {
     "land_cells_beyond_the_geography": 1788,
@@ -51,10 +51,10 @@
       "diameter_mm": 304.8,
       "velocity_m_per_s": 0.7040258423908337,
       "friction_head_m_per_km": 2.007242548895892,
-      "pipe_usd2020_per_km": 307356.960582661,
-      "stations_usd2020_per_km": 63816.13485282184,
-      "capital_usd_per_m3_km": 0.01671739537167274,
-      "energy_usd_per_m3_km": 0.0005834385008790726,
+      "pipe_usd2020_per_km": 305862.51661284966,
+      "stations_usd2020_per_km": 63505.84535188888,
+      "capital_usd_per_m3_km": 0.016636111347205596,
+      "energy_usd_per_m3_km": 0.0005727528613206727,
       "flow_m3_per_year": 1620000.0
     },
     "pipeline_materials_share": 0.3

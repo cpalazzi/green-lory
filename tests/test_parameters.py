@@ -37,3 +37,14 @@ def test_slope_classes_follow_the_bounds():
 def test_file_record_is_relative_to_the_repository():
     record = parameters.file_record()
     assert record["path"] == "inputs/parameters.yaml" and len(record["sha256"]) == 64
+
+
+def test_currency_rule_converts_at_the_price_year_then_inflates_in_euros():
+    # the ammonia tank's USD2017 in the DEA technology YAML, and green-caribou's USD2017_TO_EUR2020
+    assert parameters.eur2020_per("USD", 2017) == pytest.approx(1 / 1.1297 * 1.018 * 1.012 * 1.003)
+    assert parameters.eur2020_per("USD", 2018) == pytest.approx(1 / 1.1810 * 1.012 * 1.003)
+    assert parameters.eur2020_per("USD", 2020) == pytest.approx(0.875506, abs=1e-6)  # the YAMLs' site-cost rate
+    assert parameters.eur2020_per("EUR", 2018) == pytest.approx(1.012 * 1.003)
+    assert parameters.eur2020_per("EUR", 2020) == 1.0
+    with pytest.raises(ValueError, match="AUD"):
+        parameters.eur2020_per("AUD", 2020)

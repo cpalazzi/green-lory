@@ -149,13 +149,36 @@ site_costs:
     discount_rate: 0.05
     pipe_lifetime_years: 45.0
     pump_lifetime_years: 20.0
-    # US CPI-U (BLS series CUUR0000SA0), to bring December 2017 dollars to 2020
-    cpi_dec2017: 246.524
-    cpi_2020: 258.811
+    # Price years for the currency rule (currency, below): the unit costs are in December 2017
+    # dollars (the UCM guide's appendix), taken as 2017; the power cost is the guidance of the
+    # 2021 planning cycle, whose base costs are in September 2018 dollars. Until 30 October 2026
+    # the unit costs were brought to 2020 with the US CPI-U and the power cost was not converted.
+    unit_cost_price_year: 2017
+    power_price_year: 2018
     # Share of the pipeline's capital that is materials, which takes the equipment multiplier;
     # the rest takes the cell's build multiplier (DEA Technology Data for Energy Transport,
     # district-heating transmission line 113)
     materials_share: 0.30
+
+# Currency. The model works in euros of 2020. A cost stated in another currency or price year
+# is converted at the ECB's annual average rate of its price year, then brought to 2020 with the
+# euro-area HICP: the rule green-caribou uses, shared since 30 October 2026
+# (model.parameters.eur2020_per). The ammonia tank's USD2017 in the DEA technology YAML follows
+# it. Costs enter the optimisation linearly, so the results in another currency or year are the
+# EUR2020 results divided by one factor, with the same plant design.
+currency:
+  # US dollars per euro, ECB euro reference rate, annual average (ECB Data Portal, series
+  # EXR.A.USD.EUR.SP00.A); 2020 to the precision of the technology YAMLs' 0.875506
+  usd_per_eur:
+    2017: 1.1297
+    2018: 1.1810
+    2019: 1.1195
+    2020: 1.142196
+  # Euro-area HICP, annual average rate of change (Eurostat, prc_hicp_aind)
+  eur_inflation:
+    2018: 0.018
+    2019: 0.012
+    2020: 0.003
 
 # Physical constants with a source
 physical:

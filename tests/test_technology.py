@@ -28,13 +28,13 @@ def test_circular_extends_is_rejected(tmp_path):
         technology.tech_yaml_files(tmp_path / "a.yaml")
 
 
-@pytest.mark.parametrize("yaml_name,expected,compression_power", [
+@pytest.mark.parametrize("yaml_name,expected,compression_power,synthesis_power", [
     ("tech_config_ammonia_plant_2050_dea_colocated.yaml",
-     {"electrolysis": 1 / 1.2083785, "battery_pcs_charge": 0.96, "battery_pcs_discharge": 0.96, "hydrogen_fuel_cell": 0.5}, 0.0914),
+     {"electrolysis": 1 / 1.2083785, "battery_pcs_charge": 0.96, "battery_pcs_discharge": 0.96, "hydrogen_fuel_cell": 0.5}, 0.0327, 0.0872338),
     ("tech_config_ammonia_plant_2050_way_eur.yaml",
-     {"electrolysis": 0.886509, "battery_pcs_charge": 0.98, "battery_pcs_discharge": 0.99, "hydrogen_fuel_cell": 0.540015}, 0.05),
+     {"electrolysis": 0.886509, "battery_pcs_charge": 0.98, "battery_pcs_discharge": 0.99, "hydrogen_fuel_cell": 0.540015}, 0.05, 0.16),
 ])
-def test_link_efficiencies_come_from_the_yaml_recipe(yaml_name, expected, compression_power):
+def test_link_efficiencies_come_from_the_yaml_recipe(yaml_name, expected, compression_power, synthesis_power):
     from model import plant
     from model.config import DEFAULT_PLANT_DIR
 
@@ -44,7 +44,9 @@ def test_link_efficiencies_come_from_the_yaml_recipe(yaml_name, expected, compre
         assert network.links.at[name, "efficiency"] == value  # exact: the recipes carry these numbers
     # Three-port links: compression draws power, synthesis draws hydrogen
     assert (network.links.at["hydrogen_compression", "efficiency"], network.links.at["hydrogen_compression", "efficiency2"]) == (1.0, -compression_power)
-    assert (network.links.at["ammonia_synthesis", "efficiency"], network.links.at["ammonia_synthesis", "efficiency2"]) == (6.25, -7.092)
+    # Synthesis is rated on its electricity input (bus0), with hydrogen on bus2
+    assert (network.links.at["ammonia_synthesis", "efficiency"], network.links.at["ammonia_synthesis", "efficiency2"]) == (
+        1 / synthesis_power, -1.13472 / synthesis_power)
 
 
 def test_annuity_factor():

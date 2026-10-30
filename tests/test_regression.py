@@ -25,7 +25,10 @@ efficiency 0.828 and O&M 4 %, DEA's battery cost split, hydrogen tank and compre
 DEA's double price update): full-year LCOA +27.9 EUR/t in Chile, +23.4 in the Pilbara and
 +13.5 in central Australia. On 30 October 2026 the compressor's lifetime became 25 years and its
 fixed O&M 1.2 % (DEA 151a, Table 7): -3.5 EUR/t in Chile, -3.2 in the Pilbara and -0.5 in
-central Australia.
+central Australia. Later that day the electrolyser's 30 bar outlet was adopted (DEA): Haber-Bosch
+takes DEA's synthesis and ASU electricity (0.0872 instead of 0.16 MWh/MWh) and the storage
+compressor starts at 30 bar (cost and electricity x 0.358): -29.0 EUR/t in Chile, -25.9 in the
+Pilbara and -11.3 in central Australia.
 
 The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal cells) with a
 15-degree slope limit, against tests/regression/land_center_100pct_lat_m24_m22.csv. That file

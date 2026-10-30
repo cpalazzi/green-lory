@@ -710,8 +710,28 @@ All runs:
   need nothing more here: green-lory's Haber-Bosch cost is DEA's 0.18889 MEUR2020 per t/day
   with only DEA's ASU mark-up (no currency factor), its hydrogen tank and compressor were
   corrected on 29 October, and it uses neither DEA's ammonia carrier sheet nor PyPSA
-  technology-data. Still open: compression ahead of Haber-Bosch
-  (MODEL_CHOICES.md, inputs shared with green-caribou).
+  technology-data.
+- **30 October, later:** two decisions, shared with green-caribou.
+  - Pressure: the electrolyser delivers hydrogen at about 30 bar, as the DEA catalogue assumes
+    (renewable fuels, chapter 1.1, p. 30: "both AEC and PEMEC technology can deliver hydrogen at
+    pressures as high as 30 bar, which can be sufficient for many Power-to-X (PtX) applications
+    (e.g., ammonia"; p. 36: a compressor only for more than 30 bar; sheet 5.4, note C:
+    "Assumption of higher pressure electrolysis"). So Haber-Bosch has no feed compressor and
+    takes DEA's own electricity, 0.053 of its total input plus the ASU's 0.25 MWh per tonne of
+    nitrogen (0.545 MWh/t, 0.0872 MWh per MWh of ammonia; the legacy 0.16 until now), and the
+    storage compressor raises 30 to 200 bar (DEA's 1-200 bar cost and electricity x 0.358, by
+    isothermal work). Key-run LCOA at the focal cells: -29.0 (Chile), -25.9 (Pilbara), -11.3
+    EUR/t (central Australia); about half of it at the windy cells is the cheaper storage
+    compressor. Local solves of green-caribou's design (feed compressor, 1 bar inlet) gave +6 to
+    +7 EUR/t instead.
+  - Currency: a cost in another currency or price year is converted at the ECB's annual rate of
+    its price year, then brought to 2020 with the euro-area HICP (`currency` in
+    `inputs/parameters.yaml`, `model.parameters.eur2020_per`). The water pipeline's dollars
+    were escalated with the US CPI instead: the regenerated site-cost table (S1 and S2 pin its
+    new hash) has pipelines 0.5 % cheaper, at most 0.14 USD/m3. The supplier table for the
+    green-porpoise network model (each cell's LCOA and capacity in USD2018, the network model's
+    currency; `model/suppliers.py`) stays at the Way factor (0.9024 EUR2020 per USD2018) until
+    decided: the shared rule gives 0.8595, which would raise every supplier's LCOA by 5 %.
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release
