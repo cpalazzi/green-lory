@@ -117,9 +117,9 @@ def test_supplier_table_from_directory_and_jsonl_agree(tmp_path):
     assert table.loc["-23_-69_1000000.0", "Max_capacity"] == pytest.approx(227.57 * 140 / 3380, rel=1e-9)
     assert table.loc["-21_135_1000000.0", "Max_capacity"] == pytest.approx(115.28 * 7.3 / 348, rel=1e-9)
     assert table.loc["10_20_1000000.0", "Max_capacity"] == pytest.approx(50.0 * 7.3 / 1200, rel=1e-9)
-    contract = json.loads((tmp_path / "t_jsonl" / "gpo_export" / "contract.json").read_text())
-    assert contract["capacity_method"] == "legacy_rule_complete_overlap_v1"
-    assert "run_summaries_sha256" in contract["inputs"]
+    provenance = json.loads((tmp_path / "t_jsonl" / "gpo_export" / "suppliers_USD2018_provenance.json").read_text())
+    assert provenance["capacity_method"] == "legacy_rule_complete_overlap_v1"
+    assert "run_summaries_sha256" in provenance["inputs"]
     summary = json.loads((tmp_path / "t_jsonl" / "summary.json").read_text())
     assert summary["n_missing"] == 0 and summary["n_cells"] == 4
 

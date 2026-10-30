@@ -606,7 +606,7 @@ All runs:
   gives build only (S1 with C2's water) and water only (C2 with S1's water) without another
   solve. F against S2 shows how finance and site costs interact.
 - **Order:** new land build (done 8 October) → C2, S1, F, S2, each after your go-ahead →
-  supplier contracts → networks at the 1 % tolerance, run from a green-porpoise release
+  supplier tables for the network model → networks at the 1 % tolerance, run from a green-porpoise release
   (`legacy_gpo/arc/`).
 - **Compute:** 1.5-5 h on each of four 48-core jobs per hourly surface of about 17,000 cells
   (the global stage of 15 October), and 1-2 h per network.

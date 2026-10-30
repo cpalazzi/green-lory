@@ -6,7 +6,7 @@ import unittest
 
 import pandas as pd
 
-from model.suppliers import CAPACITY, ELECTRICITY_COSTS, convert, derive_land_share, verify_derivation
+from model.suppliers import CAPACITY, ELECTRICITY_COSTS, check_table_identity, convert, derive_land_share, verify_derivation
 
 
 class SupplierExportTests(unittest.TestCase):
@@ -102,6 +102,17 @@ class LandShareTest(unittest.TestCase):
             pd.DataFrame({"latitude": [0.0], "longitude": [0.0], "land_constraint": ["in_solve"], CAPACITY: [1e6]}).to_csv(surface, index=False)
             with self.assertRaises(ValueError):
                 derive_land_share(surface, 0.1, 0.20, Path(directory) / "out")
+
+
+class TableIdentityTest(unittest.TestCase):
+    manifest = {"scenario": {"id": "gl_run"}, "run_id": "20261030T000000Z-abc"}
+
+    def test_rows_must_carry_the_run_records_ids(self):
+        frame = pd.DataFrame({"scenario_id": ["gl_run"] * 2, "run_id": ["20261030T000000Z-abc"] * 2})
+        self.assertEqual(check_table_identity(frame, self.manifest), {"scenario_id": "gl_run", "run_id": "20261030T000000Z-abc"})
+        frame.loc[1, "run_id"] = "older"
+        with self.assertRaisesRegex(ValueError, "column run_id holds .*older.*run record .* says '20261030T000000Z-abc'"):
+            check_table_identity(frame, self.manifest)
 
 
 class LegacyNetworkInterfaceTest(unittest.TestCase):

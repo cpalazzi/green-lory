@@ -1,10 +1,12 @@
 """Supplier tables: green-lory surfaces as supplier tables of the green-porpoise network model.
 
-- ``export``: a QA-passed surface to the green-porpoise supplier schema (``Index``, ``LCOA`` in
-  USD2018, ``Max_capacity`` in Mt/yr of a 1 Mt reference plant, ``iso3``, ...), written as
-  ``suppliers_USD2018.csv`` with ``contract.json``, which records the input hashes and every
-  exclusion. Costs use the inverse of the documented Way conversion (USD2018 x 0.9024 =
-  EUR2020); no live exchange rate. The surface itself is never changed.
+- ``export``: a QA-passed surface (the global result table) to the green-porpoise supplier
+  schema (``Index``, ``LCOA`` in USD2018, ``Max_capacity`` in Mt/yr of a 1 Mt reference plant,
+  ``iso3``, ...), written as ``suppliers_USD2018.csv`` with ``suppliers_USD2018_provenance.json``
+  beside it: the input paths and hashes, the currency conversion, the capacity cutoff and every
+  exclusion, and the CSV's hash, which green-porpoise checks before a network run. Costs use the
+  inverse of the documented Way conversion (USD2018 x 0.9024 = EUR2020); no live exchange rate.
+  The surface itself is never changed.
 - ``derive``: a land-share variant of a QA-passed surface without a new solve. Under
   ``land_constraint: after_solve`` the plant design and LCOA do not depend on the land share;
   only the scaled-design capacities do, and linearly. So the 2 % variant of a 20 % surface is
@@ -19,7 +21,9 @@
         --output <new dir>
 
 The network itself runs in the green-porpoise repository (``legacy_gpo/``; linked here,
-untracked, as ``legacy_gpo/``), which reads ``contract.json`` and ``suppliers_USD2018.csv``.
+untracked, as ``legacy_gpo/``), which reads ``suppliers_USD2018.csv`` and its provenance file
+(``--supplier-table``). Exports written before 30 October 2026 name the provenance file
+``contract.json``.
 """
 from __future__ import annotations
 
@@ -35,6 +39,8 @@ CAPACITY = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
 EUR2020_PER_USD2018 = .9024
 ELECTRICITY_COSTS = [f"lcoa_tech_{technology}_eur_per_t" for technology in ("wind", "solar", "solar_tracking")]
 CAPACITY_PREFIX = "scaled_design_max_"  # every column the land share scales
+SUPPLIER_TABLE = "suppliers_USD2018.csv"
+SUPPLIER_PROVENANCE = "suppliers_USD2018_provenance.json"
 
 
 def digest(path):
@@ -58,45 +64,58 @@ def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False
     geojson) before the ISO3 check; export() records how many cells and how much capacity that
     removed.  Without the flag such cells above the cutoff are an error."""
     if not np.isfinite(minimum_capacity) or minimum_capacity < 0:
-        raise ValueError("Capacity cutoff must be finite and nonnegative")
+        raise ValueError(f"--minimum-capacity must be finite and nonnegative (Mt/yr); got {minimum_capacity}")
     required = ["latitude", "longitude", "country", "lcoa_eur_per_t", CAPACITY,
                 "annual_ammonia_production_t", "currency", "grid_energy_mwh",
                 "is_gridless_feasible", "is_full_year_result", "preferred_supplier_capacity_column",
                 *ELECTRICITY_COSTS]
     missing = set(required) - set(frame)
     if missing:
-        raise ValueError(f"Missing required surface columns: {sorted(missing)}")
+        raise ValueError(f"result table (--surface) lacks the columns {sorted(missing)}")
     if frame[["latitude", "longitude"]].duplicated().any():
-        raise ValueError("Duplicate coordinates in surface")
+        duplicated = frame.loc[frame[["latitude", "longitude"]].duplicated(), ["latitude", "longitude"]]
+        raise ValueError(f"result table (--surface) has {len(duplicated)} repeated cells, e.g. "
+                         f"{duplicated.head(3).to_dict('records')}")
     for name in ("is_gridless_feasible", "is_full_year_result"):
         if not frame[name].astype(str).str.lower().isin(["true", "1"]).all():
-            raise ValueError(f"Surface is not uniformly {name}")
-    if not frame.currency.eq("EUR").all() or not frame.preferred_supplier_capacity_column.eq(CAPACITY).all():
-        raise ValueError("Currency or capacity contract mismatch")
+            raise ValueError(f"result table column {name} must be true in every row; "
+                             f"{int((~frame[name].astype(str).str.lower().isin(['true', '1'])).sum())} rows are not")
+    if not frame.currency.eq("EUR").all():
+        raise ValueError(f"result table column currency must be EUR, the model currency; found {sorted(frame.currency.astype(str).unique())}")
+    if not frame.preferred_supplier_capacity_column.eq(CAPACITY).all():
+        raise ValueError(f"result table column preferred_supplier_capacity_column must be {CAPACITY}; "
+                         f"found {sorted(frame.preferred_supplier_capacity_column.astype(str).unique())}")
     numeric = ["latitude", "longitude", "lcoa_eur_per_t", CAPACITY, "annual_ammonia_production_t", *ELECTRICITY_COSTS]
-    if not np.isfinite(frame[numeric].to_numpy()).all():
-        raise ValueError("Non-finite model results")
+    bad = {column: int((~np.isfinite(frame[column].to_numpy(float))).sum()) for column in numeric}
+    bad = {column: count for column, count in bad.items() if count}
+    if bad:
+        raise ValueError(f"result table has NaN or infinite values (column: rows): {bad}")
     if (frame.lcoa_eur_per_t <= 0).any() or (frame[CAPACITY] < 0).any():
-        raise ValueError("Non-positive cost or negative capacity")
+        raise ValueError(f"result table has {int((frame.lcoa_eur_per_t <= 0).sum())} rows with lcoa_eur_per_t <= 0 "
+                         f"and {int((frame[CAPACITY] < 0).sum())} with {CAPACITY} < 0")
     if not np.allclose(frame.annual_ammonia_production_t, 1e6, rtol=0, atol=1):
-        raise ValueError("Expected a 1 Mt/year reference production plant")
+        raise ValueError("result table column annual_ammonia_production_t must be 1e6 t in every row (the network "
+                         "scales the 1 Mt/yr reference design); found "
+                         f"{frame.annual_ammonia_production_t.min():.6g} to {frame.annual_ammonia_production_t.max():.6g}")
     reference = country_reference[["country", "iso3"]].drop_duplicates()
     if reference.country.duplicated().any():
-        raise ValueError("Country reference has ambiguous ISO3 mappings")
+        raise ValueError(f"--country-reference gives more than one iso3 for {sorted(reference.country[reference.country.duplicated()].unique())}")
     positive = frame[(frame[CAPACITY] > 0) & (frame[CAPACITY] >= minimum_capacity * 1e6)].copy()
     if drop_unassigned:
         positive = positive[positive.country.notna()].copy()
     iso = positive.country.map(reference.set_index("country").iso3)
     if iso.isna().any():
         unknown = positive.loc[iso.isna(), "country"].fillna("<unassigned>").astype(str)
-        raise ValueError(f"Exported countries lack explicit ISO3 mapping: {sorted(unknown.unique())}")
+        raise ValueError(f"--country-reference has no iso3 for {sorted(unknown.unique())} "
+                         "(--drop-unassigned drops cells without a country)")
     # Match existing GPO grid IDs exactly, without rounding non-integer cells.
     def coordinate(value):
         return str(int(value)) if float(value).is_integer() else format(value, ".12g")
     ids = positive.latitude.map(coordinate) + "_" + positive.longitude.map(coordinate) + "_1000000.0"
     electricity_fraction = positive[ELECTRICITY_COSTS].sum(axis=1) / positive.lcoa_eur_per_t
     if not electricity_fraction.between(-1e-8, 1 + 1e-8).all():
-        raise ValueError("Generation-cost fractions lie outside [0,1]")
+        raise ValueError(f"Electricity_Cost_Frac (wind and PV cost over LCOA) lies outside 0-1 in "
+                         f"{int((~electricity_fraction.between(-1e-8, 1 + 1e-8)).sum())} cells")
     return pd.DataFrame({
         "Index": ids, "Latitude": positive.latitude, "Longitude": positive.longitude,
         "iso3": iso, "country": positive.country,
@@ -109,58 +128,75 @@ def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False
 
 def verify_derivation(provenance, qa, surface_sha256):
     """A post-hoc derivative (derive_land_share) is exported against its parent's QA report: the QA must identify the parent surface and the provenance must identify
-    this file.  Returns the derivation record for the contract."""
+    this file.  Returns the derivation record for the supplier table's provenance file."""
     if provenance.get("kind") != "post_hoc_land_share_variant":
-        raise ValueError("Unsupported derivation kind")
+        raise ValueError(f"--derived-provenance has kind {provenance.get('kind')!r}; only post_hoc_land_share_variant can be exported")
     if provenance["parent_surface"]["sha256"] != qa.get("output_sha256"):
-        raise ValueError("Derivation parent does not match the QA-identified surface")
+        raise ValueError(f"--derived-provenance was derived from a result table with sha256 {provenance['parent_surface']['sha256']}, "
+                         f"but the check report (--qa) is for {qa.get('output_sha256')}")
     if provenance["output"]["sha256"] != surface_sha256:
-        raise ValueError("Derivation output hash does not match the surface being exported")
+        raise ValueError(f"--derived-provenance describes a table with sha256 {provenance['output']['sha256']}, "
+                         f"but --surface has {surface_sha256}")
     return {"kind": provenance["kind"], "parent_surface": provenance["parent_surface"],
             "multiplier": provenance["multiplier"],
             "effective_land_competition_fraction": provenance["effective_land_competition_fraction"],
             "columns_rescaled": provenance["columns_rescaled"], "lcoa_columns_untouched": provenance["lcoa_columns_untouched"]}
 
 
+def check_table_identity(frame, manifest):
+    """The run's scenario and run ids from its run record (manifest.json), checked against every row of its result table."""
+    identity = {"scenario_id": manifest["scenario"]["id"], "run_id": manifest["run_id"]}
+    for key, value in identity.items():
+        if not frame[key].eq(value).all():
+            found = sorted(frame[key].astype(str).unique())[:5]
+            raise ValueError(f"result table (--surface) column {key} holds {found}, but its run record (--manifest) says {value!r}")
+    return identity
+
+
 def export(args):
     qa = json.loads(args.qa.read_text())
     manifest = json.loads(args.manifest.read_text())
     if qa.get("status") != "passed":
-        raise ValueError("A passed campaign QA report is mandatory")
+        raise ValueError(f"check report (--qa) has status {qa.get('status')!r}; only a passed result table can be exported")
     derivation = None
     derived_path = getattr(args, "derived_provenance", None)
+    surface_sha256 = digest(args.surface)
     if derived_path is not None:
-        derivation = verify_derivation(json.loads(Path(derived_path).read_text()), qa, digest(args.surface))
+        derivation = verify_derivation(json.loads(Path(derived_path).read_text()), qa, surface_sha256)
         derivation["provenance_path"] = str(Path(derived_path).resolve())
         derivation["provenance_sha256"] = digest(Path(derived_path))
-    elif qa.get("output_sha256") != digest(args.surface):
-        raise ValueError("QA hashes do not identify these exact inputs")
+    elif qa.get("output_sha256") != surface_sha256:
+        raise ValueError(f"check report (--qa) was written for a result table with sha256 {qa.get('output_sha256')}; "
+                         f"--surface has {surface_sha256}")
     if qa.get("manifest_sha256") != digest(args.manifest):
-        raise ValueError("QA hashes do not identify these exact inputs")
+        raise ValueError(f"check report (--qa) was written for a run record with sha256 {qa.get('manifest_sha256')}; "
+                         f"--manifest has {digest(args.manifest)}")
     if not args.allow_diagnostic and qa.get("stage") != "global":
-        raise ValueError("Only a complete global surface can be exported without --allow-diagnostic")
+        raise ValueError(f"check report (--qa) is for the {qa.get('stage')!r} stage; only a global result table can be "
+                         "exported without --allow-diagnostic")
     if qa.get("full_year_required") is not True:
-        raise ValueError("Full-year QA is required")
+        raise ValueError("check report (--qa) does not require a full year (full_year_required is not true); "
+                         "only full-year results can be exported")
     frame = pd.read_csv(args.surface)
     if len(frame) != qa["expected_row_count"] or len(frame) != qa["row_count"]:
-        raise ValueError("Surface row count contradicts QA")
-    identity = {"scenario_id": manifest["scenario"]["id"], "run_id": manifest["run_id"]}
-    contract_identity = dict(identity)
+        raise ValueError(f"result table (--surface) has {len(frame)} rows; its check report expects "
+                         f"{qa['expected_row_count']} and counted {qa['row_count']}")
+    identity = check_table_identity(frame, manifest)
+    # The ids the provenance file records: a derived table (the 2 % land share of a 20 % run) is
+    # exported under its own scenario id and names the run it came from
+    provenance_ids = dict(identity)
     if getattr(args, "scenario_id_override", None):
-        contract_identity["scenario_id"] = args.scenario_id_override
-        contract_identity["parent_scenario_id"] = identity["scenario_id"]
-    for key, value in identity.items():
-        if not frame[key].eq(value).all():
-            raise ValueError(f"Surface {key} contradicts manifest")
+        provenance_ids["scenario_id"] = args.scenario_id_override
+        provenance_ids["parent_scenario_id"] = identity["scenario_id"]
     minimum = getattr(args, "minimum_capacity", 0.)
     drop_unassigned = bool(getattr(args, "drop_unassigned", False))
     unassigned_mask = frame.country.isna() & (frame[CAPACITY] >= minimum * 1e6) & (frame[CAPACITY] > 0)
     supplier = convert(frame, pd.read_csv(args.country_reference), minimum, drop_unassigned=drop_unassigned)
     args.output.mkdir(parents=True, exist_ok=False)
-    destination = args.output / "suppliers_USD2018.csv"
+    destination = args.output / SUPPLIER_TABLE
     supplier.to_csv(destination, index=False)
     report = {
-        "schema_version": 1, **contract_identity,
+        "schema_version": 1, **provenance_ids,
         "scope": "diagnostic_only" if qa["stage"] != "global" else "global",
         "inputs": {name: {"path": str(path.resolve()), "sha256": digest(path)} for name, path in
                    [("surface", args.surface), ("qa", args.qa), ("manifest", args.manifest), ("country_reference", args.country_reference)]},
@@ -183,7 +219,7 @@ def export(args):
         "supplier_selection": "Explicit export capacity cutoff applied; downstream cheapest-site ranking not yet applied",
         "output": str(destination.resolve()), "output_sha256": digest(destination),
     }
-    write_json(args.output / "contract.json", report)
+    write_json(args.output / SUPPLIER_PROVENANCE, report)
     print(json.dumps(report, indent=2))
 
 
@@ -235,7 +271,7 @@ def main(argv: list[str] | None = None) -> None:
                    help="provenance.json of a post-hoc land-share variant; the QA report then identifies the parent surface")
     p.add_argument("--scenario-id-override", default=None, help="scenario id recorded for a derived surface (e.g. the 2 %% variant)")
     p.add_argument("--drop-unassigned", action="store_true",
-                   help="Drop cells without a country polygon (NaN country) instead of rejecting the export; counted in the contract")
+                   help="Drop cells without a country polygon (NaN country) instead of rejecting the export; counted in the provenance file")
     p.add_argument("--minimum-capacity", type=float, default=0., help="Explicit minimum annual capacity in Mt; raw surface stays unchanged")
     d = commands.add_parser("derive", help="a land-share variant of an after_solve surface")
     d.add_argument("--surface", type=Path, required=True, help="merged global_run_results.csv of the parent run")

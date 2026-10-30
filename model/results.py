@@ -32,7 +32,7 @@ SURFACE_FILES = (
     "merged/global_run_results.csv",  # a global stage of arc/submit_lory_sequence.sh
     "global_run_results.csv",  # a derived land-share variant
     "merged.csv",  # the September revalidated surfaces
-    "suppliers_USD2018.csv",  # a supplier contract
+    "suppliers_USD2018.csv",  # a supplier table for the network model (model/suppliers.py export)
 )
 ARC_CAMPAIGN_PREFIXES = ("/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/", "green-lory-campaigns/")
 
@@ -55,7 +55,7 @@ def output_dir(run_id: str, *, campaigns_dir: str | Path = runs.LOCAL_CAMPAIGNS_
 
 
 def load_surface(run_id: str, *, campaigns_dir: str | Path = runs.LOCAL_CAMPAIGNS_DIR) -> pd.DataFrame:
-    """The result table of a surface (or the supplier table of a contract) by run id."""
+    """The result table of a surface (or a supplier table for the network model) by run id."""
     directory = output_dir(run_id, campaigns_dir=campaigns_dir)
     for name in SURFACE_FILES:
         if (directory / name).is_file():

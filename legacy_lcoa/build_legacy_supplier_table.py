@@ -9,7 +9,7 @@ latitude adjustment, 7.3 MW/km2 wind, 2 % Table-2 suitable areas):
 
 with P in MW per 1 Mt/yr design. Both constants are empirical and reported
 as such; alternatives can be produced with --d-pv/--d-wind. The output keeps
-the archived table's column contract (Index, Latitude, Longitude, iso3,
+the archived table's columns (Index, Latitude, Longitude, iso3,
 country, LCOA, Production, Max_capacity, Electricity_Cost_Frac) so that
 green-porpoise can consume it unchanged, plus explicit provenance columns.
 """
@@ -79,7 +79,7 @@ def main():
                    help="Flat water cost added to every cell's LCOA (USD2018 per t NH3; the legacy plant has no water "
                         "cost). The key legacy run of 24 Sep 2026 uses 1.5 m3/t x 2 EUR2020/m3 = 3.0 EUR2020/t = "
                         "3.3245 USD2018/t (EUR2020 / 0.9024).")
-    p.add_argument("--scenario-id", default=None, help="Scenario id recorded in the contract (default: the replication id)")
+    p.add_argument("--scenario-id", default=None, help="Scenario id recorded in the provenance file (default: the replication id)")
     p.add_argument("--output", type=Path, required=True)
     args = p.parse_args()
     if args.output.exists():
@@ -121,15 +121,15 @@ def main():
     out["capacity_ratio_vs_archived"] = out.Max_capacity / out.Max_capacity_archived.replace(0, np.nan)
     out["capacity_rule"] = provenance.get("capacity_rule", provenance["formula"])
     cols = ["Index", "latitude", "longitude", "iso3", "country", "LCOA", "Production", "Max_capacity", "Electricity_Cost_Frac"]
-    contract = out[cols].rename(columns={"latitude": "Latitude", "longitude": "Longitude"})
-    contract.to_csv(args.output / "legacy_replicated_suppliers.csv", index=False)
+    table = out[cols].rename(columns={"latitude": "Latitude", "longitude": "Longitude"})
+    table.to_csv(args.output / "legacy_replicated_suppliers.csv", index=False)
     out.to_csv(args.output / "legacy_replicated_suppliers_full.csv", index=False)
-    # green-porpoise supplier contract (same schema as the September green-lory exports)
+    # Supplier table for the green-porpoise network model, with its provenance file (as model/suppliers.py export)
     export_dir = args.output / "gpo_export"
     export_dir.mkdir()
-    exported = contract[contract.Max_capacity > 0].copy()
+    exported = table[table.Max_capacity > 0].copy()
     exported.to_csv(export_dir / "suppliers_USD2018.csv", index=False)
-    contract_json = {
+    provenance_file = {
         "schema_version": 1, "scope": "global", "currency": "USD", "price_year": 2018,
         "source_currency": "USD", "source_price_year": 2018, "source_to_output_factor": 1.0,
         "scenario_id": getattr(args, "scenario_id", None) or ("legacy_lcoa_replicated_may2023_xcost45_tracking_4h_ameli" + ("_stated_land" if args.rule == "stated_method" else "")),
@@ -145,7 +145,7 @@ def main():
         "minimum_capacity_Mt_per_year": 0.0,
         "supplier_selection": "No cutoff applied at export; downstream selection applies the 1 Mt/yr cutoff and cheapest-4000 ranking",
         "source_rows": int(len(out)), "exported_positive_capacity_rows": int(len(exported)),
-        "excluded_zero_capacity_rows": int((contract.Max_capacity <= 0).sum()),
+        "excluded_zero_capacity_rows": int((table.Max_capacity <= 0).sum()),
         "inputs": {"run_dir": str(args.run.resolve()), **({"run_summaries_sha256": sha256_file(args.run)} if args.run.is_file() else {}), "land": {"path": str(args.land.resolve()), "sha256": sha256_file(args.land)},
                    "archived": {"path": str(args.archived.resolve()), "sha256": sha256_file(args.archived)},
                    "cells": {"path": str(args.cells.resolve()), "sha256": sha256_file(args.cells)}},
@@ -154,8 +154,8 @@ def main():
         "exporter_sha256": sha256_file(Path(__file__)),
         "note": "LCOA is the frozen legacy model's USD2018 output on the replicating configuration; it runs ~4 % above the archived table (LEGACY_REPLICATION_20260915.md). Requires regenerated routes.",
     }
-    with open(export_dir / "contract.json", "w") as f:
-        json.dump(contract_json, f, indent=2, sort_keys=True)
+    with open(export_dir / "suppliers_USD2018_provenance.json", "w") as f:
+        json.dump(provenance_file, f, indent=2, sort_keys=True)
 
     ok = out.dropna(subset=["LCOA_archived"])
     pos = ok[(ok.Max_capacity_archived > 0) & (ok.Max_capacity > 0)]

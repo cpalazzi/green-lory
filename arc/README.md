@@ -7,7 +7,7 @@ accepted. Run definitions are in `../runs.yaml` (`python3 -m model.cli list`).
 | Location on ARC | Contents |
 |---|---|
 | `/data/engs-df-green-ammonia/engs2523/green-lory-releases/<id>/` | read-only source releases with `source_inventory.json` and `RELEASE_NOTES.md` |
-| `/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/<campaign>/` | outputs: land tables, surfaces, contracts, networks |
+| `/data/engs-df-green-ammonia/engs2523/green-lory-campaigns/<campaign>/` | outputs: land tables, surfaces, supplier tables for the network model, networks |
 | `/data/engs-df-green-ammonia/engs2523/green-lory/data/` | shared inputs linked into every release (weather stack, MODIS, GEBCO, WDPA, bathymetry, countries) |
 | `/data/engs-df-green-ammonia/engs2523/envs/` | `green-lory-env` and `legacy-lcoa-env` |
 
@@ -52,7 +52,7 @@ the verification job of `stage_release.sh`, the merge/QA jobs).
    arc/postprocess_keyruns_20260924.sh`, never run it on a login node.
 5. **Networks** run from the green-porpoise repository (`legacy_gpo/`, linked as
    `../legacy_gpo/`): stage a release (`legacy_gpo/arc/stage_release.sh`, run in green-porpoise),
-   then `legacy_gpo/arc/submit_network_run.sh --release <id> --name <run> --contract <contract.json>`
+   then `legacy_gpo/arc/submit_network_run.sh --release <id> --name <run> --supplier-table <suppliers_USD2018.csv>`
    (4 CPUs, 64 GB, 2 h, one-hour solver limit by default; see `legacy_gpo/README.md`).
    Networks before 7 October 2026 ran from green-lory releases (`20260914-v3`,
    `20260916-network-tools-v1`), which still hold that code.
@@ -68,7 +68,7 @@ the verification job of `stage_release.sh`, the merge/QA jobs).
 | `stage_release.sh` | Stage, verify and lock a source release (run on the Mac) |
 | `submit_lory_sequence.sh` | Plant-surface campaigns by run id, in smoke, diagnostic and global stages |
 | `submit_land_center_matrix.sh` | Centred land build and derived shares |
-| `postprocess_keyruns_20260924.sh` | Slurm job: derived 2 % surface, contracts and legacy key table of the 28 September key runs |
+| `postprocess_keyruns_20260924.sh` | Slurm job: derived 2 % surface, supplier tables and legacy key table of the 28 September key runs (it predates the rename of 30 October 2026: `contract.json`, `--contract`) |
 | `release.py` | Inventory of a source release: `write` on the Mac, `verify` in a job |
 | `manifest.py` | Run manifest (source, inputs, resolved settings, cost scope, hashes): `write`, and `verify` that the inputs have not changed |
 | `qa.py` | Quality gates: `land` (a centred land table before a run) and `merge` (the shards of a run, merged and checked) |

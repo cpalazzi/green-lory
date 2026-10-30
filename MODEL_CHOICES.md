@@ -57,7 +57,7 @@ their normalisation basis is undocumented (`data/README.md`), and a DC/AC ratio 
 would change the comparison more than the choice between these rules.
 
 Cost to change: post-processing. The key surfaces solved without land, so PV-limited capacities
-scale by the density ratio (+6 % for the recommended rule); new supplier contracts and four
+scale by the density ratio (+6 % for the recommended rule); new supplier tables and four
 network jobs (about 2 h each).
 
 ### 2. Weather data

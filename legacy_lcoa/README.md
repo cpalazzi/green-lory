@@ -22,7 +22,7 @@ table).
 | `run_legacy_cells.py` | Step 2: the frozen model at listed cells; one directory per cell with `summary.json`, solved component tables and a manifest with every input hash. ARC: `../arc/jobs/08_legacy_global.sh` (16 shards) |
 | `legacy_land_areas.py`, `land_core.py` | Step 3, the missing land step: MODIS class fractions x Table-2 suitability x spherical pixel area x 2 % share, per technology, centred 1-degree cells, no exclusions |
 | `legacy_capacity.py` | Step 4: the recovered rule (140 MW/km² PV, 7.3 MW/km² wind, complete overlap) as a library, and `apply-lory`, which applies it to a green-lory surface |
-| `build_legacy_supplier_table.py` | Step 5: merge shards, apply a capacity rule (`--rule archived_table_reproduction` or `stated_method`), write the supplier table in the archived column contract plus a `gpo_export/` contract for green-porpoise |
+| `build_legacy_supplier_table.py` | Step 5: merge shards, apply a capacity rule (`--rule archived_table_reproduction` or `stated_method`), write the supplier table in the archived table's columns, plus `gpo_export/` (the supplier table for green-porpoise, `suppliers_USD2018.csv`, and its provenance file `suppliers_USD2018_provenance.json`) |
 | `collect_summaries.py`, `compare_runs.py` | Gather per-cell summaries into one `summaries.jsonl`; compare two executions cell by cell (tests in `../tests/test_legacy_surface_tools.py`) |
 | `cells_3.csv`, `cells_sample_v1.csv`, `cells_archived_all_v1.csv`, `shards/` | The three focal cells; the 563-cell latitude-stratified sample; all 15,377 archived supplier cells with Ameli WACC by country; the 16 global shards |
 | `diagnostics/` | Scripts used to recover the capacity rule and check capacity factors |
@@ -77,10 +77,11 @@ python legacy_lcoa/build_legacy_supplier_table.py --rule stated_method --anchor 
   --cells legacy_lcoa/cells_archived_all_v1.csv --output <new dir>
 ```
 
-The network step consumes `gpo_export/contract.json` through
-the published network, `python -m legacy_gpo.run --supplier-contract` (`legacy_gpo/` of the
-green-porpoise repository, linked as `../legacy_gpo/`; ARC: `legacy_gpo/arc/submit_network_run.sh
---contract <contract.json>`).
+The network step reads `gpo_export/suppliers_USD2018.csv` and the provenance file beside it
+through the published network, `python -m legacy_gpo.run --supplier-table <suppliers_USD2018.csv>`
+(`legacy_gpo/` of the green-porpoise repository, linked as `../legacy_gpo/`; ARC:
+`legacy_gpo/arc/submit_network_run.sh --supplier-table <suppliers_USD2018.csv>`). Exports written
+before 30 October 2026 name the provenance file `contract.json`.
 
 ## Expected values
 

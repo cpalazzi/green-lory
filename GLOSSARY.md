@@ -174,7 +174,7 @@ efficiencies and the tracking flag; the September reports name them.
 | Centred build | A land table built with `cell_anchor=center` (fixed 23 Sep 2026). Earlier green-lory tables (`sw`) give each cell the suitability of the cell one degree south |
 | Focal cells | Atacama (−23, −69), northwest Australia (−23, 117), central Australia (−21, 135): the cells whose changes drove the network divergence |
 | MOD-AMB | The Verschuur et al. (2024) scenario used as the primary endpoint, with RCP4.5 and 70 % ammonia adoption |
-| Supplier contract | The network input exported from a surface: `contract.json` plus `suppliers_USD2018.csv` |
+| Supplier table | The network model's input exported from a surface by `python -m model.suppliers export`: `suppliers_USD2018.csv` (one row per cell: `LCOA` in USD2018/t, `Max_capacity` in Mt/yr, `iso3`, ...) and `suppliers_USD2018_provenance.json` (input hashes, currency conversion, cutoff, exclusions, the CSV's hash). Called a supplier contract, with `contract.json`, until 30 October 2026 |
 | Release | An immutable copy of the source tree on ARC (`green-lory-releases/<id>`) with a hashed file inventory; every ARC job runs from one |
 | Campaign | An output tree on ARC (`green-lory-campaigns/<campaign>/`); runs are written below it by results class, run id and stage |
 | Accepted gap | The network optimality gap at which a result is accepted: 1.5 %, the public deposit's own tolerance (decided 5 Oct 2026) |
@@ -190,7 +190,7 @@ efficiencies and the tracking flag; the September reports name them.
 | `interest_rate_<tech>` | WACC used per technology after overrides. |
 | `annual_ammonia_production_t` | Reference-design production (1 Mt/yr). |
 | `scaled_design_max_onshore_ammonia_capacity_t` [`paper_scaled_max_onshore_ammonia_capacity_t`] | Capacity of the scaled reference design on onshore land. |
-| `scaled_design_max_gridless_onshore_ammonia_capacity_t` [`paper_scaled_max_gridless_...`] | The same, counting only production that needed no grid imports (all of it: the grid is off); this is what the supplier contract exports as `Max_capacity` (Mt/yr). |
+| `scaled_design_max_gridless_onshore_ammonia_capacity_t` [`paper_scaled_max_gridless_...`] | The same, counting only production that needed no grid imports (all of it: the grid is off); this is what the supplier table exports as `Max_capacity` (Mt/yr). |
 | `scaled_design_limiting_constraint` | Which budget stopped the scaling: `wind`, `solar` or `renewable_union`. |
 | `max_ammonia_capacity_t` and the other `max_*` columns | An older capacity family from separate per-technology caps, in surfaces before 7 October 2026; no longer written. |
 | `land_constraint`, `capacity_rule`, `land_allocation` | The options above, echoed per row. |
@@ -212,5 +212,5 @@ efficiencies and the tracking flag; the September reports name them.
 - Land tables: `green-lory-campaigns/land_center_20260923_v1/` on ARC (100 %, 2 %, 20 %).
 - Campaign runs: `green-lory-campaigns/<campaign>/<class>/<scenario>/runs/<run-id>/<stage>/` with `manifest.json`, `shards/`, `merged/`, `qa/`.
 - Network runs: `green-lory-campaigns/verschuur_reconcile_20260907_v1/networks/` on ARC; local copies under `results/campaigns/verschuur_reconcile_20260907_v1/arc_received_*/` (paths per run in `run_store.csv`).
-- Supplier contracts for green-porpoise: `contract.json` plus `suppliers_USD2018.csv` (USD2018 because the network model keeps the deposited currency).
+- Supplier tables for green-porpoise: `suppliers_USD2018.csv` plus `suppliers_USD2018_provenance.json` (USD2018 because the network model keeps the deposited currency; `contract.json` in exports before 30 October 2026).
 - Legacy replication package: `legacy_lcoa/` (frozen lcoa-opt source, harness, land step, supplier-table builder).
