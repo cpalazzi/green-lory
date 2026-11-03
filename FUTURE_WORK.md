@@ -42,3 +42,24 @@ below 8.5 degrees. At the 20 % land share, 27 of 16,885 cells pay a slope factor
   about 6-15 % grade depending on assistance (Miceli 2012).
 - Grading and earthworks costs by slope from engineering estimates, in place of transmission
   analogues.
+
+## Weather years
+
+**Decided 3 November 2026** (CAMPAIGN_PLAN.md, sections 7b and "Decisions and access"):
+
+- Every run uses one weather year, 2019, for the PV and wind profiles. The cold premium goes by
+  latitude (CAMPAIGN_PLAN.md, section 7b), not by temperature.
+- Reason (user, 3 November): the working papers and the thesis come first, so the model uses
+  only data in Salmon's profiles, in the cutout, or in a small public dataset.
+
+**What more years would change:**
+- A cold premium by temperature: IEA Wind Recommended Practice 13 (2017, sections 3.1 and 5)
+  recommends low-temperature equipment where the annual mean is below 0 C, or where it falls
+  below -20 C on more than nine days a year, judged on ten years or more of temperature. This
+  would also catch cold continental interiors south of 60 degrees.
+- PV and wind output varies from year to year, so a plant sized on one year can fall short in
+  a weaker one.
+
+**Where to get them:** ERA5 from the Copernicus Climate Data Store (daily minimum and monthly mean
+2 m temperature, about 15 GB for ten years at 0.25 degree; sea-ice cover as monthly means), and
+profiles recomputed from cutouts of the same years.

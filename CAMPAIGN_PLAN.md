@@ -629,6 +629,267 @@ All runs:
   - `GLOSSARY.md` and `data/README.md` updated.
 - **End state:** one documented library, one CLI, run definitions as data, notebooks that only
   read results.
+- **For you, before publication:** a courtesy email to info@marineregions.org saying that the
+  World EEZ v12 layer, taken from Marine Regions' public feed on 30 October 2026, gives the
+  country of the offshore cells. The feed's service metadata asks users of a layer to contact
+  VLIZ (`data/README.md`, Maritime zones).
+
+## 7. Offshore sites, cold climates, snow and the weather source (agreed 30 October 2026)
+
+The model keeps measuring the cost of production at a site. Delivery (cables to shore, ships to
+markets) stays with the network model.
+
+### 7a. Weather source
+
+- **Agreed 3 November** (proposed 30 October): build the one-degree profiles from the ERA5 2019
+  cutout on ARC (green-condor,
+  0.25 degree, 8,760 hours; `data/README.md`) with atlite, instead of Salmon's profiles. The
+  source is then direct; land and sea pixels can be averaged separately in each cell, which
+  replaces the land correction of coastal cells and gives offshore cells sea-only profiles; the
+  cold rules use the same temperature; and no capacity factor exceeds 1.
+- **Turbines:** the existing atlite tiles use a Vestas V112 3 MW onshore, an NREL 5 MW offshore
+  turbine and a fixed CSi panel, without tracking, and give 26-38 % lower wind capacity factors
+  at the focal cells than the current profiles. The profiles are recomputed (atlite 0.4.1,
+  `envs/green-condor-env` on ARC) with turbines matching DEA 2050 (the data sheets' rows; a
+  turbine's power curve per unit of capacity is set mainly by its specific power):
+  - onshore: DEA 6 MW, 165 m rotor, 281 W/m2, hub height 110 m. atlite's
+    `NREL_ReferenceTurbine_2020ATB_7MW` (200 m rotor, 223 W/m2) with its wind speeds multiplied
+    by (281/223)^(1/3) = 1.080: below rated power a turbine's output per unit of capacity
+    depends on wind speed cubed over specific power, so this keeps the reference turbine's
+    power coefficient at each point and moves rated power to the higher wind speed of DEA's
+    turbine;
+  - offshore: DEA 35 MW, 380 m rotor, 310 W/m2 (309 from the rotor), hub height 220 m. atlite's
+    `NREL_ReferenceTurbine_2020ATB_15MW_offshore` (240 m rotor, 332 W/m2) with its wind speeds
+    multiplied by (310/332)^(1/3) = 0.978, at 220 m;
+  - both through `cutout.wind(turbine=dict(V, POW, P, hub_height), smooth=True)`: atlite
+    extrapolates the cutout's 100 m wind to the hub height with the logarithmic profile and
+    the cutout's roughness;
+  - PV: `cutout.pv(panel="CSi", orientation="latitude_optimal")` for fixed tilt and
+    `tracking="horizontal"` (single axis, north-south) for tracking, converted to output per MW
+    of AC, the basis of DEA's costs, with DEA's DC/AC ratio of 1.25 and clipping at 1.
+- **Air density:** wind speeds normalised by each point's air density before the power curve,
+  V (rho / rho0)^(1/3), the IEC 61400-12-1 method for pitch-regulated turbines, with density from
+  the point's height in the standard atmosphere (unless atlite 0.4.1 offers it). At 3,000 m the
+  density is 0.74 of sea level and wind speeds count x 0.91; at 4,000 m, 0.67 and x 0.87, so
+  output below rated power falls by about a third. Neither Salmon's nor Cesaro's thesis mentions
+  it for Salmon's profiles.
+- **Calibration check:** atlite's full-load hours at DEA's reference sites against DEA's: onshore
+  3,800 h (Danish site), offshore fixed 4,650 h (North Sea, 10.3 m/s at 100 m, Table 11), PV
+  1,515 h fixed and 1,742 h tracking (AC). A gap would become one stated loss factor per
+  technology (wakes and availability for wind).
+- **What is known of Salmon's profiles (3 November):** ERA5 2019 at one degree, wind through
+  "the curve for a Vestas 3 MW wind turbine", PV through pvlib, using "the DC power output from
+  solar cells" (Salmon 2023, DPhil thesis, chapter 3, p. 37); the conversion was Zac Cesaro's,
+  whose thesis (2022, section 4.5) uses ERA5's 100 m wind and pvlib's PVWatts from ERA5's
+  surface solar radiation. Neither names the Vestas model (V90, V112 or V126 at 3 MW have
+  472, 305 and 241 W/m2), the hub height or the panel tilt. Against DEA 2050, over five Danish
+  land cells and four Danish North Sea cells: onshore wind 5,076 h (DEA 3,800, +34 %), offshore
+  wind 6,470 h (DEA 4,650, +39 %), fixed PV 1,039 h (DEA 1,212 per MW of DC, 1,515 per MW of AC),
+  tracking PV 1,354 h (DEA 1,742 per MW of AC). DEA's PV costs, which the model uses, are per MW
+  of AC (sheet 22: 0.29 MEUR/MW, 0.23 per MW of DC, DC/AC 1.25), so the model counts DC output
+  per MW against AC costs per MW, about 25 % too little PV output per euro, while wind runs well
+  above DEA's full-load hours.
+- **Aggregation:** each one-degree cell's profile is the average of its 0.25-degree pixels
+  weighted by land area (onshore) or by sea area of the depth class (offshore), through atlite's
+  `matrix` argument; written in the current file format, so runs only change `weather_dir`
+  and drop `weather_land_correction`.
+- **Check:** the new profiles against the current ones on the 1,317 step-4 cells, and the
+  focal-cell LCOA. The reconciling run keeps Salmon's profiles, as the legacy model used them.
+- **Compute:** like the existing tiles, a Slurm job per latitude band (the earlier conversion ran
+  on 32 cores and 360 GB with a 72 h limit).
+
+### 7b. Cold climates
+
+- **Construction:** labour productivity by temperature, from the Alaska school-construction cost
+  factors (HMS for Alaska DEED, Bond Reimbursement and Grant Review Committee packet, 21 February
+  2019, Equation 1, report pp. 8-9): (40 - T) - 3 % on labour, T the annual mean in Fahrenheit,
+  Anchorage (37 F) as zero, from "published rates for modifying the labor productivity for
+  temperature below 40 degrees". Used by month: the mean over the 12 months of
+  max(0, 4.4 C - monthly mean) x 1.8 % per C, on the labour share of the build cost
+  (`installation_multiplier`). The labour share of DEA's build costs is to be set (Alaska's 42 %
+  is for a school).
+- **Equipment (proposed):** a premium on the equipment part (`tech_cost_per_mw`) where IEA Wind
+  Recommended Practice 13 (2017, sections 3.1 and 5) recommends low-temperature versions: annual
+  mean below 0 C, or below -20 C for at least an hour on more than nine days a year (a daily
+  minimum below -20 C is exactly an hour or more below it).
+  - Wind +5 %: arctic equipment (blade heating, cold-rated parts) made the turbines built cost
+    "somewhat over 5 %" more, 5-10 % in all (Marjaniemi and Peltola 1998, VTT Julkaisuja 830,
+    pp. 49 and 52; 200-600 kW turbines in Finnish Lapland). Their heating used 1-3 % of the
+    annual output, which is not counted.
+  - Electrolysers, Haber-Bosch with its ASU, compressor and tanks +10 %: enclosures and heat
+    tracing. Between USGS's Arctic offshore cost adjustment, +25 % on topsides material only
+    (Verma, White and Gautier 2008, USGS Open-File Report 2008-1193, p. 4), and a fully
+    enclosed, heated drilling rig in Arctic Alaska, up to USD 3 million against USD 20-25
+    million for a new rig, 12-15 % (David 1982, abstract only).
+  - PV and batteries: none. Modules are qualified to -40 C; batteries are housed and heated,
+    so cold acts as a heating load, not modelled.
+  - The all-in Arctic factors (Fairbanks 1.35 and North Slope 1.5 against the US Gulf Coast;
+    Muse, Stancil & Co. 2004, p. 19; Robertson 1999, INEEL, p. 10) are mostly labour, camps,
+    freight and materials (Robertson: 1.5 falls to 1.2 at an ice-free port through "reduced
+    shipping, labor, and materials costs"), which the remoteness factors and the construction
+    rule above cover. No source gives a premium as a function of design temperature.
+- **Cold rule (decided 3 November; replaces the construction and equipment rules above):** every
+  technology costs 25 % more (`tech_cost_per_mw` and `build_cost_per_mw`) at cells at or beyond
+  60 degrees latitude, or at 3,000 m or higher: about 20 C colder than sea level at the standard
+  lapse rate (6.5 C per km), roughly the drop from the subtropics to 60 degrees. Elevation from
+  GEBCO 2025, added to the land build with the offshore cells (until then the land table's
+  `elevation_m`). No temperature data needed. The design is unchanged, so the case without the
+  premium follows from the same results.
+  - Source: Yamal LNG, adjusted to Corpus Christi's scope, costs 25 % more, "reflecting the
+    higher construction costs in the harsh arctic environment" (Songhurst 2018, OIES NG137,
+    p. 40), the one like-for-like Arctic process plant. The figure is all-in, so with the
+    remoteness factor it counts some remoteness twice: on the high side by intent.
+    Equipment-only figures are lower (drilling rig 12-15 %, Arctic topsides +25 % on material,
+    wind 5-10 %). The much larger Arctic factors are mostly logistics, labour and short building
+    seasons: the North Slope's 1.5 against the US Gulf Coast falls to 1.2 at an ice-free port
+    through "reduced shipping, labor, and materials costs" (Robertson 1999, INEEL, p. 10); North
+    Slope schools cost about twice Anchorage's, with logistics +54 % and cold on labour about
+    +8 % of the total (HMS for Alaska DEED 2019). Section 7e deals with remoteness.
+  - Effect in C2 of 30 October (Salmon's profiles): 4,077 cold cells, 3,691 by latitude and 387
+    by altitude (mostly Tibet and the Andes; one cell both). They supply 3.5 % of the cheapest
+    2,000 Mt/yr and none with the premium; the 2,000th Mt moves from 283 to 284 EUR/t. Among the
+    cheapest 5 % of cells the cold ones fall from 135 to none, including the Altiplano and Puna
+    cells of Bolivia, Argentina and Chile (282-285 EUR/t). Salmon and Bañares-Alcántara (2022)
+    had no cold premium: they excluded latitudes beyond 85 degrees and Antarctica, and the legacy
+    global runs covered 65 S to 65 N (`lcoa-opt/main_mp.py`).
+- Fixed O&M follows, as a fraction of the overnight cost.
+
+### 7c. Snow on PV
+
+- A limitation, not modelled (decided 30 October): the profiles come from irradiance and
+  temperature only, so snow lying on the modules is not counted. Snowfall comes with cloud, so
+  the profiles already give little output during it; what they miss is the cover that stays on
+  the modules on clear days after snow. Losses reported for snowy sites: 1-15 % a year, up to
+  90 % in a month (Sandia's summary of Marion et al. 2013).
+
+### 7d. Offshore sites
+
+- **Cells:** sea cells with offshore wind area in the land build (`--include-offshore-wind`,
+  `wind_offshore_area_km2`, depth from `data/model_bathymetry.nc`). Country from exclusive
+  economic zones (Marine Regions, World EEZ v12, CC BY 4.0, `data/marine_regions/`; the
+  sovereign, `iso_sov1`); cells outside every zone are tagged international waters and run too.
+  Cells with winter sea ice are excluded: inside the sea-ice edge (15 % concentration, the usual
+  threshold) at its 2019 maximum (proposed 3 November, section 7f).
+- **Technologies:** wind only, no PV offshore; the plant produces at the site, so DEA's
+  substation and export cable are left out of the wind cost.
+- **Costs by depth** (2050, DEA electricity catalogue, chapter 21 and its data sheets; MEUR/MW):
+
+  | Depth | Wind | Conversion plant and stores | Sources |
+  |---|---|---|---|
+  | up to 70 m, fixed | turbine 0.75 + foundation + array cables 0.04 + development 0.16 (1.28 at 30 m); foundation 0.334 at 30 m, scaled by DEA's function of depth, 0.45 MEUR/MW + 5 kEUR/MW per m | x 1.72: on a fixed jacket platform, 42 % of a 300 t/d offshore plant's capital cost (Brener 2022, MSc thesis, Oxford) | DEA p. 208: "fixed foundations can be used in water depths of up to 70 metres"; Table 15, p. 225 (its cost function is calibrated on 20-50 m, Table 11) |
+  | 70 to 1,000 m, floating | 0.75 + 0.675 + 0.04 + 0.16 = 1.63 | x 2: a process plant on a moored floating hull. Floating LNG plants, hull, turret, mooring and marine installation included, cost near or above USD 2,000 per t/yr for the first newbuilds, like the costliest onshore plants (Scott 2018, Oil & Gas Journal); later ones about USD 500-1,130 per t, in line with onshore plants, against USD 2,114 for Prelude (Rystad, in World Oil and JPT 2025). x 2 is the first-of-a-kind level | NREL 2016 (Musial et al., p. v and note 2): floating beyond 60 m, water deeper than 1,000 m excluded |
+  | deeper than 1,000 m | x 3 on every technology at onshore cost: turbines and plant on ships; speculative. Order of magnitude: floating wind at 500 m depth and 1,000 km from shore, 2.8-4.0 MUSD/MW (Salmon and Bañares-Alcántara 2022, Table 2), 2.5-3.5 times onshore; a first-of-a-kind floating plant, 2-4 times a mature one (Prelude against later floating LNG plants, Rystad) | | |
+
+- **Build factor at sea:** the remote factor of section 7e, with the travel time of the nearest
+  port plus the sea leg at 20 km/h beyond 175 km (decided 3 November, replacing 60 km).
+- **Water:** desalinated seawater at the source price, no pipeline.
+- **Finance:** international waters take the highest rate in Ameli et al.'s table in the finance
+  runs (11.8 %, the rate of their Africa region), as a high-risk default: no state's legal
+  framework, insurance or offtake support. (Damodaran's US cost of capital for the
+  shipbuilding and marine industry, 6.7 % in January 2026, is a company rate, not a project
+  rate.) The uniform-rate runs give them 5 % like every cell.
+- **Fixed foundations:** up to 70 m, DEA's limit (decided 30 October); the plant multipliers
+  x 1.72, x 2 and x 3 as in the table.
+
+### 7e. Remoteness, onshore and offshore (proposed 3 November)
+
+Carlo (3 November): a remote place must cost what building there costs, at sea as on land. A
+remote cell that looks cheap in the model would invite a case study that the costs do not support.
+
+- **The problem:** the installation factor rises with travel time to a city of 20,000 (Nelson
+  et al. 2019) only up to 4 hours and then stays at x1.34 (GHD 2025 fit); the equipment factor
+  stops at x1.10. The remotest calibration site is 6.7 hours from such a city, and 41 % of the run
+  cells lie beyond it. In C2 (no site costs), cells more than 12 hours away supply 58 % of the
+  cheapest 2,000 Mt/yr; with S1's factors (15 October) still 25 %. The cheapest cells of C2 are
+  sub-Antarctic islands (Campbell, Macquarie, Auckland, Crozet, Kerguelen, Heard; 202-212 EUR/t,
+  28 to 208 hours from a city) and the Magallanes fjords: 25 of the 30 cheapest cells can host
+  less than 0.1 Mt/yr, and the islands are nature reserves that the protected-land layer counts
+  at 0-9 % (to check).
+- **One measure on land and at sea:** travel time from a city of at least 20,000 people. On land,
+  Nelson et al. as now; at sea, the nearest port's own travel time plus the sea leg at 20 km/h
+  (Salmon and Bañares-Alcántara 2022), beyond the 60 km that DEA's offshore costs include.
+  Equipment by distance to the nearest port, on land and at sea.
+- **Calibration beyond 6.7 hours:** public cost-factor tables for genuinely remote places, added to
+  GHD's sites and located on the same travel-time raster: Alaska's geographic cost factors (HMS
+  for Alaska DEED; road-connected towns to fly-in villages, relative to Anchorage, split into
+  logistics and labour), and, where found, northern Canada, remote Western Australia and the
+  Northern Territory, and the US Defense Department's area cost factors for remote sites
+  (Pituffik, formerly Thule, 3.39). The fitted curve keeps rising with travel time instead of
+  stopping at 4 hours.
+- **Remote cost data found (3 November):** 2,325 rows from 21 public series (session scratch
+  folder `remote_costs/`, with `REPORT.md`). The most remote places with published construction
+  factors are settlements reached by air, barge or seasonal road, at about x1.5 to x2.4 of the
+  nearest supply city for a whole building: Alaska's fly-in and no-barge villages x1.60-1.63 on
+  Anchorage (HMS for Alaska DEED, July 2023; up to x2.00 in the 2008-2018 table); the US Defense
+  Department's Arctic villages x1.44 and Aleutians x2.25 on Anchorage (UFS 3-701-01, June 2026);
+  Shamattawa, a fly-in First Nation, x1.99 on Winnipeg (federal manual, 1996); Australia's remote
+  islands x1.75-2.00 on the state capital (Rawlinsons, via Nous 2017); Puerto Williams x1.62 on
+  Punta Arenas. HMS's 2018 split for North Slope villages: general requirements (freight, fuel,
+  crew travel and per diem, duration, equipment) +54 to +57 %, productivity +18 %, risk +18 %.
+  No source covers places without a settlement, airstrip or landing, and none gives coordinates
+  or travel times: the places must be geocoded and read on the Nelson et al. raster.
+- **Remote factor (decided 3 November):** one rule for every point, on land and at sea, with no
+  breakpoints, from one source used as a sensitivity factor rather than a case study: Canada's
+  1996 federal capital cost manual (*DIAND Cost Reference Manual*, Real Property Services for
+  INAC, July 1996, pp. 1-15 and 1-16). A duplex at Shamattawa, Manitoba, "only accessible by air
+  and winter road" about 750 air km from Winnipeg, costs x1.99 Winnipeg's, the product of nature
+  of site 1.04, transportation 1.60, schedule 1.00, personnel 1.14, materials 1.05 and
+  administration 1.00. Rounded, x2 on the build part and x1.6 (its transportation part) on
+  equipment, which is made elsewhere and shipped in. Shamattawa is 20.4 hours (0.85 days) from a
+  city of 20,000 on the Nelson et al. raster, which has no road restriction (it models off-road
+  travel at land-cover speeds, so fly-in places get finite times).
+  - Rule, travel time d in days from a city of 20,000: build (`build_cost_per_mw`) =
+    1 + 1.127 log2(1 + d), equipment (`tech_cost_per_mw`) = 1 + 0.676 log2(1 + d), so each
+    factor rises by the same step for each doubling of (1 + d) and equals x2 and x1.6 at 0.85
+    days. Days, because hours matter little at this scale.
+  - Why a logarithm: remote costs grow by steps in kind (daily commute, overnight stays, a camp
+    with rotations, flights or winter roads, sealift), each roughly doubling the travel time, so
+    each doubling adds about the same. log2(1 + d) is zero in a city, nearly linear for short
+    trips (as the Australian fits, linear in hours), and grows ever more slowly for long ones; a
+    linear rule through Shamattawa would give x10 on the build part at Kerguelen, and a cap
+    would need a cutoff and make every remote place equal. The form is a convention; it has no
+    fitted parameter beyond the Shamattawa anchor.
+  - Values: 1 hour (0.04 days) build 1.07, equipment 1.04; 4 hours 1.25 and 1.15; half a day 1.66
+    and 1.40; Shamattawa (0.85 days) 2.00 and 1.60; 2 days 2.79 and 2.07; 4 days 3.62 and 2.57;
+    Kerguelen (7.5 days) 4.48 and 3.09, about x3.3 on a wind and electrolyser plant.
+  - Comparison for remote islands (a check, not an input): the US Defense Department's
+    construction area cost factors put Pituffik (Thule Air Base, Greenland) at 3.39, Diego Garcia
+    at 3.30 and Wake Island at 4.36, on the average of 96 base cities in the contiguous US = 1.00
+    (UFS 3-701-01, *DoD Facilities Pricing Guide*, 2026, Table 4-1; the factor covers labour,
+    materials and equipment prices adjusted for weather, logistics and labour productivity).
+  - Check in the Australian range (up to 6.7 hours), with nothing fitted to it: the build rule is
+    0.04 below GHD's installation factors on average (RMSE 0.087; GHD's own fit 0.070) and 0.19
+    below Aurecon's; the equipment rule is 0.01 above Aurecon's equipment factors.
+  - Every point gets a factor: d from the raster where it has a value; otherwise, and at sea, the
+    nearest port's own travel time plus the sea leg at 20 km/h (Salmon and Bañares-Alcántara
+    2022). The site-cost table records which.
+  - At sea (decided 3 November), the sea leg counts beyond 175 km, DEA's far-shore reference:
+    DEA's costs other than
+    substations and export cables are about the same at 175 km (DC, 40 m) as at 60 km (AC, 30 m),
+    1.31 against 1.28 MEUR/MW, so marine installation to 175 km is in DEA's costs.
+  - Effect on C2 with the designs held fixed, cold rule included: cells more than 12 hours from
+    a city supply 26 % of the cheapest 2,000 Mt/yr with the present factors and none with this
+    rule; the 2,000th Mt stays at 327 EUR/t, and cells 1-7 hours from a city change by +0.3 % at
+    the median. Kerguelen's five land cells go from 239-262 to 701-770 EUR/t.
+- **No exclusion in this campaign (decided 3 November):** costs only, and every point gets a
+  factor ("all points are theoretically reachable"; Carlo). C2 and S2 run on every cell, on land
+  and at sea (compute is available). After S2, its results can be used to leave out remote areas
+  in other runs and campaigns.
+
+### 7f. Order
+
+1. Profiles from the cutout, checked against the current ones.
+2. Sea ice and economic zones (zones downloaded on 30 October).
+3. Remoteness: remote calibration data, the refit and the exclusion limit (section 7e).
+4. Offshore land build and site costs.
+5. Technology YAML and plant changes, run definitions.
+6. The campaign (C2, S1, F, S2, with offshore cells), each stage after a go-ahead.
+
+Sea ice is in neither Salmon's profiles nor the cutout. Proposed (3 November): NSIDC's Sea Ice
+Index (G02135, version 4.0) extent polygons at 2019's maxima, March in the north
+(`extent_N_201903_polygon_v4.0.zip`) and September in the south
+(`extent_S_201909_polygon_v4.0.zip`); public, no account, two small files. A sea cell is
+excluded if its centre lies inside.
 
 ## Decisions and access
 
@@ -737,6 +998,20 @@ All runs:
   diagnostic cells match local solves to 2e-5. The global jobs of S1, F and S2 were cancelled
   before they started, to add a cold uplift to the site costs and offshore sites first; C2's
   global stage finishes (jobs 13578378-82), as the onshore reference for both.
+- **3 November:** simplicity first, for the working papers and the thesis of the coming months:
+  only data in Salmon's profiles, in the ERA5 2019 cutout, or in a small public dataset. More
+  weather years are future work (`FUTURE_WORK.md`). Later the same day: a cold rule by latitude
+  instead of temperature (proposed in section 7b), and Salmon's profiles kept only if their
+  turbine and panel can be documented, otherwise new profiles from the cutout (section 7a).
+  Then: new profiles from the cutout agreed (section 7a; the theses name only a Vestas 3 MW
+  turbine); the cold premium is 25 % (Yamal) at 60 degrees latitude or 3,000 m and above
+  (section 7b); the remoteness factor is to be reworked for genuinely remote places, on land
+  and at sea; no exclusion: C2 and S2 cover every cell, and S2's results can later be used to
+  leave out remote areas (section 7e).
+  The remote factor is decided: travel time in days, x2 on the build part and x1.6 on equipment
+  at Shamattawa's 0.85 days (DIAND 1996), logarithmic in travel time, every point costed; at sea
+  the sea leg counts beyond DEA's far-shore 175 km. DIAND 1996, the DoD pricing guide (UFS
+  3-701-01, 2026) and Songhurst (2018) added to Zotero.
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release

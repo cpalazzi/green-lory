@@ -41,8 +41,14 @@ Locations:
   `results/campaigns/legacy_lcoa_20260915_v1/weather_store_archived15377_mac_v1/` locally and
   `green-lory/data/weather_store_archived15377_v1/` on ARC.
 
-Known open point: PV profiles occasionally exceed 1.0 (Atacama fixed 1.06,
-tracking 1.12); the AC/DC normalisation basis is undocumented.
+Method, from the authors' theses: ERA5 at one degree, wind through "the curve for a Vestas 3 MW
+wind turbine" and PV through pvlib, using "the DC power output from solar cells" (Salmon 2023,
+DPhil thesis, Oxford, chapter 3, p. 37). The conversion was Zac Cesaro's (Salmon's
+acknowledgements); Cesaro's thesis (2022, Oxford, section 4.5) uses ERA5's 100 m wind and pvlib's
+PVWatts model on ERA5's surface solar radiation. Neither names the Vestas model, the hub height or
+the panel tilt. The PV profiles are therefore DC output per MW of modules, which is why they
+occasionally exceed 1.0 (Atacama fixed 1.06, tracking 1.12); DEA's PV costs are per MW of AC
+(DC/AC 1.25).
 
 The profiles average the whole 1-degree cell, sea and lakes included (at equal sea share, cells
 centred at sea and on land have the same wind; it rises with the sea share). Runs from October
@@ -125,6 +131,12 @@ they have not been used in any accepted surface.
 | File | Purpose | SHA-256 |
 |---|---|---|
 | `ports/verschuur2024_ports.csv` | The 1,377 ports of the green-porpoise shipping network (Verschuur et al. 2024, *Environ. Res.: Infrastruct. Sustain.* 4, 015001), with location, country and trade columns; 46 in Australia, 16 in Chile. Copied on 7 October 2026 from the archived project snapshot `../results/campaigns/verschuur_reconcile_20260907_v1/historical/git-0a63616/data/c_port_data.csv`, byte for byte. For the equipment (port-distance) factor of the site costs | `497b9bc9fdcb9b67af57c5834f1a068633b0776535e254ec644bc89750f13651` |
+
+## Maritime zones (`marine_regions/`)
+
+| File | Purpose | SHA-256 |
+|---|---|---|
+| `marine_regions/world_eez_v12_wfs/eez_v12.zip` (`eez.shp`, `.dbf`, `.shx`, `.prj`, `.cst` inside, unpacked beside it) | Exclusive economic zones for the country of offshore cells (`iso_sov1`, the sovereign; `pol_type` 200NM, Overlapping claim or Joint regime); cells outside every zone are international waters. Flanders Marine Institute (2023), Maritime Boundaries Geodatabase: Maritime Boundaries and Exclusive Economic Zones (200NM), version 12, doi:10.14284/632, CC BY 4.0 (the geodatabase v12, doi:10.14284/628). 285 polygons, EPSG:4326. Retrieved on 30 October 2026 from Marine Regions' public feed (layer `MarineRegions:eez`, "Exclusive Economic Zones (200 NM) (v12, world, 2023)"), the same data as the download page, which asks for personal details | zip `7b010436bf816c34600f0acea35a4a6b3db83ce26901c9b4f957634b5d7ba1ab`; `eez.shp` `bb68ebda72f96ecf4f6428cd11079c50ec94eb2ffc4f711e092698dbb79066e5`; `eez.dbf` `badec96cd1b9a1a3a46dc78229ce1329ed48c20178b08cbe6b6fd020acf3cd55` |
 
 ## Site-cost inputs (`accessibility/`, `water/`, `gazetteer/`)
 
