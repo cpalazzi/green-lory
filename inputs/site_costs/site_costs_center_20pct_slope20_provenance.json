@@ -1,7 +1,7 @@
 {
   "written_by": "python -m model.site_costs",
   "rows": 18039,
-  "sha256": "a7fe35abdb7c56945ae538e31bd6d98a7d5479f1b81fe70a98efe1784d7169c0",
+  "sha256": "aa0bfff7bedd0721e72502a86e589d5a8159e4674ac4770896aea1b80e4b778b",
   "currency": "USD2020",
   "inputs": {
     "land_table": {
@@ -16,24 +16,30 @@
       "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/cell_geography.csv",
       "sha256": "7d6f1b31b775cd93de60bcf2ce9891a4054f0fd548f1c2789b01bff17ac2119d"
     },
-    "remoteness_fit": {
-      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/remoteness_fit.json",
-      "sha256": "d5588c3e04536a8a7e3d9e0d8ddbe40f2272c6f3170ac4bd4546eb05071d25a2"
+    "port_travel_times": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/port_travel_times.csv",
+      "sha256": "31b9544f90fd478f9bd89e8f34066a721312b15c197ba4c02614ddbe149676ff"
     }
   },
   "parameters_yaml": {
     "path": "inputs/parameters.yaml",
-    "sha256": "0f2666188f78d5a15680cca2c15f9403b739829d68882b4759292818ce23bc07"
+    "sha256": "355ddc416c69f1d42f386a6e8a14b24c999f524085cf5cb342ff1e4aba0c126c"
   },
   "parameters": {
     "land_cells_beyond_the_geography": 1788,
-    "remoteness": {
-      "source": "ghd2025",
-      "equipment_a_per_1000_km": 0.20365413095631188,
-      "equipment_cap": 1.1,
-      "installation_city_size": "20k",
-      "installation_b_per_hour": 0.08553563896878519,
-      "installation_saturation_min": 240.0
+    "cells_by_port": 61,
+    "remote_factor": {
+      "city_size": "20k",
+      "anchor_days": 0.85,
+      "build_at_anchor": 2.0,
+      "equipment_at_anchor": 1.6,
+      "sea_speed_km_per_h": 20.0,
+      "sea_leg_included_km": 175.0
+    },
+    "cold": {
+      "multiplier": 1.25,
+      "min_abs_latitude_deg": 60.0,
+      "min_elevation_m": 3000.0
     },
     "land_competition_fraction": 0.2,
     "slope_class_factors": {

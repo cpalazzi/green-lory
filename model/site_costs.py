@@ -3,12 +3,12 @@
 For each onshore cell of a land table, site_cost_table() gives
 
 - equipment_cost_multiplier, on the equipment part of every technology's overnight cost
-  (tech_cost_per_mw): 1 + a x great-circle distance to the nearest port of the shipping network,
-  capped. It stands for transporting plant and materials (AEMO's equipment cost factor, based
-  on the nearest port since its 2025 inputs);
-- installation_multiplier, on the build part (build_cost_per_mw): 1 + b x min(travel time to the
-  nearest city of at least N people, saturation). It stands for labour, materials and
-  mobilisation from the city (AEMO's installation cost factor);
+  (tech_cost_per_mw), and installation_multiplier, on the build part (build_cost_per_mw): the
+  remote factor, which rises with log2(1 + d), d the travel time in days from a city of at least
+  20,000 people, through a value at the anchor, a fly-in community (remote_multiplier). Every
+  point gets one: the travel time is the raster's, or the nearest port's plus the sea leg
+  (travel_min_to_city; travel_time_source records which);
+- cold_multiplier, on both parts of every technology: at high latitude or altitude (cold_rule);
 - slope_multiplier, on the build part of PV and wind only: the mean factor of the slope classes
   of the land the plant's share takes, flattest first (SLOPE_CLASS_FACTORS);
 - depth_multiplier and labour_multiplier, both 1 (inputs/parameters.yaml): the table covers
@@ -17,11 +17,10 @@ For each onshore cell of a land table, site_cost_table() gives
 - the water price (USD/m3, the site-cost currency of the technology YAML): the source price
   plus a pipeline from the nearest water source (water_pipeline_cost).
 
-a, b, N and the saturation come from inputs/site_costs/remoteness_fit.json, fitted by
-model/site_geography.py to one of the AEMO location-factor tables (REMOTENESS_SOURCES). A
-technology's build multiplier is installation x labour x depth, times the slope factor for PV
-and wind; fixed O&M is a fraction of the overnight cost, so it follows both multipliers
-(model/technology.py).
+The remote and cold rules are in inputs/parameters.yaml with their sources. A technology's
+equipment multiplier is equipment x cold, and its build multiplier installation x labour x depth
+x cold, times the slope factor for PV and wind; fixed O&M is a fraction of the overnight cost, so
+it follows both multipliers (model/technology.py).
 
     python -m model.site_costs --land <land table> --output <site costs csv>
     green-lory site-costs --land <land table> --output <site costs csv>
@@ -42,22 +41,24 @@ import pandas as pd
 
 from .config import DEFAULT_TECH_YAML, SITE_COSTS_DIR, SLOPE_CLASS_COLUMNS, repo_path
 from .parameters import eur2020_per, file_record, parameter
+from .site_geography import PORT_TRAVEL_TIMES_CSV, nearest_km
 
 CELL_GEOGRAPHY_CSV = SITE_COSTS_DIR / "cell_geography.csv"
 ONSHORE_LAND_PCT_MIN = 1e-6
-REMOTENESS_FIT_JSON = SITE_COSTS_DIR / "remoteness_fit.json"
+MINUTES_PER_DAY = 1440.0
 
 # The values below, with their sources: inputs/parameters.yaml, section site_costs.
-# The AEMO table the remoteness factors are fitted to (model/site_geography.py fits both):
-#   ghd2025      GHD (2025), 2025 Energy Technology Cost and Technical Parameter Review, draft
-#                report Rev C for AEMO, Table 8.3: equipment factors by distance from a major
-#                port, installation factors from Rawlinsons (2025) regional cost maps (divided
-#                by the state capital's factor, Table 8.2, to keep remoteness only)
-#   aurecon2024  Aurecon (2024), 2024 Energy Technology Cost and Technical Parameter Review,
-#                Rev 3, Table 11-1: equipment factors by distance from the state capital,
-#                installation factors derived from Rawlinsons (2024) location factors
-REMOTENESS_SOURCES = ("ghd2025", "aurecon2024")
-DEFAULT_REMOTENESS_SOURCE = str(parameter("site_costs.remoteness_source"))
+_REMOTE = parameter("site_costs.remote_factor")
+REMOTE_CITY_SIZE = str(_REMOTE["city_size"])
+REMOTE_ANCHOR_DAYS = float(_REMOTE["anchor_days"])
+REMOTE_BUILD_AT_ANCHOR = float(_REMOTE["build_at_anchor"])
+REMOTE_EQUIPMENT_AT_ANCHOR = float(_REMOTE["equipment_at_anchor"])
+SEA_SPEED_KM_PER_H = float(_REMOTE["sea_speed_km_per_h"])
+SEA_LEG_INCLUDED_KM = float(_REMOTE["sea_leg_included_km"])
+_COLD = parameter("site_costs.cold")
+COLD_MULTIPLIER = float(_COLD["multiplier"])
+COLD_MIN_ABS_LATITUDE_DEG = float(_COLD["min_abs_latitude_deg"])
+COLD_MIN_ELEVATION_M = float(_COLD["min_elevation_m"])
 
 # Build-cost factor of each slope class up to the slope limit (the land tables exclude the rest)
 _SLOPE_FACTORS = [float(factor) for factor in parameter("site_costs.slope_class_factors")]
@@ -113,18 +114,28 @@ def _annuity(rate: float, years: float) -> float:
 # The factors
 # ---------------------------------------------------------------------------------------------
 
-def equipment_multiplier(port_distance_km, a_per_1000_km: float, cap: float) -> np.ndarray:
-    """1 + a x distance to the nearest port, at most cap."""
-    return 1.0 + np.minimum(a_per_1000_km / 1000.0 * np.asarray(port_distance_km, float), cap - 1.0)
+def travel_min_to_city(raster_min, port_min, port_km, at_sea=False) -> tuple[np.ndarray, np.ndarray]:
+    """Minutes from a city, and whether they run through the port.
+
+    The raster's time where it has a value; otherwise, and at sea, the port's own time plus the
+    sea leg. At sea the first SEA_LEG_INCLUDED_KM are in DEA's offshore costs, so do not count."""
+    raster = np.asarray(raster_min, float)
+    by_port = np.isnan(raster) | at_sea
+    leg_km = np.maximum(np.asarray(port_km, float) - np.where(at_sea, SEA_LEG_INCLUDED_KM, 0.0), 0.0)
+    return np.where(by_port, np.asarray(port_min, float) + leg_km / SEA_SPEED_KM_PER_H * 60.0, raster), by_port
 
 
-def installation_multiplier(travel_min, b_per_hour: float, saturation_min: float) -> np.ndarray:
-    """1 + b x travel time to the nearest city, the time capped at the saturation.
+def remote_multiplier(travel_min, at_anchor: float) -> np.ndarray:
+    """1 in a city, at_anchor at REMOTE_ANCHOR_DAYS, the same step for each doubling of (1 + days)."""
+    days = np.asarray(travel_min, float) / MINUTES_PER_DAY
+    return 1.0 + (at_anchor - 1.0) * np.log2(1.0 + days) / np.log2(1.0 + REMOTE_ANCHOR_DAYS)
 
-    Cells without a travel time (no land pixel with data) take the saturation value."""
-    minutes = np.asarray(travel_min, float)
-    minutes = np.where(np.isnan(minutes), saturation_min, minutes)
-    return 1.0 + b_per_hour / 60.0 * np.minimum(minutes, saturation_min)
+
+def cold_rule(latitude, elevation_m) -> np.ndarray:
+    """COLD_MULTIPLIER at or beyond the latitude or at or above the elevation, otherwise 1."""
+    cold = ((np.abs(np.asarray(latitude, float)) >= COLD_MIN_ABS_LATITUDE_DEG)
+            | (np.asarray(elevation_m, float) >= COLD_MIN_ELEVATION_M))
+    return np.where(cold, COLD_MULTIPLIER, 1.0)
 
 
 def slope_multiplier(class_pcts: pd.DataFrame, land_share: float) -> np.ndarray:
@@ -187,38 +198,31 @@ def water_pipeline_cost(flow_m3_per_year: float) -> dict:
 # The table
 # ---------------------------------------------------------------------------------------------
 
-def load_remoteness_fit(path: Path = REMOTENESS_FIT_JSON, source: str = DEFAULT_REMOTENESS_SOURCE) -> dict:
-    if source not in REMOTENESS_SOURCES:
-        raise ValueError(f"remoteness source must be one of {REMOTENESS_SOURCES}")
-    fit = json.loads(Path(path).read_text())["fits"][source]
-    installation = fit["installation"]["best"]
-    return {
-        "source": source,
-        "equipment_a_per_1000_km": float(fit["equipment"]["a_per_1000_km"]),
-        "equipment_cap": float(fit["equipment"]["cap"]),
-        "installation_city_size": str(installation["city_size"]),
-        "installation_b_per_hour": float(installation["b_per_hour"]),
-        "installation_saturation_min": float(installation["saturation_min"]),
-    }
+def load_ports(path: Path = PORT_TRAVEL_TIMES_CSV) -> pd.DataFrame:
+    """The ports with a travel time: a few lie out in the water on the raster, and the next port
+    stands in for them."""
+    ports = pd.read_csv(path)
+    return ports[ports[f"travel_min_city_{REMOTE_CITY_SIZE}"].notna()].reset_index(drop=True)
 
 
 def site_cost_table(
     land_table: pd.DataFrame,
     geography: pd.DataFrame,
-    remoteness: dict,
+    ports: pd.DataFrame,
     *,
     water_source_usd_per_m3: float,
     water_m3_per_t: float,
 ) -> tuple[pd.DataFrame, dict]:
     """Per-cell site costs for the land table's cells with onshore land (module docstring)."""
-    missing = [column for column in SLOPE_CLASS_COLUMNS if column not in land_table.columns]
+    missing = [column for column in (*SLOPE_CLASS_COLUMNS, "elevation_m") if column not in land_table.columns]
     if missing:
-        raise ValueError(f"The land table has no slope classes ({', '.join(missing)}); rebuild it with model.land_table")
+        raise ValueError(f"The land table has no {', '.join(missing)}; rebuild it with model.land_table")
     shares = pd.to_numeric(land_table["land_competition_fraction"]).unique()
     if len(shares) != 1:
         raise ValueError("land_competition_fraction must be uniform within a land table")
     # onshore land above rounding noise (sea cells can carry 1e-14 % from the spherical weights)
-    cells = land_table[land_table["onshore_land_pct"] > ONSHORE_LAND_PCT_MIN][["latitude", "longitude", *SLOPE_CLASS_COLUMNS]]
+    cells = land_table[land_table["onshore_land_pct"] > ONSHORE_LAND_PCT_MIN][
+        ["latitude", "longitude", "elevation_m", *SLOPE_CLASS_COLUMNS]]
     # the geography covers 55 S to 83 N (the lakes database); land cells beyond it (Antarctica) get
     # no site costs, and runs refuse any cell without a row
     in_range = cells["latitude"].between(geography["latitude"].min(), geography["latitude"].max())
@@ -229,16 +233,18 @@ def site_cost_table(
         examples = ", ".join(f"({lat:g}, {lon:g})" for lat, lon in table.loc[uncovered, ["latitude", "longitude"]].head(5).to_numpy())
         raise ValueError(f"{int(uncovered.sum())} land cells have no geography row, e.g. {examples}")
 
-    travel_column = f"travel_min_city_{remoteness['installation_city_size']}_median"
+    port_km, port_index = nearest_km(table["latitude"], table["longitude"], ports["lat"], ports["lon"])
+    travel_min, by_port = travel_min_to_city(table[f"travel_min_city_{REMOTE_CITY_SIZE}_median"],
+                                             ports[f"travel_min_city_{REMOTE_CITY_SIZE}"].to_numpy()[port_index], port_km)
     pipeline = water_pipeline_cost(water_m3_per_t * REFERENCE_AMMONIA_T_PER_YEAR)
     out = pd.DataFrame({"latitude": table["latitude"], "longitude": table["longitude"]})
-    out["port_distance_km"] = table["port_distance_km"]
-    out["nearest_port_id"] = table["nearest_port_id"]
-    out["travel_time_to_city_min"] = table[travel_column]
-    out["equipment_cost_multiplier"] = equipment_multiplier(
-        table["port_distance_km"], remoteness["equipment_a_per_1000_km"], remoteness["equipment_cap"])
-    out["installation_multiplier"] = installation_multiplier(
-        table[travel_column], remoteness["installation_b_per_hour"], remoteness["installation_saturation_min"])
+    out["port_distance_km"] = port_km
+    out["nearest_port_id"] = ports["id"].to_numpy()[port_index]
+    out["travel_time_to_city_min"] = travel_min
+    out["travel_time_source"] = np.where(by_port, "port", "raster")
+    out["equipment_cost_multiplier"] = remote_multiplier(travel_min, REMOTE_EQUIPMENT_AT_ANCHOR)
+    out["installation_multiplier"] = remote_multiplier(travel_min, REMOTE_BUILD_AT_ANCHOR)
+    out["cold_multiplier"] = cold_rule(table["latitude"], table["elevation_m"])
     out["slope_multiplier"] = slope_multiplier(table, float(shares[0]))
     out["depth_multiplier"] = DEPTH_MULTIPLIER
     out["labour_multiplier"] = LABOUR_MULTIPLIER
@@ -247,15 +253,17 @@ def site_cost_table(
     out["water_source_distance_km"] = table["water_source_distance_km"]
     out["water_source_cost_usd_per_m3"] = float(water_source_usd_per_m3)
     out["water_pipeline_cost_usd_per_m3"] = out["water_source_distance_km"] * (
-        pipeline["capital_usd_per_m3_km"] * (PIPELINE_MATERIALS_SHARE * out["equipment_cost_multiplier"]
-                                             + (1.0 - PIPELINE_MATERIALS_SHARE) * pv_wind_build)
+        pipeline["capital_usd_per_m3_km"] * out["cold_multiplier"] * (PIPELINE_MATERIALS_SHARE * out["equipment_cost_multiplier"]
+                                                                      + (1.0 - PIPELINE_MATERIALS_SHARE) * pv_wind_build)
         + pipeline["energy_usd_per_m3_km"]
     )
     out["water_cost_usd_per_m3"] = out["water_source_cost_usd_per_m3"] + out["water_pipeline_cost_usd_per_m3"]
     out["land_cost_usd_per_km2_year"] = 0.0
     parameters = {
         "land_cells_beyond_the_geography": beyond,
-        "remoteness": remoteness,
+        "cells_by_port": int(by_port.sum()),
+        "remote_factor": _REMOTE,
+        "cold": _COLD,
         "land_competition_fraction": float(shares[0]),
         "slope_class_factors": SLOPE_CLASS_FACTORS,
         "slope_techs": list(SLOPE_TECHS),
@@ -273,9 +281,9 @@ def site_cost_table(
 def load_site_cost_overrides(path: str | Path, tech_names) -> dict:
     """A site-cost table as cell overrides: {(lat, lon): {tech: {...}, "__location__": {...}}}.
 
-    Every technology gets the equipment multiplier and a build multiplier (installation x labour
-    x depth, times the slope factor for PV and wind); the location entry carries the water price
-    and the land cost.
+    Every technology gets an equipment multiplier (equipment x cold) and a build multiplier
+    (installation x labour x depth x cold, times the slope factor for PV and wind); the location
+    entry carries the water price and the land cost.
     """
     from .plant import normalize_component_name
 
@@ -283,10 +291,10 @@ def load_site_cost_overrides(path: str | Path, tech_names) -> dict:
     names = [name for name in (normalize_component_name(tech) for tech in tech_names) if name is not None]
     index = {}
     for row in frame.itertuples(index=False):
-        base_build = row.installation_multiplier * row.labour_multiplier * row.depth_multiplier
+        base_build = row.installation_multiplier * row.labour_multiplier * row.depth_multiplier * row.cold_multiplier
         entry = {
             name: {
-                "equipment_cost_multiplier": float(row.equipment_cost_multiplier),
+                "equipment_cost_multiplier": float(row.equipment_cost_multiplier * row.cold_multiplier),
                 "build_cost_multiplier": float(base_build * (row.slope_multiplier if name in SLOPE_TECHS else 1.0)),
             }
             for name in names
@@ -320,8 +328,7 @@ def write_site_cost_table(
     *,
     tech_yaml: Path = DEFAULT_TECH_YAML,
     geography_csv: Path = CELL_GEOGRAPHY_CSV,
-    fit_json: Path = REMOTENESS_FIT_JSON,
-    remoteness_source: str = DEFAULT_REMOTENESS_SOURCE,
+    ports_csv: Path = PORT_TRAVEL_TIMES_CSV,
 ) -> pd.DataFrame:
     from .technology import load_tech_meta
 
@@ -329,7 +336,7 @@ def write_site_cost_table(
     table, parameters = site_cost_table(
         pd.read_csv(land_csv),
         pd.read_csv(geography_csv),
-        load_remoteness_fit(fit_json, remoteness_source),
+        load_ports(ports_csv),
         # The source price is the YAML's baseline (the flat runs' price): the desalination price
         # at sea, lake and river alike. Fresh water could be treated more cheaply; charging the
         # desalination price is a deliberate shadow price that protects freshwater for other uses
@@ -347,7 +354,7 @@ def write_site_cost_table(
         "inputs": {
             name: {"path": str(path), "sha256": _sha256(path)}
             for name, path in (("land_table", land_csv), ("tech_yaml", tech_yaml),
-                               ("cell_geography", geography_csv), ("remoteness_fit", fit_json))
+                               ("cell_geography", geography_csv), ("port_travel_times", ports_csv))
         },
         "parameters_yaml": file_record(),
         "parameters": parameters,
@@ -362,15 +369,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tech-yaml", type=Path, default=DEFAULT_TECH_YAML,
                         help="technology YAML: the water source price, the water use and the currency")
     parser.add_argument("--geography", type=Path, default=CELL_GEOGRAPHY_CSV)
-    parser.add_argument("--remoteness-fit", type=Path, default=REMOTENESS_FIT_JSON)
-    parser.add_argument("--remoteness-source", choices=REMOTENESS_SOURCES, default=DEFAULT_REMOTENESS_SOURCE)
+    parser.add_argument("--port-travel-times", type=Path, default=PORT_TRAVEL_TIMES_CSV)
 
 
 def run(args: argparse.Namespace) -> int:
     table = write_site_cost_table(
         repo_path(args.land), repo_path(args.output), tech_yaml=repo_path(args.tech_yaml),
-        geography_csv=repo_path(args.geography), fit_json=repo_path(args.remoteness_fit),
-        remoteness_source=args.remoteness_source,
+        geography_csv=repo_path(args.geography), ports_csv=repo_path(args.port_travel_times),
     )
     print(f"wrote {args.output}: {len(table)} cells")
     return 0

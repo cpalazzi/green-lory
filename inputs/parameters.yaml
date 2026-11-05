@@ -3,8 +3,7 @@
 #
 # Elsewhere: technology costs, lifetimes, efficiencies, water use and the water source price in
 # tech/; what differs between runs (time step, land share, finance, which tables) in
-# ../runs.yaml; the remoteness factors fitted to the AEMO tables in
-# site_costs/remoteness_fit.json. model/parameters.py reads this file; the land, geography and
+# ../runs.yaml. model/parameters.py reads this file; the land, geography and
 # site-cost tables and the run manifests record its hash, and tests/test_parameters.py checks
 # that the model reads every value. Full references: README.md (this folder),
 # ../CAMPAIGN_PLAN.md (References) and ../data/README.md.
@@ -136,9 +135,34 @@ water_sources:
   saline_lake_min_occurrence_pct: 50
 
 site_costs:
-  # The AEMO location-factor table the remoteness factors are fitted to: ghd2025 (GHD 2025,
-  # Table 8.3) or aurecon2024 (Aurecon 2024, Table 11-1); chosen 8 October 2026
-  remoteness_source: ghd2025
+  # Remote factor, one rule for every point on land and at sea (decided 3 November 2026):
+  # 1 + (f - 1) log2(1 + d) / log2(1 + anchor_days), d the travel time in days from a city of
+  # city_size people, f the factor at the anchor. The anchor is Shamattawa, Manitoba, "only
+  # accessible by air and winter road": x1.99 on Winnipeg, of which transportation 1.60 (DIAND
+  # Cost Reference Manual, Real Property Services for INAC, July 1996, pp. 1-15 and 1-16), and
+  # 20.4 hours from a city of 20,000 on the Nelson et al. (2019) raster. Rounded to x2 on the
+  # build part and x1.6 on equipment, as a sensitivity factor rather than a case study
+  remote_factor:
+    city_size: 20k
+    anchor_days: 0.85
+    build_at_anchor: 2.0
+    equipment_at_anchor: 1.6
+    # Where the raster has no value, and at sea, the travel time is the nearest port's plus the
+    # sea leg at this speed (Salmon and Bañares-Alcántara 2022)
+    sea_speed_km_per_h: 20.0
+    # At sea the leg counts beyond this distance: DEA's offshore costs other than substations
+    # and export cables are about the same at 175 km as at 60 km (1.31 and 1.28 MEUR/MW), so
+    # marine installation to 175 km is in DEA's costs
+    sea_leg_included_km: 175.0
+  # Cold rule (decided 3 November 2026): every technology, equipment and build parts alike, costs
+  # this much more at or beyond the latitude, or at or above the elevation. Yamal LNG adjusted to
+  # Corpus Christi's scope is 25 % higher, "reflecting the higher construction costs in the harsh
+  # arctic environment" (Songhurst 2018, OIES NG137, Appendix 5, p. 40). 3,000 m is about 20 C
+  # colder than sea level at 6.5 C per km, roughly the drop from the subtropics to 60 degrees
+  cold:
+    multiplier: 1.25
+    min_abs_latitude_deg: 60.0
+    min_elevation_m: 3000.0
   # Build-cost factor of each slope class (land.slope_class_upper_deg): none up to 8.5 degrees,
   # then the middle of NREL's hilly (1.1-1.5) and mountainous (1.2-2.0) cost multipliers for
   # transmission lines (Lopez et al. 2025, Table 12), applied by analogy, since no published

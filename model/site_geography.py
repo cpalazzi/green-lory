@@ -5,6 +5,7 @@ on a machine that holds the data of data/README.md (it needs rasterio), and writ
 to inputs/site_costs/:
 
     python -m model.site_geography cells    # cell_geography.csv
+    python -m model.site_geography ports    # port_travel_times.csv
     python -m model.site_geography sites    # calibration_sites.csv
     python -m model.site_geography fit      # remoteness_fit.json and remoteness_fit.md
 
@@ -22,13 +23,18 @@ cells
       least WATER_SOURCE_MIN_SHARE of the cell, or RIVER_SOURCE_CLASSES at least
       RIVER_SOURCE_MIN_SHARE) and the great-circle distance between cell centres to the nearest
       cell that does.
+ports
+    The ports of the shipping network with their travel times to a city of at least N people, for
+    each N of CITY_SIZES (Nelson et al. 2019, at the port; empty for ports more than 3 pixels from
+    a land pixel). model/site_costs.py takes a point's travel time from its nearest port where
+    the raster has no value, and at sea.
 sites
     The sites of the two AEMO location-factor tables (inputs/site_costs/*_location_factors.csv),
     located with the GeoNames gazetteer of Australia, with their travel times (at the site) and
     their distances to the nearest network port and to their state capital's port.
 fit
-    The remoteness factors of model/site_costs.py fitted to the sites of each table:
-    equipment = 1 + a x distance (capped at the table's largest factor) and installation =
+    A check on the remote factor of model/site_costs.py, which is not fitted: the AEMO factors
+    fitted to the sites of each table, equipment = 1 + a x distance (capped at the table's largest factor) and installation =
     1 + b x min(travel time to a city of at least N people, saturation), N and the saturation
     chosen by leave-one-out cross-validation.
 """
@@ -61,6 +67,7 @@ CELL_GEOGRAPHY_CSV = SITE_COSTS_DIR / "cell_geography.csv"
 # Results of the remote permanence reads, kept so that a rerun reads only new cells
 GSW_PERMANENT_WATER_CSV = SITE_COSTS_DIR / "gsw_permanent_water.csv"
 CALIBRATION_SITES_CSV = SITE_COSTS_DIR / "calibration_sites.csv"
+PORT_TRAVEL_TIMES_CSV = SITE_COSTS_DIR / "port_travel_times.csv"
 REMOTENESS_FIT_JSON = SITE_COSTS_DIR / "remoteness_fit.json"
 LOCATION_FACTOR_TABLES = {
     "aurecon2024": SITE_COSTS_DIR / "aurecon2024_location_factors.csv",
@@ -398,6 +405,16 @@ def build_cell_geography(
 
 
 # ---------------------------------------------------------------------------------------------
+# Ports
+# ---------------------------------------------------------------------------------------------
+
+def build_port_travel_times(nelson_dir: Path = NELSON_TRAVEL_TIME_DIR, ports_csv: Path = PORTS_CSV) -> pd.DataFrame:
+    """Every network port with its travel times (module docstring)."""
+    ports = pd.read_csv(ports_csv)[["id", "name", "lat", "lon"]]
+    return ports.join(_sample_travel_times(nelson_dir, ports["lat"].to_numpy(), ports["lon"].to_numpy()))
+
+
+# ---------------------------------------------------------------------------------------------
 # Calibration sites
 # ---------------------------------------------------------------------------------------------
 
@@ -646,6 +663,8 @@ def main(argv: list[str] | None = None) -> int:
     cells.add_argument("--output", type=Path, default=CELL_GEOGRAPHY_CSV)
     cells.add_argument("--min-lat", type=int, default=None)
     cells.add_argument("--max-lat", type=int, default=None)
+    ports = commands.add_parser("ports", help="the ports' travel times")
+    ports.add_argument("--output", type=Path, default=PORT_TRAVEL_TIMES_CSV)
     sites = commands.add_parser("sites", help="the calibration sites")
     sites.add_argument("--output", type=Path, default=CALIBRATION_SITES_CSV)
     fit = commands.add_parser("fit", help="the remoteness fit")
@@ -653,6 +672,8 @@ def main(argv: list[str] | None = None) -> int:
     fit.add_argument("--output", type=Path, default=REMOTENESS_FIT_JSON)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    nelson_inputs = {f"nelson_cities_{layer}": NELSON_TRAVEL_TIME_DIR / f"travel_time_to_cities_{layer}.tif"
+                     for layer in sorted({layer for group in CITY_SIZES.values() for layer in group})}
 
     if args.command == "cells":
         latitudes = None
@@ -660,17 +681,15 @@ def main(argv: list[str] | None = None) -> int:
             latitudes = list(range(args.min_lat if args.min_lat is not None else -55,
                                    (args.max_lat if args.max_lat is not None else 83) + 1))
         frame = build_cell_geography(latitudes=latitudes)
-        inputs = {"ports": PORTS_CSV, "gsw_permanent_water": GSW_PERMANENT_WATER_CSV}
-        inputs.update({f"nelson_cities_{layer}": NELSON_TRAVEL_TIME_DIR / f"travel_time_to_cities_{layer}.tif"
-                       for layer in sorted({layer for group in CITY_SIZES.values() for layer in group})})
+        inputs = {"ports": PORTS_CSV, "gsw_permanent_water": GSW_PERMANENT_WATER_CSV, **nelson_inputs}
         inputs.update({f"glwd_class_{code}": GLWD_AREA_DIR / f"GLWD_v2_0_class_{code}_ha_x10.tif"
                        for code in ["00"] + sorted({c for group in WATER_CLASSES.values() for c in group})})
         _write_with_provenance(frame, args.output, inputs)
+    elif args.command == "ports":
+        _write_with_provenance(build_port_travel_times(), args.output, {"ports": PORTS_CSV, **nelson_inputs}, decimals=5)
     elif args.command == "sites":
         frame = build_calibration_sites()
-        inputs = {**LOCATION_FACTOR_TABLES, "gazetteer": GEONAMES_AU_FILE, "ports": PORTS_CSV}
-        inputs.update({f"nelson_cities_{layer}": NELSON_TRAVEL_TIME_DIR / f"travel_time_to_cities_{layer}.tif"
-                       for layer in sorted({layer for group in CITY_SIZES.values() for layer in group})})
+        inputs = {**LOCATION_FACTOR_TABLES, "gazetteer": GEONAMES_AU_FILE, "ports": PORTS_CSV, **nelson_inputs}
         _write_with_provenance(frame, args.output, inputs, decimals=5)
     else:
         sites_frame = pd.read_csv(args.sites)

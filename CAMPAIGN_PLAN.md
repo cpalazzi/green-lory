@@ -799,7 +799,7 @@ markets) stays with the network model.
 - **Fixed foundations:** up to 70 m, DEA's limit (decided 30 October); the plant multipliers
   x 1.72, x 2 and x 3 as in the table.
 
-### 7e. Remoteness, onshore and offshore (proposed 3 November)
+### 7e. Remoteness, onshore and offshore (decided 3 November)
 
 Carlo (3 November): a remote place must cost what building there costs, at sea as on land. A
 remote cell that looks cheap in the model would invite a case study that the costs do not support.
@@ -813,11 +813,12 @@ remote cell that looks cheap in the model would invite a case study that the cos
   28 to 208 hours from a city) and the Magallanes fjords: 25 of the 30 cheapest cells can host
   less than 0.1 Mt/yr, and the islands are nature reserves that the protected-land layer counts
   at 0-9 % (to check).
-- **One measure on land and at sea:** travel time from a city of at least 20,000 people. On land,
-  Nelson et al. as now; at sea, the nearest port's own travel time plus the sea leg at 20 km/h
-  (Salmon and Bañares-Alcántara 2022), beyond the 60 km that DEA's offshore costs include.
-  Equipment by distance to the nearest port, on land and at sea.
-- **Calibration beyond 6.7 hours:** public cost-factor tables for genuinely remote places, added to
+- **One measure on land and at sea:** travel time from a city of at least 20,000 people, for
+  equipment and build alike. On land, Nelson et al. as now; at sea, the nearest port's own travel
+  time plus the sea leg at 20 km/h (Salmon and Bañares-Alcántara 2022), beyond the 175 km that
+  DEA's offshore costs include.
+- **Calibration beyond 6.7 hours (proposed, replaced by the remote factor below):** public
+  cost-factor tables for genuinely remote places, added to
   GHD's sites and located on the same travel-time raster: Alaska's geographic cost factors (HMS
   for Alaska DEED; road-connected towns to fly-in villages, relative to Anchorage, split into
   logistics and labour), and, where found, northern Canada, remote Western Australia and the
@@ -879,6 +880,23 @@ remote cell that looks cheap in the model would invite a case study that the cos
     a city supply 26 % of the cheapest 2,000 Mt/yr with the present factors and none with this
     rule; the 2,000th Mt stays at 327 EUR/t, and cells 1-7 hours from a city change by +0.3 % at
     the median. Kerguelen's five land cells go from 239-262 to 701-770 EUR/t.
+- **Built 5 November (uncommitted, for review):** `model/site_costs.py` (`remote_multiplier`,
+  `travel_min_to_city`, `cold_rule`), `python -m model.site_geography ports`
+  (`inputs/site_costs/port_travel_times.csv`), and the table
+  `inputs/site_costs/site_costs_center_20pct_slope20.csv` rebuilt on the October land table, with
+  its new hash in `runs.yaml` for S1 and S2. The offshore step will replace this table.
+  - Eight of the 1,377 ports have no raster value, because their coordinates lie out in the water
+    (Manila, Jingtang, Qingzhou, Jinzhou Wan, Bajo Grande, Steinkjer, Tarawa, Famagusta). The
+    route uses the nearest port that has one.
+  - On land the whole sea leg counts, since the 175 km allowance comes from DEA's offshore costs.
+    61 of the 18,039 land cells take the port route (0.2 to 6.1 days), one of them in C2.
+  - The table reproduces the effect above: 26.4 % to 0 %, 327 EUR/t, +0.3 %, Kerguelen 701-770.
+  - The water pipeline follows the cell's multipliers, so its price rises with the rule, which
+    the effect above leaves out (it holds C2's flat water price): median change 0, 90th
+    percentile +4 USD/t of ammonia, 99th +29, at most +60 (Sahara, over 1,000 km from water).
+    The cold factor applies to the pipeline too, but not to its pumping energy.
+  - Greenland's ice sheet reaches 15.7 days (x5.6 on build); C2 does not run those cells, and its
+    remotest cell is at 8.7 days.
 - **No exclusion in this campaign (decided 3 November):** costs only, and every point gets a
   factor ("all points are theoretically reachable"; Carlo). C2 and S2 run on every cell, on land
   and at sea (compute is available). After S2, its results can be used to leave out remote areas
@@ -888,7 +906,8 @@ remote cell that looks cheap in the model would invite a case study that the cos
 
 1. Profiles from the cutout, checked against the current ones.
 2. Sea ice and economic zones (zones downloaded on 30 October).
-3. Remoteness: remote calibration data, the refit and the exclusion limit (section 7e).
+3. Remoteness and cold: the remote factor and the cold rule in the site costs (sections 7b, 7e;
+   built 5 November).
 4. Offshore land build and site costs.
 5. Technology YAML and plant changes, run definitions.
 6. The campaign (C2, S1, F, S2, with offshore cells), each stage after a go-ahead.

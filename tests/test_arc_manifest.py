@@ -265,10 +265,10 @@ def _site_cost_table(path: Path, *, source_price=2.284393, land_cost=0.0, slope=
     its own water source, so pays the source price."""
     water_at_source = source_price if water_at_source is None else water_at_source
     path.write_text(
-        "latitude,longitude,equipment_cost_multiplier,installation_multiplier,slope_multiplier,depth_multiplier,"
+        "latitude,longitude,equipment_cost_multiplier,installation_multiplier,cold_multiplier,slope_multiplier,depth_multiplier,"
         "labour_multiplier,water_source_cost_usd_per_m3,water_cost_usd_per_m3,land_cost_usd_per_km2_year\n"
-        f"-23,117,1.05,1.34,{slope},1,1,{source_price},7.2,{land_cost}\n"
-        f"-23,151,1.01,1.09,1,1,1,{source_price},{water_at_source},{land_cost}\n"
+        f"-23,117,1.05,1.34,1,{slope},1,1,{source_price},7.2,{land_cost}\n"
+        f"-23,151,1.01,1.09,1,1,1,1,{source_price},{water_at_source},{land_cost}\n"
     )
     return path
 

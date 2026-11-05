@@ -123,7 +123,7 @@ pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run
 | `rep_...` | the reconciling run, which keeps its September id (`rep` for replication mode) |
 | `dea2050`, `dea2030`, `way2050`, `xcost45` | technology cost basis (see [Sources and terms](#sources-and-terms)) |
 | `wacc5`, `ameli`, `amelired`, `amelilc` | uniform 5 % WACC; Ameli reduced WACC by country (`ameli` in key run 2, `amelired` in the reconciling run); Ameli low-carbon (current) WACC by country (campaign runs F and S2) |
-| `bflat`, `bspat` | build-cost multiplier 1 everywhere, or depth x remoteness x labour |
+| `bflat`, `bspat` | site-cost multipliers 1 everywhere, or the site-cost table's: remote factor, cold, slope, depth and labour |
 | `wflat`, `wspat`, `wnone` | uniform baseline water (2 EUR2020/m³ from 24 Sep 2026), spatial water, no water cost |
 | `land20c`, `land2c`, `land20oct`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`c` centred build of 23 Sep 2026, `oct` the October build of 8 Oct 2026 with slope classes up to 20 degrees and protected land counted on land only, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |
 | `fixed`, `track`, `both` | PV technologies offered |

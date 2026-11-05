@@ -13,12 +13,32 @@ mechanisms. Everything here except the three transcribed tables is generated, wi
 | `ghd2025_location_factors.csv` | GHD (2025), *2025 Energy Technology Cost and Technical Parameter Review*, draft report Rev C (28 November 2025), for AEMO's draft 2026 Forecasting Assumptions Update: Table 8.3, the factors of 110 sites, transcribed on 7 October 2026. Equipment factors by distance from a major port (1.00, 1.05, 1.10); installation factors from Rawlinsons (2025) regional cost maps, including each capital's price level | hand |
 | `ghd2025_capital_installation_factors.csv` | GHD (2025) Table 8.2: the capital cities' installation factors relative to Melbourne | hand |
 | `cell_geography.csv` | Every 1-degree cell from 55 S to 83 N: travel time to the nearest city of 5,000 to 5 million people (median over the cell's land pixels), distance to the nearest network port, sea and inland-water areas by class, whether the cell holds a water source (sea and lakes at least 10 % of it, or large rivers at least 1 %) and the distance to the nearest one (also with every saline lake, with none, and without the rivers) | `python -m model.site_geography cells` |
+| `port_travel_times.csv` | The 1,377 ports of the shipping network with their travel times to a city of 5,000 to 5 million people, at the port. Eight ports have none, because their coordinates lie more than 3 pixels from a land pixel on the raster (among them Manila and Jingtang); the next nearest port stands in for them | `python -m model.site_geography ports` |
 | `gsw_permanent_water.csv` | For the 134 cells that would hold a water source only through a saline lake: the area where the JRC Global Surface Water occurrence layer shows water in at least half of the observations of 1984-2021, read remotely on 8 October 2026; 109 of them pass the 10 % threshold | the same, kept between runs |
 | `calibration_sites.csv` | The sites of both tables, located with the GeoNames gazetteer of Australia (Texas, Kingston SE, Campbelltown and Derwent Valley under their gazetteer names; Cardowan is a homestead, not a town), with their travel times and their distances to the nearest network port and to the state capital's port | `python -m model.site_geography sites` |
-| `remoteness_fit.json`, `remoteness_fit.md` | The fit of the equipment and installation factors to each table, and the report with every site's residual | `python -m model.site_geography fit` |
-| `site_costs_center_20pct_slope20.csv` | The site costs of every cell with onshore land in the October 20 % land table (`land_center_slope20_20261008_v2`): equipment, installation, slope, depth and labour multipliers, the nearest water source and the water price (USD2020/m3), with GHD's fit | `green-lory site-costs --land <land table> --output <csv>` |
+| `remoteness_fit.json`, `remoteness_fit.md` | The fit of the equipment and installation factors to each table, and the report with every site's residual: a check since 3 November 2026, not an input | `python -m model.site_geography fit` |
+| `site_costs_center_20pct_slope20.csv` | The site costs of every cell with onshore land in the October 20 % land table (`land_center_slope20_20261008_v2`): travel time and its source (`travel_time_source`: `raster` or `port`), the equipment, installation, cold, slope, depth and labour multipliers, the nearest water source and the water price (USD2020/m3) | `green-lory site-costs --land <land table> --output <csv>` |
 
-## The fit
+## The remote factor
+
+One rule for every point (`site_costs.remote_factor` in `../parameters.yaml`, decided on 3
+November 2026). With d the travel time in days from a city of 20,000:
+
+1. Build factor (`installation_multiplier`) = 1 + 1.127 log2(1 + d); equipment factor
+   (`equipment_cost_multiplier`) = 1 + 0.676 log2(1 + d). Both pass through Shamattawa, Manitoba
+   (0.85 days on the raster), rounded from the DIAND manual's x1.99 and its transportation
+   factor 1.60: x2 and x1.6.
+2. d is the median over the cell's land pixels where the raster has a value. Otherwise it is the
+   travel time of the nearest port that has one, plus the distance to that port at 20 km/h.
+3. At sea (offshore cells, not yet in these tables) d always runs through the port, and only the
+   distance beyond 175 km counts, because DEA's offshore costs include marine installation that
+   far.
+
+Nothing is fitted beyond the anchor. Against the Australian factors, which the rule did not use,
+the build factor is 0.04 below GHD's on average (RMSE 0.087) and 0.19 below Aurecon's, and the
+equipment factor 0.01 above Aurecon's (`tests/test_site_costs.py`).
+
+## The fit (a check)
 
 Equipment factor = 1 + a x distance, capped at the table's largest factor; installation factor
 = 1 + b x min(travel time to the nearest city of at least N people, saturation). The
@@ -37,8 +57,8 @@ factor of about two because Aurecon derives them as the residual of an overall l
 2.5; its own note 1 says some "appear to be high"), while GHD takes Rawlinsons' regional uplift
 directly. The largest misses of both fits are regional cities far from their capital
 (Townsville, Mackay, Rockhampton: 1.2 to 1.36 in Aurecon's table at no travel time to a town of
-20,000) and, in Aurecon's, Forsayth (2.67). `model/site_costs.py` uses GHD's fit by default
-(`--remoteness-source`), as chosen on 8 October 2026.
+20,000) and, in Aurecon's, Forsayth (2.67). `model/site_costs.py` used GHD's fit from 8
+October to 3 November 2026; it stopped at 4 hours, and the remotest site is 6.7 hours from a city.
 
 ## Water
 

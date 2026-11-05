@@ -536,13 +536,13 @@ def test_site_cost_results_must_carry_the_table_values(tmp_path):
     table = tmp_path / "site_costs.csv"
     pd.DataFrame({
         "latitude": [-23.0, -23.0], "longitude": [117.0, 151.0],
-        "equipment_cost_multiplier": [1.05, 1.01], "installation_multiplier": [1.34, 1.09],
+        "equipment_cost_multiplier": [1.05, 1.01], "installation_multiplier": [1.34, 1.09], "cold_multiplier": [1.0, 1.25],
         "slope_multiplier": [1.2, 1.0], "depth_multiplier": [1.0, 1.0], "labour_multiplier": [1.0, 1.0],
         "water_cost_usd_per_m3": [7.2, 2.28], "land_cost_usd_per_km2_year": [0.0, 0.0],
     }).to_csv(table, index=False)
     expectations = {"site_costs_csv": table, "site_costs_sha256": None}
     good = pd.DataFrame({"latitude": [-23.0, -23.0], "longitude": [117.0, 151.0],
-                         "equipment_cost_multiplier": [1.05, 1.01], "build_cost_multiplier": [1.5, 1.09],
+                         "equipment_cost_multiplier": [1.05, 1.01 * 1.25], "build_cost_multiplier": [1.5, 1.09 * 1.25],
                          "water_cost_usd_per_m3": [7.2, 2.28]})
     assert _check_site_costs(good, expectations) == {"site_cost_cells_checked": 2}
     for column, value, message in (("equipment_cost_multiplier", 1.0, "equipment"), ("build_cost_multiplier", 1.7, "range"),
