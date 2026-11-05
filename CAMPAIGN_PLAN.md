@@ -689,6 +689,14 @@ markets) stays with the network model.
   of AC (sheet 22: 0.29 MEUR/MW, 0.23 per MW of DC, DC/AC 1.25), so the model counts DC output
   per MW against AC costs per MW, about 25 % too little PV output per euro, while wind runs well
   above DEA's full-load hours.
+- **Built 3 November** (uncommitted): `model/weather_profiles.py` (settings in
+  `inputs/parameters.yaml`, `weather.profiles`), `arc/jobs/11_weather_profiles.sh` (check,
+  convert in 12 bands of 15 cell latitudes, stack), `tests/test_weather_profiles.py`. A local
+  trial on the PyPSA-Earth European cutout (2013, 0.3 degrees, so the land weights are uniform)
+  gave, after the wake factor of 0.93: onshore 2,976 h with atlite's power-curve smoothing and
+  3,731 h without (DEA 3,800), offshore 4,500 and 5,266 h (DEA 4,650), PV 1,351 h fixed and
+  1,673 h tracking per MW of AC (DEA 1,515 and 1,742). The ARC check reports both smoothing
+  settings on the 2019 cutout.
 - **Aggregation:** each one-degree cell's profile is the average of its 0.25-degree pixels
   weighted by land area (onshore) or by sea area of the depth class (offshore), through atlite's
   `matrix` argument; written in the current file format, so runs only change `weather_dir`

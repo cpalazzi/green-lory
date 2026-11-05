@@ -82,6 +82,42 @@ weather:
     calm_capacity_factor: 0.02
     # neighbours with at least this land share count as fully inland for the floor
     inland_land_share: 0.99
+  # One-degree profiles from the ERA5 2019 cutout on ARC (model/weather_profiles.py;
+  # CAMPAIGN_PLAN.md section 7a, agreed 3 November 2026). Wind: an atlite 0.4.1 reference turbine
+  # with its wind speeds stretched to the specific power of DEA 2050's turbine (output per unit of
+  # capacity below rated power depends on wind speed cubed over specific power, so V x (DEA /
+  # reference)^(1/3) keeps the reference curve's power coefficient and moves rated power to DEA's
+  # wind speed), at DEA's hub height. DEA: technology_data_for_el_and_dh, sheets "20 Onshore
+  # turbines" and "21 Offshore Wind AC Fixed", 2050 column.
+  profiles:
+    wind_onshore:
+      reference_turbine: NREL_ReferenceTurbine_2020ATB_7MW
+      reference_power_mw: 7.0
+      reference_rotor_m: 200.0
+      power_mw: 6.0
+      rotor_m: 165.0
+      hub_height_m: 110.0
+    wind_offshore:
+      reference_turbine: NREL_ReferenceTurbine_2020ATB_15MW_offshore
+      reference_power_mw: 15.0
+      reference_rotor_m: 240.0
+      power_mw: 35.0
+      rotor_m: 380.0
+      hub_height_m: 220.0
+    # atlite's smoothing of the power curve (Andresen et al. 2015, fitted to the Danish fleet)
+    smooth_power_curve: true
+    # wind speeds x (rho / rho0)^(1/3) before the power curve, the IEC 61400-12-1 normalisation for
+    # pitch-regulated turbines, with the density of the standard atmosphere (ISO 2533) at the
+    # point's height plus the hub height
+    air_density_correction: true
+    # PV: atlite's crystalline silicon panel (Huld et al. 2010; inverter efficiency 0.9 in the
+    # panel file), fixed at the latitude-optimal tilt and single-axis tracking (north-south axis);
+    # output per MW of AC, the basis of DEA's PV costs (sheet "22 Utility-scale PV", 0.29 MEUR per
+    # MW of AC): atlite's output per MW of modules x DEA's sizing factor (DC/AC), capped at 1
+    pv_panel: CSi
+    pv_orientation: latitude_optimal
+    pv_tracking: horizontal
+    dc_ac_ratio: 1.25
 
 # Water sources (CAMPAIGN_PLAN.md section 0b; decided 7 and 9 October 2026): a cell holds a source
 # if the sea and permanent lakes and reservoirs cover at least standing_min_share of it, or large
