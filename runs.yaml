@@ -213,18 +213,19 @@ runs:
     land_table: land_center_20260923_v1/max_capacities_center_2pct_slope15.csv
     land_table_sha256: 89a601662b9570d7c42adb439fecd6b9337d59104b3b76e25ad3384bf5855753
 
-# The campaign of October 2026 (CAMPAIGN_PLAN.md section 5). Every run: DEA 2050 costs, fixed-tilt
-# PV, co-located land at a 20 % share of the October land build, land applied after the solve,
-# capacity from the scaled reference design, the wind of cells with water corrected to their land.
+# The campaign of October 2026 (CAMPAIGN_PLAN.md sections 5 and 7). Every run: DEA 2050 costs,
+# fixed-tilt PV, co-located land at a 20 % share of the October land build, land applied after the
+# solve, capacity from the scaled reference design and, from November 2026, the one-degree
+# profiles from the ERA5 2019 cutout (C1, not rerun, keeps Salmon's profiles with the land
+# correction). Each run has a sea run (_offshore): the same plant at sea (model/sea_cells.py).
 
   gl_dea2050_wacc5_bflat_wflat_land20oct_fixed:
     role: campaign C2 (base, hourly)
     runner: green_lory
     description: >-
       Campaign C2 (base, hourly): DEA 2050 costs, uniform 5 % WACC, flat build costs, uniform baseline water
-      of 2 EUR2020/m3 in the headline, no land rent, hourly weather with the wind of cells with water
-      corrected to their land, fixed-tilt PV only, co-located wind/PV, the October land build at
-      a 20 % share
+      of 2 EUR2020/m3 in the headline, no land rent, the hourly one-degree profiles from the ERA5 2019 cutout, fixed-tilt PV only,
+      co-located wind/PV, the October land build at a 20 % share
     results_class: 50_campaign
     job_token: camp-c2
     tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
@@ -243,8 +244,7 @@ runs:
     land_constraint: after_solve
     capacity_rule: scaled_reference_design
     land_allocation: colocated
-    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
-    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+    weather_dir: data/weather_data/era5_2019_1deg
     notes: >-
       Global stage over the 16,885 run cells
       (land_center_slope20_20261008_v2/locations_onshore_suitable_center_20261008.csv). Step 4 of
@@ -312,8 +312,7 @@ runs:
     land_constraint: after_solve
     capacity_rule: scaled_reference_design
     land_allocation: colocated
-    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
-    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+    weather_dir: data/weather_data/era5_2019_1deg
     notes: >-
       Water enters the LCOA after the solve, as a cost per tonne, so S1 also gives the build-only and
       water-only cases without another solve: build only is S1 with C2's water, water only is C2 with
@@ -344,8 +343,7 @@ runs:
     land_constraint: after_solve
     capacity_rule: scaled_reference_design
     land_allocation: colocated
-    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
-    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+    weather_dir: data/weather_data/era5_2019_1deg
 
   gl_dea2050_amelilc_bspat_wspat_land20oct_fixed:
     role: campaign S2 (site costs and finance)
@@ -374,8 +372,129 @@ runs:
     land_constraint: after_solve
     capacity_rule: scaled_reference_design
     land_allocation: colocated
-    weather_land_correction: data/weather_data/land_correction/weather_land_correction_2019.nc
-    weather_land_correction_sha256: ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf
+    weather_dir: data/weather_data/era5_2019_1deg
+
+  gl_dea2050_wacc5_bflat_wflat_land20oct_fixed_offshore:
+    role: campaign C2 at sea
+    runner: green_lory
+    description: >-
+      C2's plant at sea: wind at sea and no PV, wind and the plant at the costs of their depth class
+      (the base costs of a plant at sea) with no location factors, uniform 5 % WACC, the cell's sea
+      at the October land build's 20 % share
+    results_class: 50_campaign
+    job_token: camp-c2-sea
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed  # no PV output at sea
+    interest_rate: 0.05  # every technology at every cell
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price: desalinated at the site, no pipeline
+    cost_scope: site_costs_wacc5_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_sea_flat_20pct.csv
+    site_costs_csv_sha256: 30ea97bf6558a3f667399e5e78638bf5cdccc2a86dcf7f963bc69b6b522dd684
+    land_share: 0.20
+    land_table: land_sea_20261105_v2/max_capacities_sea_20pct.csv
+    land_table_sha256: 56b38c9f0fdc90621f213e374be9d128af832ac62f36b807bae1d475af15c2fc
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg_sea
+    notes: >-
+      Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
+
+  gl_dea2050_wacc5_bspat_wspat_land20oct_fixed_offshore:
+    role: campaign S1 at sea
+    runner: green_lory
+    description: >-
+      S1's plant at sea: as C2 at sea, with the location factors (remote factor at sea, cold) on top
+      of the depth-class costs
+    results_class: 50_campaign
+    job_token: camp-s1-sea
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed  # no PV output at sea
+    interest_rate: 0.05  # every technology at every cell
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price: desalinated at the site, no pipeline
+    cost_scope: site_costs_wacc5_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_sea_20pct.csv
+    site_costs_csv_sha256: 5a62eb4d980bc3485a43011a906ebd47b13ed7b86c6ac1091d064dcaba709907
+    land_share: 0.20
+    land_table: land_sea_20261105_v2/max_capacities_sea_20pct.csv
+    land_table_sha256: 56b38c9f0fdc90621f213e374be9d128af832ac62f36b807bae1d475af15c2fc
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg_sea
+    notes: >-
+      Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
+
+  gl_dea2050_amelilc_bflat_wflat_land20oct_fixed_offshore:
+    role: campaign F at sea
+    runner: green_lory
+    description: >-
+      F's plant at sea: as C2 at sea, with each cell's interest rate from its economic zone (Ameli et
+      al.'s 2021 low-carbon WACC; 11.8 % in international waters)
+    results_class: 50_campaign
+    job_token: camp-f-sea
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed  # no PV output at sea
+    finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
+    finance_csv_sha256: c9bae11600a0683094b0864335f194b8a03676d8705ff7dbc147676ab3fae011
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price: desalinated at the site, no pipeline
+    cost_scope: site_costs_ameli_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_sea_flat_20pct.csv
+    site_costs_csv_sha256: 30ea97bf6558a3f667399e5e78638bf5cdccc2a86dcf7f963bc69b6b522dd684
+    land_share: 0.20
+    land_table: land_sea_20261105_v2/max_capacities_sea_20pct.csv
+    land_table_sha256: 56b38c9f0fdc90621f213e374be9d128af832ac62f36b807bae1d475af15c2fc
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg_sea
+    notes: >-
+      Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
+
+  gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore:
+    role: campaign S2 at sea
+    runner: green_lory
+    description: >-
+      S2's plant at sea: S1 at sea's location factors with F at sea's interest rates
+    results_class: 50_campaign
+    job_token: camp-s2-sea
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed  # no PV output at sea
+    finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
+    finance_csv_sha256: c9bae11600a0683094b0864335f194b8a03676d8705ff7dbc147676ab3fae011
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price: desalinated at the site, no pipeline
+    cost_scope: site_costs_ameli_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_sea_20pct.csv
+    site_costs_csv_sha256: 5a62eb4d980bc3485a43011a906ebd47b13ed7b86c6ac1091d064dcaba709907
+    land_share: 0.20
+    land_table: land_sea_20261105_v2/max_capacities_sea_20pct.csv
+    land_table_sha256: 56b38c9f0fdc90621f213e374be9d128af832ac62f36b807bae1d475af15c2fc
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg_sea
+    notes: >-
+      Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
 
 
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above

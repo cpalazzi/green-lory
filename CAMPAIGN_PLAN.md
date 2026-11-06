@@ -770,6 +770,18 @@ markets) stays with the network model.
   4.5.1) computes speed as sqrt(u2 + v2) and scales 100 to 120 m by 1.023, and used an IEC class III
   curve for India; Salmon's global curve is not documented. DEA's turbine is 281 W/m2, the one
   whose costs the model uses.
+- **Global conversion (6 November):** release 20261106-profiles-v2 (commit 46ae5cf, clean); campaign
+  folder `green-lory-campaigns/weather_profiles_20261106_v1/`: bands 1-11 as array 13622975 (short,
+  32 cores, 64 GB), then the land and sea stacks, jobs 13622977 and 13622978, after the bands.
+  The stacks are linked into the shared data as `data/weather_data/era5_2019_1deg` and
+  `era5_2019_1deg_sea`, the `weather_dir` of the campaign runs.
+- **Campaign runs (defined 6 November, `runs.yaml`):** C2, S1, F and S2 read the new profiles and
+  drop the land correction; each has a sea run (`_offshore`) on the sea land table
+  (`land_sea_20261105_v2`, 40,197 cells), the flat or spatial sea site costs and, for F and S2,
+  the finance table by cell. Sea runs use their own smoke and diagnostic cells
+  (`inputs/cells/diagnostic_cells_sea.csv`: Dogger Bank, Kerguelen shelf, mid-Atlantic). The runs
+  go from release 20261106-campaign-v2 (clean); 20261106-campaign-v1, staged with the definitions
+  uncommitted, was not used.
 - **Atolls (found 5 November, before the bands ran):** 24 run cells of the Tuamotus (14 to 22 S)
   have land in the land table, from MODIS, and none in `cell_geography.csv`, so they would have
   had no land profile and no solution. `band_cells` now gives every cell a land profile, from all
