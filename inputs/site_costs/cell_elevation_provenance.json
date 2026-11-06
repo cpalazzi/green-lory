@@ -1,0 +1,15 @@
+{
+  "written_by": "python -m model.site_geography",
+  "rows": 64800,
+  "sha256": "18ea501d9f6b3770d5325066f578328ec868bf4ae62e1d4b59fd5b6a2df629e0",
+  "parameters": {
+    "path": "inputs/parameters.yaml",
+    "sha256": "355ddc416c69f1d42f386a6e8a14b24c999f524085cf5cb342ff1e4aba0c126c"
+  },
+  "inputs": {
+    "gebco": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/land/GEBCO_2025_sub_ice.nc",
+      "sha256": "40080250dd9932367461f0294195ef01b8ab78163c9f93d3b60a4f751ca3aa75"
+    }
+  }
+}

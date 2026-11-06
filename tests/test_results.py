@@ -76,6 +76,25 @@ def test_coast_distance_bands_in_australia():
     assert banded.at[134.0, "band"] == "inland >300 km"
 
 
+def _plants(rows):
+    return pd.DataFrame(rows, columns=["latitude", "longitude", "lcoa_eur_per_t", results.CAPACITY_COLUMN])
+
+
+def test_a_combined_map_shows_the_cheapest_plant_that_reaches_the_reference_output():
+    land = _plants([(54.0, -4.0, 255.0, 0.03e6),   # cheap but tiny: the sea plant is shown
+                    (-23.0, 117.0, 300.0, 5e6),    # cheaper than its sea plant
+                    (-21.0, 135.0, 320.0, 2e6),    # no sea plant
+                    (10.0, 10.0, 280.0, 0.5e6)])   # neither plant reaches 1 Mt/yr: left out
+    sea = _plants([(54.0, -4.0, 500.0, 4e6), (-23.0, 117.0, 450.0, 3e6), (55.0, 2.0, 440.0, 4.4e6), (10.0, 10.0, 600.0, 0.2e6)])
+    shown = results.lowest_feasible_plant(land, sea).set_index(["latitude", "longitude"])
+    assert sorted(shown.index) == [(-23.0, 117.0), (-21.0, 135.0), (54.0, -4.0), (55.0, 2.0)]
+    assert shown.loc[(54.0, -4.0), "site"] == "sea" and shown.loc[(54.0, -4.0), "lcoa_eur_per_t"] == 500.0
+    assert shown.loc[(-23.0, 117.0), "site"] == "land" and shown.loc[(-21.0, 135.0), "site"] == "land"
+    assert shown.loc[(55.0, 2.0), "site"] == "sea"
+    # with the cutoff at zero the map is simply the cheaper of the two
+    assert results.lowest_feasible_plant(land, sea, minimum_mt_per_year=0.0).set_index(["latitude", "longitude"]).loc[(54.0, -4.0), "site"] == "land"
+
+
 def test_maps_draw_a_small_surface():
     import matplotlib
     matplotlib.use("Agg")

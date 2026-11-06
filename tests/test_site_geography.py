@@ -26,6 +26,30 @@ def test_cell_blocks_centre_cells_on_whole_degrees():
     assert list(blocks[0, 180]) == [718, 719, 720, 721]  # the cell centred on 0 degrees
 
 
+def test_land_and_sea_means_keep_land_and_sea_apart():
+    blocks = np.array([[100.0, 300.0, -50.0, -150.0], [10.0, 20.0, 30.0, 40.0], [-5.0, -15.0, -25.0, -35.0]])
+    land, sea = geo._land_and_sea_means(blocks)
+    np.testing.assert_allclose(land, [200.0, 25.0, np.nan])
+    np.testing.assert_allclose(sea, [100.0, np.nan, 20.0])
+
+
+def test_a_coastal_cell_takes_only_a_zone_that_reaches_it(tmp_path):
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    zones = gpd.GeoDataFrame({"iso_sov1": ["GBR"], "pol_type": ["200NM"]}, geometry=[box(1.6, 49.8, 2.4, 50.4)], crs="EPSG:4326")
+    zones.to_file(tmp_path / "eez.shp")
+    lat, lon = (grid.ravel() for grid in np.meshgrid(np.arange(-90.0, 90.0), np.arange(-180.0, 180.0), indexing="ij"))
+    elevation = pd.DataFrame({"latitude": lat, "longitude": lon, "land_elevation_m": np.nan, "sea_depth_m": np.nan})
+    coastal = ((lat == 50.0) & (lon == 1.0)) | ((lat == -75.0) & (lon == 2.0))
+    elevation.loc[coastal, ["land_elevation_m", "sea_depth_m"]] = 10.0
+    elevation.to_csv(tmp_path / "elevation.csv", index=False)
+    table = geo.build_sea_zones(tmp_path / "eez.shp", tmp_path / "elevation.csv").set_index(["latitude", "longitude"])
+    assert table.loc[(50.0, 2.0), "eez_source"] == "centre"
+    assert table.loc[(50.0, 1.0), ["eez_iso3", "eez_source"]].tolist() == ["GBR", "nearest"]
+    assert table.loc[(-75.0, 2.0), "eez_source"] == "none"  # Antarctica's coast has no zone
+
+
 def test_gsw_tiles_cover_the_cell():
     assert geo._gsw_tile_names(-28, 137) == [("130E_20S", 130.0, -20.0)]
     assert [name for name, _, _ in geo._gsw_tile_names(-30, 140)] == ["130E_20S", "130E_30S", "140E_20S", "140E_30S"]

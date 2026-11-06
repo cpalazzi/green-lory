@@ -52,9 +52,9 @@ Recommendation: keep the land-table column as the single rule (written once into
 with `solar_density_method`, run-time recomputation removed). It is the paper's stated method,
 the legacy stated method uses it (so the legacy/green-lory comparison carries no density
 artefact), and the empirical median says it is not optimistic. Before comparing with Bolinger,
-settle whether the model's PV megawatts are AC or DC: the PV profiles exceed 1.0 at times and
-their normalisation basis is undocumented (`data/README.md`), and a DC/AC ratio of about 1.3
-would change the comparison more than the choice between these rules.
+settle whether the model's PV megawatts are AC or DC: Salmon's profiles are DC output per MW of
+modules (`data/README.md`) and the ERA5 profiles output per MW of AC (`CAMPAIGN_PLAN.md`, section
+7a), and a DC/AC ratio of 1.25 changes the comparison more than the choice between these rules.
 
 Cost to change: post-processing. The key surfaces solved without land, so PV-limited capacities
 scale by the density ratio (+6 % for the recommended rule); new supplier tables and four

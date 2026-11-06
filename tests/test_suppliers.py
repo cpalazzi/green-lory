@@ -1,12 +1,16 @@
 """model/suppliers.py: green-lory surfaces as supplier tables of the network model."""
+import contextlib
+import io
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 import pandas as pd
 
 from model.suppliers import CAPACITY, ELECTRICITY_COSTS, check_table_identity, convert, derive_land_share, verify_derivation
+from model import suppliers
 
 
 class SupplierExportTests(unittest.TestCase):
@@ -115,6 +119,61 @@ class TableIdentityTest(unittest.TestCase):
             check_table_identity(frame, self.manifest)
 
 
+class SeaSupplierTests(unittest.TestCase):
+    def setUp(self):
+        base = {"country": None, "lcoa_eur_per_t": 500., CAPACITY: 4e6, "annual_ammonia_production_t": 1e6, "currency": "EUR",
+                "grid_energy_mwh": 0, "is_gridless_feasible": True, "is_full_year_result": True,
+                "preferred_supplier_capacity_column": CAPACITY, **dict.fromkeys(ELECTRICITY_COSTS, 10.),
+                "scenario_id": "sea", "run_id": "r2"}
+        self.land = pd.DataFrame([{**base, "latitude": 54, "longitude": -4, "country": "United Kingdom", "lcoa_eur_per_t": 255.,
+                                   CAPACITY: 2e6, "scenario_id": "land", "run_id": "r1"}])
+        self.sea = pd.DataFrame([{**base, "latitude": lat, "longitude": lon} for lat, lon in [(54, -4), (40, -40), (0, 173)]])
+        self.zones = pd.DataFrame({"latitude": [54, 40, 0], "longitude": [-4, -40, 173], "eez_iso3": ["GBR", None, "KIR"]})
+        self.reference = pd.DataFrame({"country": ["United Kingdom"], "iso3": ["GBR"]})
+
+    def test_a_sea_plant_is_its_own_supplier_in_its_zone(self):
+        table = convert(self.sea, self.reference, sea_zones=self.zones)
+        self.assertEqual(list(table.Index), ["54_-4_1000000.0_sea", "40_-40_1000000.0_sea", "0_173_1000000.0_sea"])
+        self.assertEqual(list(table.iso3), ["GBR", "XIW", "KIR"])
+        self.assertEqual(list(table.country), ["United Kingdom", "International waters", "KIR"])
+
+    def test_columns_stay_those_of_the_network(self):
+        # the published code reads Electricity_Cost_Frac as the last column
+        land, sea = convert(self.land, self.reference), convert(self.sea, self.reference, sea_zones=self.zones)
+        self.assertEqual(list(land.columns), list(sea.columns))
+        self.assertEqual(list(sea.columns)[-1], "Electricity_Cost_Frac")
+
+    def _write(self, folder, name, frame):
+        surface, manifest, qa = (folder / f"{name}_{kind}" for kind in ("surface.csv", "manifest.json", "qa.json"))
+        frame.to_csv(surface, index=False)
+        manifest.write_text(json.dumps({"scenario": {"id": frame.scenario_id.iloc[0]}, "run_id": frame.run_id.iloc[0],
+                                        "execution": {"capacity_rule": "scaled_reference_design"}}))
+        qa.write_text(json.dumps({"status": "passed", "output_sha256": suppliers.digest(surface), "manifest_sha256": suppliers.digest(manifest),
+                                  "stage": "global", "full_year_required": True, "expected_row_count": len(frame), "row_count": len(frame)}))
+        return surface, manifest, qa
+
+    def test_export_joins_a_land_and_a_sea_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            land, land_manifest, land_qa = self._write(folder, "land", self.land)
+            sea, sea_manifest, sea_qa = self._write(folder, "sea", self.sea)
+            reference, zones = folder / "reference.csv", folder / "zones.csv"
+            self.reference.to_csv(reference, index=False)
+            self.zones.to_csv(zones, index=False)
+            args = SimpleNamespace(surface=land, qa=land_qa, manifest=land_manifest, country_reference=reference, output=folder / "out",
+                                   allow_diagnostic=False, minimum_capacity=1., drop_unassigned=False, sea_surface=sea, sea_qa=sea_qa,
+                                   sea_manifest=sea_manifest, sea_zones=zones)
+            with contextlib.redirect_stdout(io.StringIO()):
+                suppliers.export(args)
+            table = pd.read_csv(folder / "out" / suppliers.SUPPLIER_TABLE)
+            record = json.loads((folder / "out" / suppliers.SUPPLIER_PROVENANCE).read_text())
+        self.assertEqual(list(table.Index), ["54_-4_1000000.0", "54_-4_1000000.0_sea", "40_-40_1000000.0_sea", "0_173_1000000.0_sea"])
+        self.assertEqual(record["exported_positive_capacity_rows"], 1)
+        self.assertEqual(record["sea"]["exported_positive_capacity_rows"], 3)
+        self.assertEqual(record["sea"]["international_waters_rows"], 1)
+        self.assertEqual(record["sea"]["run_id"], "r2")
+
+
 class LegacyNetworkInterfaceTest(unittest.TestCase):
     """The table green-lory exports is one the published network accepts (needs the legacy_gpo link)."""
 
@@ -135,4 +194,20 @@ class LegacyNetworkInterfaceTest(unittest.TestCase):
         selected, effective, duplicates = select_suppliers(table, count=4000, minimum=1.0)
         # the 0.5 Mt/yr cell is below the 1 Mt/yr cutoff; the others in order of cost
         self.assertEqual(list(effective.Index), ["-23_-69_1000000.0", "-23_117_1000000.0"])
+        self.assertTrue(duplicates.empty)
+
+    def test_the_network_takes_two_suppliers_in_one_cell(self):
+        try:
+            from legacy_gpo.run import select_suppliers
+        except ImportError:
+            self.skipTest("legacy_gpo (green-porpoise) is not linked")
+        row = {"latitude": 54, "longitude": -4, "country": "United Kingdom", "lcoa_eur_per_t": 255., CAPACITY: 2e6,
+               "annual_ammonia_production_t": 1e6, "currency": "EUR", "grid_energy_mwh": 0, "is_gridless_feasible": True,
+               "is_full_year_result": True, "preferred_supplier_capacity_column": CAPACITY, **dict.fromkeys(ELECTRICITY_COSTS, 10.)}
+        reference = pd.DataFrame({"country": ["United Kingdom"], "iso3": ["GBR"]})
+        land = convert(pd.DataFrame([row]), reference, minimum_capacity=1)
+        sea = convert(pd.DataFrame([{**row, "lcoa_eur_per_t": 500., CAPACITY: 4e6}]), reference, minimum_capacity=1,
+                      sea_zones=pd.DataFrame({"latitude": [54], "longitude": [-4], "eez_iso3": ["GBR"]}))
+        selected, effective, duplicates = select_suppliers(pd.concat([land, sea], ignore_index=True), count=4000, minimum=1.0)
+        self.assertEqual(list(effective.Index), ["54_-4_1000000.0", "54_-4_1000000.0_sea"])  # both kept, cheapest first
         self.assertTrue(duplicates.empty)

@@ -1,0 +1,40 @@
+{
+  "written_by": "python -m model.sea_cells",
+  "rows": 40197,
+  "outputs": {
+    "max_capacities_sea_20pct.csv": "56b38c9f0fdc90621f213e374be9d128af832ac62f36b807bae1d475af15c2fc",
+    "site_costs_sea_20pct.csv": "5a62eb4d980bc3485a43011a906ebd47b13ed7b86c6ac1091d064dcaba709907",
+    "locations_sea_20261105.csv": "e4f9197c8e3c2461b9041fbe84116c1c070edcccdce50b4888b61f6d2e7b8a67",
+    "site_costs_sea_flat_20pct.csv": "30ea97bf6558a3f667399e5e78638bf5cdccc2a86dcf7f963bc69b6b522dd684"
+  },
+  "inputs": {
+    "land_table": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/results/campaigns/land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv",
+      "sha256": "0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb"
+    },
+    "tech_yaml": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml",
+      "sha256": "22cbbff4a6d96251d5a072b1f6494f23d23739d07c0f0bf33985d1586479ca75"
+    },
+    "cell_geography": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/cell_geography.csv",
+      "sha256": "7d6f1b31b775cd93de60bcf2ce9891a4054f0fd548f1c2789b01bff17ac2119d"
+    },
+    "cell_elevation": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/cell_elevation.csv",
+      "sha256": "18ea501d9f6b3770d5325066f578328ec868bf4ae62e1d4b59fd5b6a2df629e0"
+    },
+    "sea_zones": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/sea_zones.csv",
+      "sha256": "bd2819f27f8d0f24bebb3be7daee53266e24967d941f61a65736e7c5234c879e"
+    },
+    "port_travel_times": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/port_travel_times.csv",
+      "sha256": "31b9544f90fd478f9bd89e8f34066a721312b15c197ba4c02614ddbe149676ff"
+    }
+  },
+  "parameters_yaml": {
+    "path": "inputs/parameters.yaml",
+    "sha256": "fb0b4f0b2fc4358fb44c37de83d9995ac602c2cfd5da3b02965992114f76f97a"
+  }
+}

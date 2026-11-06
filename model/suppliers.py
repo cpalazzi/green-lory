@@ -8,6 +8,9 @@
   converted from EUR2020 to USD2018 by the shared currency rule (inputs/parameters.yaml,
   currency): 0.8595 EUR2020 per USD2018; exports before 30 October 2026 used the Way YAML's
   0.9024. The surface itself is never changed.
+  A sea run's surface can join it (``--sea-surface``): a coastal cell's land and sea plants are
+  separate suppliers, so a sea plant's ``Index`` ends in ``_sea``, and its country is its economic
+  zone's sovereign (inputs/site_costs/sea_zones.csv), XIW in international waters.
 - ``derive``: a land-share variant of a QA-passed surface without a new solve. Under
   ``land_constraint: after_solve`` the plant design and LCOA do not depend on the land share;
   only the scaled-design capacities do, and linearly. So the 2 % variant of a 20 % surface is
@@ -37,6 +40,7 @@ import numpy as np
 import pandas as pd
 
 from .parameters import eur2020_per
+from .site_geography import SEA_ZONES_CSV
 
 CAPACITY = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
 # EUR2020 per USD2018 by the shared currency rule: the ECB's 2018 rate, then euro-area inflation
@@ -45,6 +49,10 @@ CAPACITY = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
 EUR2020_PER_USD2018 = eur2020_per("USD", 2018)
 ELECTRICITY_COSTS = [f"lcoa_tech_{technology}_eur_per_t" for technology in ("wind", "solar", "solar_tracking")]
 CAPACITY_PREFIX = "scaled_design_max_"  # every column the land share scales
+# The network needs a code on every supplier for its routes; ISO 3166 leaves codes in X to users
+INTERNATIONAL_WATERS_ISO3 = "XIW"
+INTERNATIONAL_WATERS = "International waters"
+SEA_INDEX_SUFFIX = "_sea"
 SUPPLIER_TABLE = "suppliers_USD2018.csv"
 SUPPLIER_PROVENANCE = "suppliers_USD2018_provenance.json"
 
@@ -63,12 +71,22 @@ def write_json(path, payload):
         f.write("\n")
 
 
-def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False):
+def _zone_countries(positive, zones, reference):
+    """A sea run's rows: each cell's sovereign (iso3) and its name, or the code alone for a small
+    state outside the country reference, and international waters outside every zone."""
+    held = positive[["latitude", "longitude"]].merge(zones[["latitude", "longitude", "eez_iso3"]], on=["latitude", "longitude"], how="left")
+    iso = held.eez_iso3.fillna(INTERNATIONAL_WATERS_ISO3)
+    names = reference.drop_duplicates("iso3").set_index("iso3").country.to_dict() | {INTERNATIONAL_WATERS_ISO3: INTERNATIONAL_WATERS}
+    return pd.Series(iso.to_numpy(), index=positive.index), pd.Series(iso.map(names).fillna(iso).to_numpy(), index=positive.index)
+
+
+def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False, sea_zones=None):
     """Supplier table in the deposited green-porpoise schema.
 
     drop_unassigned=True removes cells whose country is NaN (no polygon overlap in the country
     geojson) before the ISO3 check; export() records how many cells and how much capacity that
-    removed.  Without the flag such cells above the cutoff are an error."""
+    removed.  Without the flag such cells above the cutoff are an error. sea_zones (the table of
+    economic zones) marks a sea run: every row gets its zone's country and a sea Index."""
     if not np.isfinite(minimum_capacity) or minimum_capacity < 0:
         raise ValueError(f"--minimum-capacity must be finite and nonnegative (Mt/yr); got {minimum_capacity}")
     required = ["latitude", "longitude", "country", "lcoa_eur_per_t", CAPACITY,
@@ -107,17 +125,22 @@ def convert(frame, country_reference, minimum_capacity=0., drop_unassigned=False
     if reference.country.duplicated().any():
         raise ValueError(f"--country-reference gives more than one iso3 for {sorted(reference.country[reference.country.duplicated()].unique())}")
     positive = frame[(frame[CAPACITY] > 0) & (frame[CAPACITY] >= minimum_capacity * 1e6)].copy()
-    if drop_unassigned:
-        positive = positive[positive.country.notna()].copy()
-    iso = positive.country.map(reference.set_index("country").iso3)
-    if iso.isna().any():
-        unknown = positive.loc[iso.isna(), "country"].fillna("<unassigned>").astype(str)
-        raise ValueError(f"--country-reference has no iso3 for {sorted(unknown.unique())} "
-                         "(--drop-unassigned drops cells without a country)")
+    if sea_zones is not None:
+        iso, positive["country"] = _zone_countries(positive, sea_zones, reference)
+    else:
+        if drop_unassigned:
+            positive = positive[positive.country.notna()].copy()
+        iso = positive.country.map(reference.set_index("country").iso3)
+        if iso.isna().any():
+            unknown = positive.loc[iso.isna(), "country"].fillna("<unassigned>").astype(str)
+            raise ValueError(f"--country-reference has no iso3 for {sorted(unknown.unique())} "
+                             "(--drop-unassigned drops cells without a country)")
     # Match existing GPO grid IDs exactly, without rounding non-integer cells.
     def coordinate(value):
         return str(int(value)) if float(value).is_integer() else format(value, ".12g")
     ids = positive.latitude.map(coordinate) + "_" + positive.longitude.map(coordinate) + "_1000000.0"
+    if sea_zones is not None:
+        ids = ids + SEA_INDEX_SUFFIX
     electricity_fraction = positive[ELECTRICITY_COSTS].sum(axis=1) / positive.lcoa_eur_per_t
     if not electricity_fraction.between(-1e-8, 1 + 1e-8).all():
         raise ValueError(f"Electricity_Cost_Frac (wind and PV cost over LCOA) lies outside 0-1 in "
@@ -159,14 +182,15 @@ def check_table_identity(frame, manifest):
     return identity
 
 
-def export(args):
-    qa = json.loads(args.qa.read_text())
-    manifest = json.loads(args.manifest.read_text())
+def read_checked_surface(surface, qa_path, manifest_path, allow_diagnostic, derived_path=None):
+    """A result table checked against its QA report and run record, with those two, its ids and
+    its derivation record."""
+    qa = json.loads(qa_path.read_text())
+    manifest = json.loads(manifest_path.read_text())
     if qa.get("status") != "passed":
         raise ValueError(f"check report (--qa) has status {qa.get('status')!r}; only a passed result table can be exported")
     derivation = None
-    derived_path = getattr(args, "derived_provenance", None)
-    surface_sha256 = digest(args.surface)
+    surface_sha256 = digest(surface)
     if derived_path is not None:
         derivation = verify_derivation(json.loads(Path(derived_path).read_text()), qa, surface_sha256)
         derivation["provenance_path"] = str(Path(derived_path).resolve())
@@ -174,20 +198,25 @@ def export(args):
     elif qa.get("output_sha256") != surface_sha256:
         raise ValueError(f"check report (--qa) was written for a result table with sha256 {qa.get('output_sha256')}; "
                          f"--surface has {surface_sha256}")
-    if qa.get("manifest_sha256") != digest(args.manifest):
+    if qa.get("manifest_sha256") != digest(manifest_path):
         raise ValueError(f"check report (--qa) was written for a run record with sha256 {qa.get('manifest_sha256')}; "
-                         f"--manifest has {digest(args.manifest)}")
-    if not args.allow_diagnostic and qa.get("stage") != "global":
+                         f"--manifest has {digest(manifest_path)}")
+    if not allow_diagnostic and qa.get("stage") != "global":
         raise ValueError(f"check report (--qa) is for the {qa.get('stage')!r} stage; only a global result table can be "
                          "exported without --allow-diagnostic")
     if qa.get("full_year_required") is not True:
         raise ValueError("check report (--qa) does not require a full year (full_year_required is not true); "
                          "only full-year results can be exported")
-    frame = pd.read_csv(args.surface)
+    frame = pd.read_csv(surface)
     if len(frame) != qa["expected_row_count"] or len(frame) != qa["row_count"]:
         raise ValueError(f"result table (--surface) has {len(frame)} rows; its check report expects "
                          f"{qa['expected_row_count']} and counted {qa['row_count']}")
-    identity = check_table_identity(frame, manifest)
+    return frame, qa, manifest, check_table_identity(frame, manifest), derivation
+
+
+def export(args):
+    frame, qa, manifest, identity, derivation = read_checked_surface(
+        args.surface, args.qa, args.manifest, args.allow_diagnostic, getattr(args, "derived_provenance", None))
     # The ids the provenance file records: a derived table (the 2 % land share of a 20 % run) is
     # exported under its own scenario id and names the run it came from
     provenance_ids = dict(identity)
@@ -197,7 +226,18 @@ def export(args):
     minimum = getattr(args, "minimum_capacity", 0.)
     drop_unassigned = bool(getattr(args, "drop_unassigned", False))
     unassigned_mask = frame.country.isna() & (frame[CAPACITY] >= minimum * 1e6) & (frame[CAPACITY] > 0)
-    supplier = convert(frame, pd.read_csv(args.country_reference), minimum, drop_unassigned=drop_unassigned)
+    reference = pd.read_csv(args.country_reference)
+    supplier = convert(frame, reference, minimum, drop_unassigned=drop_unassigned)
+    land_suppliers = len(supplier)
+    sea = None
+    if getattr(args, "sea_surface", None) is not None:
+        sea_frame, sea_qa, _, sea_identity, _ = read_checked_surface(args.sea_surface, args.sea_qa, args.sea_manifest, args.allow_diagnostic)
+        sea_supplier = convert(sea_frame, reference, minimum, sea_zones=pd.read_csv(args.sea_zones))
+        supplier = pd.concat([supplier, sea_supplier], ignore_index=True)
+        sea = {**sea_identity, "source_rows": len(sea_frame), "exported_positive_capacity_rows": len(sea_supplier),
+               "international_waters_rows": int(sea_supplier.iso3.eq(INTERNATIONAL_WATERS_ISO3).sum()),
+               "inputs": {name: {"path": str(path.resolve()), "sha256": digest(path)} for name, path in
+                          [("surface", args.sea_surface), ("qa", args.sea_qa), ("manifest", args.sea_manifest), ("zones", args.sea_zones)]}}
     args.output.mkdir(parents=True, exist_ok=False)
     destination = args.output / SUPPLIER_TABLE
     supplier.to_csv(destination, index=False)
@@ -213,7 +253,7 @@ def export(args):
         "capacity_source_column": CAPACITY, "capacity_units": "Mt_NH3_per_year (1 Mt reference multiplier)",
         "capacity_rule": manifest["execution"]["capacity_rule"],
         "electricity_cost_fraction_basis": "Wind + fixed-PV + tracking-PV annualised generation cost / headline LCOA; excludes storage and conversion plant",
-        "source_rows": len(frame), "exported_positive_capacity_rows": len(supplier),
+        "source_rows": len(frame), "exported_positive_capacity_rows": land_suppliers, "sea": sea,
         "excluded_zero_capacity_rows": int((frame[CAPACITY] == 0).sum()),
         "minimum_capacity_Mt_per_year": minimum,
         "excluded_positive_below_cutoff_rows": int(((frame[CAPACITY] > 0) & (frame[CAPACITY] < minimum * 1e6)).sum()),
@@ -278,6 +318,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--scenario-id-override", default=None, help="scenario id recorded for a derived surface (e.g. the 2 %% variant)")
     p.add_argument("--drop-unassigned", action="store_true",
                    help="Drop cells without a country polygon (NaN country) instead of rejecting the export; counted in the provenance file")
+    for name in ("sea-surface", "sea-qa", "sea-manifest"):
+        p.add_argument(f"--{name}", type=Path, default=None, help="a sea run's plants, as further suppliers")
+    p.add_argument("--sea-zones", type=Path, default=SEA_ZONES_CSV)
     p.add_argument("--minimum-capacity", type=float, default=0., help="Explicit minimum annual capacity in Mt; raw surface stays unchanged")
     d = commands.add_parser("derive", help="a land-share variant of an after_solve surface")
     d.add_argument("--surface", type=Path, required=True, help="merged global_run_results.csv of the parent run")

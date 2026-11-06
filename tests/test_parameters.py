@@ -8,7 +8,7 @@ import pytest
 from model import parameters
 
 READERS = ("model.config", "model.plant", "model.land_table", "model.weather", "model.weather_land", "model.site_geography",
-           "model.site_costs", "model.weather_profiles")
+           "model.site_costs", "model.weather_profiles", "model.sea_cells")
 
 
 def test_the_model_reads_every_value_in_the_file():

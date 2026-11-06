@@ -103,7 +103,8 @@ weather:
       power_mw: 35.0
       rotor_m: 380.0
       hub_height_m: 220.0
-    # atlite's smoothing of the power curve (Andresen et al. 2015, fitted to the Danish fleet)
+    # atlite's smoothing of the power curve, on land and at sea, for wind speeds varying within a
+    # grid cell (Hörsch et al. 2018, eq. 8, its parameters fitted to Danish feed-in)
     smooth_power_curve: true
     # wind speeds x (rho / rho0)^(1/3) before the power curve, the IEC 61400-12-1 normalisation for
     # pitch-regulated turbines, with the density of the standard atmosphere (ISO 2533) at the
@@ -117,6 +118,52 @@ weather:
     pv_orientation: latitude_optimal
     pv_tracking: horizontal
     dc_ac_ratio: 1.25
+
+# Plants at sea (CAMPAIGN_PLAN.md section 7d; decided 30 October and 3 November 2026): wind only,
+# the plant at the site, so without DEA's substation and export cable. Costs in EUR2020, the 2050
+# column of DEA's electricity catalogue (chapter 21 and its data sheets)
+offshore:
+  # A cell holds a sea plant if this share of it is sea, the share at which a cell's land weights
+  # start (weather.land_correction.full_land_share). Frozen sea counts as sea: the cold rule
+  # (site_costs.cold) prices it, and nothing is left out for ice
+  min_sea_share: 0.01
+  # Fixed foundations "can be used in water depths of up to 70 metres" (DEA p. 208); floating
+  # beyond, water deeper than 1,000 m excluded from NREL's floating resource (Musial et al. 2016)
+  fixed_max_depth_m: 70.0
+  floating_max_depth_m: 1000.0
+  turbine_eur_per_mw: 750000.0
+  array_cables_eur_per_mw: 40000.0
+  development_eur_per_mw: 160000.0
+  # DEA's foundation at its reference depth, scaled by DEA's function of depth (Table 15, p. 225;
+  # calibrated on 20-50 m, Table 11)
+  fixed_foundation:
+    eur_per_mw_at_reference: 334000.0
+    reference_depth_m: 30.0
+    function_base_eur_per_mw: 450000.0
+    function_eur_per_mw_per_m: 5000.0
+  floating_foundation_eur_per_mw: 675000.0
+  # Every technology but wind, by depth class. fixed: a jacket platform is 42 % of a 300 t/d
+  # offshore plant's capital cost (Brener 2022, MSc thesis, Oxford), x1.72. floating: a process
+  # plant on a moored hull at the first-of-a-kind level of floating LNG (Scott 2018; Rystad 2025).
+  # deep: on ships, speculative; floating wind at 500 m and 1,000 km from shore is 2.5-3.5 times
+  # onshore (Salmon and Bañares-Alcántara 2022, Table 2)
+  plant_multiplier:
+    fixed: 1.72
+    floating: 2.0
+    deep: 3.0
+  # In deep water wind too is its onshore cost times this
+  deep_wind_multiplier: 3.0
+  # Finance runs. International waters take the highest rate in Ameli et al.'s (2021) table, that
+  # of their Africa region: no state's legal framework, insurance or offtake support (decided 30
+  # October 2026). Ameli's table has no row for these small states, whose zones hold sea cells;
+  # its rates are regional, so each takes the rate of the region it lies in
+  international_waters_interest_rate: 0.118
+  ameli_region_of_small_states:
+    AFR: [COM, CPV, MUS, STP, SYC]
+    CSA: [ATG, BRB, DMA, GRD, KNA, LCA, VCT]
+    MEA: [BHR]
+    ODA: [FSM, KIR, MDV, MHL, NRU, PLW, TON, TUV, WSM]
+    WEU: [MLT]
 
 # Water sources (CAMPAIGN_PLAN.md section 0b; decided 7 and 9 October 2026): a cell holds a source
 # if the sea and permanent lakes and reservoirs cover at least standing_min_share of it, or large

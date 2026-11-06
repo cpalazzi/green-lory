@@ -675,8 +675,8 @@ markets) stays with the network model.
   it for Salmon's profiles.
 - **Calibration check:** atlite's full-load hours at DEA's reference sites against DEA's: onshore
   3,800 h (Danish site), offshore fixed 4,650 h (North Sea, 10.3 m/s at 100 m, Table 11), PV
-  1,515 h fixed and 1,742 h tracking (AC). A gap would become one stated loss factor per
-  technology (wakes and availability for wind).
+  1,515 h fixed and 1,742 h tracking (AC). DEA's hours are a reference, not a target (Carlo,
+  5 November), so a gap adds no factor.
 - **What is known of Salmon's profiles (3 November):** ERA5 2019 at one degree, wind through
   "the curve for a Vestas 3 MW wind turbine", PV through pvlib, using "the DC power output from
   solar cells" (Salmon 2023, DPhil thesis, chapter 3, p. 37); the conversion was Zac Cesaro's,
@@ -689,22 +689,92 @@ markets) stays with the network model.
   of AC (sheet 22: 0.29 MEUR/MW, 0.23 per MW of DC, DC/AC 1.25), so the model counts DC output
   per MW against AC costs per MW, about 25 % too little PV output per euro, while wind runs well
   above DEA's full-load hours.
-- **Built 3 November** (uncommitted): `model/weather_profiles.py` (settings in
+- **Built 3 November:** `model/weather_profiles.py` (settings in
   `inputs/parameters.yaml`, `weather.profiles`), `arc/jobs/11_weather_profiles.sh` (check,
   convert in 12 bands of 15 cell latitudes, stack), `tests/test_weather_profiles.py`. A local
   trial on the PyPSA-Earth European cutout (2013, 0.3 degrees, so the land weights are uniform)
   gave, after the wake factor of 0.93: onshore 2,976 h with atlite's power-curve smoothing and
   3,731 h without (DEA 3,800), offshore 4,500 and 5,266 h (DEA 4,650), PV 1,351 h fixed and
   1,673 h tracking per MW of AC (DEA 1,515 and 1,742). The ARC check reports both smoothing
-  settings on the 2019 cutout.
+  settings on the 2019 cutout. It takes hours, not minutes: job 13603956 timed out at one hour,
+  and 13610857 reruns it with a 12-hour limit.
+- **Checked 5 November** (job 13610857, 6 h 5 min; `check.json` in
+  `green-lory-campaigns/weather_profiles_20261104_v1/` on ARC): 2019 full-load hours over DEA's
+  reference cells, wind after the wake factor of 0.93, with the ratio to DEA in brackets.
+
+  | Technology | DEA 2050 | Raw power curve | Smoothed power curve |
+  |---|---|---|---|
+  | Onshore wind | 3,800 | 3,762 (0.99) | 2,968 (0.78) |
+  | Offshore wind | 4,650 | 5,555 (1.19) | 4,702 (1.01) |
+  | Fixed PV | 1,515 | 1,334 (0.88) | |
+  | Tracking PV | 1,742 | 1,656 (0.95) | |
+
+  - Smoothing: atlite's `windturbine_smooth` shifts the power curve by 1.27 m/s and spreads it
+    with a 2.29 m/s kernel, so the offshore curve reaches full output at about 15.8 m/s, not
+    10.7 m/s. Against the raw curve it takes off about 21 % at a mean hub speed of 6 m/s and 8 %
+    at 14 m/s (Weibull shape 2.1). The "Oversmoothing" warning in the log is harmless: both
+    curves give 0.1 % of rated output at 0 m/s, and atlite tests an absolute 0.01 MW, which only
+    the 15 MW curve passes.
+  - Offshore: the cells read 10.0 to 10.1 m/s at 100 m in 2019, against DEA's 10.3 m/s, so at
+    DEA's wind speed the ratio would be about 2 % higher. DEA's hours are net, built up from the
+    measured Danish fleet (Table 13). Its note B gives 5 % for outages and grid losses, so a
+    factor on the raw curve (0.84, with the wake factor 0.78) would be only partly sourced.
+  - PV: 1,334 h is DEA's 2020 plant (1,343 h, performance ratio 0.86). DEA's 2050 figure differs
+    only by the performance ratio, 0.97, which includes 0.05 from bifacial modules: full-load
+    hours are irradiation x transposition factor x performance ratio (sheet 22, note K). A
+    factor of 0.97 / 0.86 before the cap would give about 1,500 h fixed and 1,865 h tracking
+    (12.4 % more on the local 2013 cutout, the cap taking 0.4 % in Denmark and 0.7 % in southern
+    Spain). Not applied: see the decision below.
+  - **Decided (Carlo, 5 November):** one setting for land and sea, and DEA's hours are a
+    reference, not a target. Smoothing stays on (`smooth_power_curve: true`), with no wind or PV
+    factor. The kernel is the PyPSA-Eur paper's (Hörsch et al. 2018, eq. 8), which smooths its
+    onshore and offshore power curves "to account for effects of spatial wind speed variations
+    within a grid cell", with parameters fitted to Danish feed-in; atlite's default and
+    PyPSA-Earth's current configuration leave it off. A plant here is a farm spread over its
+    cell, not one turbine. The raw curve gives
+    5,555 h in the North Sea, 19 % above DEA's net figure; smoothed, onshore wind reads 2,968 h,
+    within the 2,600 to 3,100 h of Danish turbines installed since 2010 (DEA, chapter 20).
+    atlite's efficiency of 0.95 cancels, since the profiles are divided by the smoothed curve's
+    maximum, so the wake factor of 0.93 is the only derating.
+  - Against Salmon's profiles at the same cells, after the wake factor: onshore wind -37 %,
+    offshore wind -22 %, fixed PV +28 %. C2 will move towards solar sites.
 - **Aggregation:** each one-degree cell's profile is the average of its 0.25-degree pixels
   weighted by land area (onshore) or by sea area of the depth class (offshore), through atlite's
   `matrix` argument; written in the current file format, so runs only change `weather_dir`
   and drop `weather_land_correction`.
 - **Check:** the new profiles against the current ones on the 1,317 step-4 cells, and the
   focal-cell LCOA. The reconciling run keeps Salmon's profiles, as the legacy model used them.
-- **Compute:** like the existing tiles, a Slurm job per latitude band (the earlier conversion ran
-  on 32 cores and 360 GB with a 72 h limit).
+- **Compute:** like the existing tiles, a Slurm job per latitude band. December 2025's tiles (60
+  ERA5 rows each, as a band here) took 17 to 50 hours on 32 cores with 360 GB requested. By
+  `sbatch --test-only` on 5 November, those resources would start within hours on `short`
+  (12 h limit), in 3.5 days on `medium` (2 days) and in 19 days on `long`. So one band runs first
+  on `short` to measure the time: its log gives each technology's time even if it runs out, and a
+  finished band stays valid for the stack. Band 30-44 N: job 13618227, array task 8, submitted 5
+  November from release 20261105-profiles-v1; it ran in 1 h 59 min on 32 cores, 6.7 GB at peak
+  (wind 20 min, wind at sea 4, fixed PV 74, tracking PV 16). Sea and land tables stop at 75
+  degrees, so the band from 90 to 76 S (array task 0) holds no run cell and is skipped: 11 bands.
+- **First look, band 30-44 N (6 November):** over C2's 2,678 land cells there, against Salmon's
+  profiles as C2 read them, wind falls to 0.59 of its hours at the median (0.47 to 0.92 between
+  the 10th and 90th percentiles) and fixed PV rises to 1.23, almost all of which is the change to
+  output per MW of AC (x 1.25). Against NREL's 2024 supply curves (Lopez et al., in Zotero; a 6 MW
+  turbine, 170 m rotor, 115 m hub, state averages of developable land), the smoothed hours of the
+  five flat Great Plains states are 0.62 to 1.20 of NREL's (median 0.92); hillier states read
+  lower, as a cell's average falls below the best sites NREL places turbines on.
+- **Why the wind falls (6 November):** not the units (both per MW, at most 1), the year (both
+  2019; hourly correlation 0.93, highest with no shift) or the sample. Over 2,168 inland cells of
+  band 30-44 N, at the median, the new 1,033 h against Salmon's 1,887 h (before wakes) split into
+  DEA's turbine (x 0.73), air density (x 0.91) and smoothing (x 0.83), found by recovering the
+  hub-height speed behind each hour and running it through the other curves. Salmon's output
+  matches a Vestas V112 at 100 m only with 14 % more wind speed hour by hour (8-20 % between the
+  quartiles), as a low-wind turbine of about 210-240 W/m2 would give. Cesaro's thesis (section
+  4.5.1) computes speed as sqrt(u2 + v2) and scales 100 to 120 m by 1.023, and used an IEC class III
+  curve for India; Salmon's global curve is not documented. DEA's turbine is 281 W/m2, the one
+  whose costs the model uses.
+- **Atolls (found 5 November, before the bands ran):** 24 run cells of the Tuamotus (14 to 22 S)
+  have land in the land table, from MODIS, and none in `cell_geography.csv`, so they would have
+  had no land profile and no solution. `band_cells` now gives every cell a land profile, from all
+  its points where the geography has no land. They make 0.41 Mt/yr in C2, none reaches 1 Mt/yr,
+  and no cell of band 30-44 N is affected, so the other bands need a release with this change.
 
 ### 7b. Cold climates
 
@@ -739,9 +809,13 @@ markets) stays with the network model.
 - **Cold rule (decided 3 November; replaces the construction and equipment rules above):** every
   technology costs 25 % more (`tech_cost_per_mw` and `build_cost_per_mw`) at cells at or beyond
   60 degrees latitude, or at 3,000 m or higher: about 20 C colder than sea level at the standard
-  lapse rate (6.5 C per km), roughly the drop from the subtropics to 60 degrees. Elevation from
-  GEBCO 2025, added to the land build with the offshore cells (until then the land table's
-  `elevation_m`). No temperature data needed. The design is unchanged, so the case without the
+  lapse rate (6.5 C per km), roughly the drop from the subtropics to 60 degrees. Elevation is the
+  mean of the cell's land in GEBCO 2025 (`cell_elevation.csv`), not the land table's
+  `elevation_m`, a GEBCO point at the cell centre that can land on a peak: (35 S, 70 W) reads
+  4,234 m against a mean of 2,713 m. 360 land cells below 60 degrees reach 3,000 m, against 386
+  at the centre. No temperature data needed. MODIS land cover supports the latitude: permanent
+  snow and ice is 1 % of land at 55-60 S and 99.6 % at 60-65 S, and in the north it starts to rise
+  there, 0.6 % at 55-60 N, 3.5 % at 60-65 N and 25 % at 70-75 N. The design is unchanged, so the case without the
   premium follows from the same results.
   - Source: Yamal LNG, adjusted to Corpus Christi's scope, costs 25 % more, "reflecting the
     higher construction costs in the harsh arctic environment" (Songhurst 2018, OIES NG137,
@@ -772,12 +846,53 @@ markets) stays with the network model.
 
 ### 7d. Offshore sites
 
-- **Cells:** sea cells with offshore wind area in the land build (`--include-offshore-wind`,
-  `wind_offshore_area_km2`, depth from `data/model_bathymetry.nc`). Country from exclusive
-  economic zones (Marine Regions, World EEZ v12, CC BY 4.0, `data/marine_regions/`; the
-  sovereign, `iso_sov1`); cells outside every zone are tagged international waters and run too.
-  Cells with winter sea ice are excluded: inside the sea-ice edge (15 % concentration, the usual
-  threshold) at its 2019 maximum (proposed 3 November, section 7f).
+- **Cells:** every cell of the land table with at least 1 % sea: 40,197 sea plants (2,605 fixed,
+  4,456 floating, 33,136 deep), 5,172 of them in cells that also have land. A sea plant is a
+  separate run with its own land table, weather stack and site-cost table
+  (`model/sea_cells.py`), so the plant code is unchanged and a coastal cell can hold both.
+  Without those cells only 540 fixed cells would remain, since shallow water lies near land.
+  Depth is the mean of the cell's sea (GEBCO, `sea_depth_m`). Country from exclusive economic
+  zones (Marine Regions, World EEZ v12, CC BY 4.0, `data/marine_regions/`; the sovereign,
+  `iso_sov1`), the nearest zone reaching the cell where a coastal cell's centre is on land; cells
+  outside every zone, Antarctica's coast among them, are tagged international waters (24,254) and
+  run too. Sea plants stop at 75 degrees, the land table's limit. The Caspian holds no sea plants:
+  the lakes database counts it as inland water, so its 18 cells without land hold no plant of
+  either kind.
+- **Sea ice (decided 5 November):** nothing is left out for ice. Sea is what the cell geography
+  reads as sea, and south of 55 S, where that table stops, MODIS's water class; frozen or not, it
+  holds a plant, and the cold rule prices it: 7,630 sea plants at or beyond 60 degrees pay the
+  25 %. Antarctica's ice shelves read as water too, in MODIS as in GEBCO's sub-ice grid, so they
+  hold plants, at the costs of a cold, deep and remote site. Below 60 degrees frozen sea pays no
+  premium (605 cells, section 7f).
+- **Area (decided 5 November):** the cell's sea at the land table's share (20 %) and the wind
+  density of the land runs (5 MW/km2).
+- **Flat runs at sea (decided 6 November):** the depth-class costs of wind and the plant are the
+  base costs of a plant at sea, so the flat sea runs (C2 and F) keep them, from
+  `site_costs_sea_flat_20pct.csv`, with every location factor 1. S1 and S2 add the location factors
+  (remote, cold, labour) on top, from `site_costs_sea_20pct.csv`, as on land. Without the base
+  costs a flat run would put a sea plant at onshore cost, and open ocean and ice shelves would
+  look cheaper than land wherever the wind is strong.
+- **Coastal cells (decided 5 November):** a coastal cell holds two independent plants, each on its
+  own area, with nothing shared between them: 4,428 of C2's 16,885 land plants have a sea plant in
+  the same cell. For the network and the supply curve they are separate suppliers, so their
+  capacities add. A sea plant's `Index` ends in `_sea` (`python -m model.suppliers export
+  --sea-surface`); the network code in green-porpoise treats `Index` as a key and takes two
+  suppliers at one location unchanged. Its country is the zone's sovereign, XIW in international
+  waters, since the network needs a code on every supplier. The network routes a sea plant to a
+  port like any supplier, by its onshore route; revisit this at the network stage.
+- **Maps (decided 5 November):** land and sea maps show every plant. Combined maps show
+  `results.lowest_feasible_plant`, the cell's cheapest plant that can make the 1 Mt/yr reference
+  output. Every LCOA is that of the 1 Mt/yr design, so a smaller plant cannot make ammonia at
+  that cost at scale, and the cheapest colour would otherwise mostly be plants too small to
+  matter: in C2, 81 of the 100 cheapest land plants are below 1 Mt/yr (median 0.04). The cutoff
+  is the network's, so a combined map shows what the network can choose. In C2 it keeps 95 % of
+  the capacity (7,224 of 16,885 plants, 56,735 of 59,844 Mt/yr) and moves the cheapest plant
+  from 202 to 221 EUR/t and the 10th percentile from 298 to 294 EUR/t. In the 4,428 cells with
+  both plants, by the about 320 km2 a sea plant takes per Mt/yr: both reach 1 Mt/yr in 547, the
+  sea plant alone in 2,828, the land plant alone in 284, neither in 769. A cell with neither is
+  left blank: with the 6,064 land plants below 1 Mt/yr that have no sea plant, 6,833 cells of
+  the land run. A capacity map of the same table shows what the shown plant can make; the two
+  plants of a cell add only in the supply curve.
 - **Technologies:** wind only, no PV offshore; the plant produces at the site, so DEA's
   substation and export cable are left out of the wind cost.
 - **Costs by depth** (2050, DEA electricity catalogue, chapter 21 and its data sheets; MEUR/MW):
@@ -795,9 +910,13 @@ markets) stays with the network model.
   runs (11.8 %, the rate of their Africa region), as a high-risk default: no state's legal
   framework, insurance or offtake support. (Damodaran's US cost of capital for the
   shipbuilding and marine industry, 6.7 % in January 2026, is a company rate, not a project
-  rate.) The uniform-rate runs give them 5 % like every cell.
+  rate.) The uniform-rate runs give them 5 % like every cell. The 23 small states with zones but
+  no row in Ameli's table (1,396 sea cells) take the rate of their Ameli region (decided 5
+  November), since those rates are regional.
 - **Fixed foundations:** up to 70 m, DEA's limit (decided 30 October); the plant multipliers
   x 1.72, x 2 and x 3 as in the table.
+- **Cost parts (decided 5 November):** the turbine is the equipment part
+  (`tech_cost_per_mw`); the foundation, array cables and development are the build part.
 
 ### 7e. Remoteness, onshore and offshore (decided 3 November)
 
@@ -811,8 +930,11 @@ remote cell that looks cheap in the model would invite a case study that the cos
   cheapest 2,000 Mt/yr; with S1's factors (15 October) still 25 %. The cheapest cells of C2 are
   sub-Antarctic islands (Campbell, Macquarie, Auckland, Crozet, Kerguelen, Heard; 202-212 EUR/t,
   28 to 208 hours from a city) and the Magallanes fjords: 25 of the 30 cheapest cells can host
-  less than 0.1 Mt/yr, and the islands are nature reserves that the protected-land layer counts
-  at 0-9 % (to check).
+  less than 0.1 Mt/yr. The islands are nature reserves, and the protected-land layer does count
+  them: `protected_area_pct` is a share of the whole cell, so Kerguelen's 9.3 % is 91 % of its
+  10.2 % land (Crozet 87 %, Auckland 70 %, Macquarie 66 %, Campbell 63 %; checked 5 November).
+  Heard reads 0: WDPA tags its reserve as marine, and the land table leaves out marine records.
+  Its two cells hold under 0.1 Mt/yr.
 - **One measure on land and at sea:** travel time from a city of at least 20,000 people, for
   equipment and build alike. On land, Nelson et al. as now; at sea, the nearest port's own travel
   time plus the sea leg at 20 km/h (Salmon and Bañares-Alcántara 2022), beyond the 175 km that
@@ -880,7 +1002,7 @@ remote cell that looks cheap in the model would invite a case study that the cos
     a city supply 26 % of the cheapest 2,000 Mt/yr with the present factors and none with this
     rule; the 2,000th Mt stays at 327 EUR/t, and cells 1-7 hours from a city change by +0.3 % at
     the median. Kerguelen's five land cells go from 239-262 to 701-770 EUR/t.
-- **Built 5 November (uncommitted, for review):** `model/site_costs.py` (`remote_multiplier`,
+- **Built 5 November:** `model/site_costs.py` (`remote_multiplier`,
   `travel_min_to_city`, `cold_rule`), `python -m model.site_geography ports`
   (`inputs/site_costs/port_travel_times.csv`), and the table
   `inputs/site_costs/site_costs_center_20pct_slope20.csv` rebuilt on the October land table, with
@@ -905,18 +1027,24 @@ remote cell that looks cheap in the model would invite a case study that the cos
 ### 7f. Order
 
 1. Profiles from the cutout, checked against the current ones.
-2. Sea ice and economic zones (zones downloaded on 30 October).
+2. Economic zones (downloaded on 30 October).
 3. Remoteness and cold: the remote factor and the cold rule in the site costs (sections 7b, 7e;
    built 5 November).
 4. Offshore land build and site costs.
 5. Technology YAML and plant changes, run definitions.
 6. The campaign (C2, S1, F, S2, with offshore cells), each stage after a go-ahead.
 
-Sea ice is in neither Salmon's profiles nor the cutout. Proposed (3 November): NSIDC's Sea Ice
-Index (G02135, version 4.0) extent polygons at 2019's maxima, March in the north
-(`extent_N_201903_polygon_v4.0.zip`) and September in the south
-(`extent_S_201909_polygon_v4.0.zip`); public, no account, two small files. A sea cell is
-excluded if its centre lies inside.
+Sea ice (decided 5 November): no sea-ice data, the cold rule alone, with MODIS land cover
+(MCD12C1) as the only cover data. MODIS cannot show sea ice: in every layer of the file (the 2022
+land cover), all 4,470 all-sea cells inside the 2019 ice edge read the same as the 30,062 outside
+it, 100 % water, and class 15, snow and ice, is permanent ice on land. Antarctica's ice shelves
+read as water too (the Amery cell, 71 S 70 E, is 100 % water). What MODIS gives is the sea area
+south of 55 S (its water class) and the support for the cold rule's latitude (section 7b).
+
+NSIDC's Sea Ice Index (G02135, version 4.0) was tried for an exclusion and dropped. Against it, the
+cold rule alone adds 5,743 cells: 5,138 at or beyond 60 degrees, which pay the 25 %, and 605 below
+it, which pay nothing (278 fixed or floating, mostly Canadian and Russian: Gulf of St Lawrence,
+Labrador, Okhotsk).
 
 ## Decisions and access
 
@@ -1039,6 +1167,15 @@ excluded if its centre lies inside.
   at Shamattawa's 0.85 days (DIAND 1996), logarithmic in travel time, every point costed; at sea
   the sea leg counts beyond DEA's far-shore 175 km. DIAND 1996, the DoD pricing guide (UFS
   3-701-01, 2026) and Songhurst (2018) added to Zotero.
+- **6 November:** flat runs at sea keep the depth-class costs, the base costs of a plant at sea
+  (section 7d); green-lory's two commits of 4 and 5 November pushed.
+- **5 November:** no sea-ice data: frozen sea counts as sea and the cold rule prices it, with
+  MODIS land cover as the only cover data; NSIDC's Sea Ice Index was tried and dropped. Wind
+  profiles smoothed on land and at sea, with no wind or PV factor; DEA's hours are a reference,
+  not a target (section 7a). Sea plants as separate sea runs (section 7d): coastal cells hold a land and a sea plant
+  as separate suppliers; the sea at a 20 % share and 5 MW/km2; the foundation in the build part;
+  small states at their Ameli region's rate; sea plants up to 75 degrees. Combined maps show the
+  cheapest plant that can make 1 Mt/yr; land and sea maps show every plant.
 - **ARC access:** the control socket closed on 7 October in the evening and was open again on
   8 October, when the global land build was submitted.
 - **ARC tooling checked on 7 October** with a smoke stage of the key run from release

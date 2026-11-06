@@ -6,6 +6,8 @@ to inputs/site_costs/:
 
     python -m model.site_geography cells    # cell_geography.csv
     python -m model.site_geography ports    # port_travel_times.csv
+    python -m model.site_geography elevation  # cell_elevation.csv
+    python -m model.site_geography sea      # sea_zones.csv
     python -m model.site_geography sites    # calibration_sites.csv
     python -m model.site_geography fit      # remoteness_fit.json and remoteness_fit.md
 
@@ -28,6 +30,13 @@ ports
     each N of CITY_SIZES (Nelson et al. 2019, at the port; empty for ports more than 3 pixels from
     a land pixel). model/site_costs.py takes a point's travel time from its nearest port where
     the raster has no value, and at sea.
+elevation
+    Every 1-degree cell, 90 S to 89 N: the mean elevation of its GEBCO pixels at or above 0 m and
+    the mean depth of those below it (empty where the cell has none).
+sea
+    Every 1-degree cell: the sovereign and type of the exclusive economic zone holding its
+    centre, or the nearest zone reaching a coastal cell whose centre is on land (Marine Regions;
+    empty outside every zone).
 sites
     The sites of the two AEMO location-factor tables (inputs/site_costs/*_location_factors.csv),
     located with the GeoNames gazetteer of Australia, with their travel times (at the site) and
@@ -53,6 +62,8 @@ import pandas as pd
 
 from .config import (
     EARTH_RADIUS_KM,
+    EEZ_SHAPEFILE,
+    GEBCO_FILE,
     GEONAMES_AU_FILE,
     GLWD_AREA_DIR,
     NELSON_TRAVEL_TIME_DIR,
@@ -68,6 +79,9 @@ CELL_GEOGRAPHY_CSV = SITE_COSTS_DIR / "cell_geography.csv"
 GSW_PERMANENT_WATER_CSV = SITE_COSTS_DIR / "gsw_permanent_water.csv"
 CALIBRATION_SITES_CSV = SITE_COSTS_DIR / "calibration_sites.csv"
 PORT_TRAVEL_TIMES_CSV = SITE_COSTS_DIR / "port_travel_times.csv"
+CELL_ELEVATION_CSV = SITE_COSTS_DIR / "cell_elevation.csv"
+SEA_ZONES_CSV = SITE_COSTS_DIR / "sea_zones.csv"
+GEBCO_PIXELS_PER_DEGREE = 240
 REMOTENESS_FIT_JSON = SITE_COSTS_DIR / "remoteness_fit.json"
 LOCATION_FACTOR_TABLES = {
     "aurecon2024": SITE_COSTS_DIR / "aurecon2024_location_factors.csv",
@@ -415,6 +429,67 @@ def build_port_travel_times(nelson_dir: Path = NELSON_TRAVEL_TIME_DIR, ports_csv
 
 
 # ---------------------------------------------------------------------------------------------
+# Elevation and sea
+# ---------------------------------------------------------------------------------------------
+
+def _land_and_sea_means(blocks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Per cell of (cells, pixels): mean elevation at or above 0 m and mean depth below it."""
+    sea = blocks < 0
+    with np.errstate(invalid="ignore", divide="ignore"):  # cells with no land or no sea
+        return (np.where(sea, 0.0, blocks).sum(axis=1) / (~sea).sum(axis=1),
+                -np.where(sea, blocks, 0.0).sum(axis=1) / sea.sum(axis=1))
+
+
+def build_cell_elevation(gebco_path: Path = GEBCO_FILE) -> pd.DataFrame:
+    """The per-cell table of the module docstring."""
+    import xarray as xr
+
+    frames = []
+    with xr.open_dataset(gebco_path) as dataset:
+        elevation = dataset["elevation"]
+        for lat in range(-90, 90):
+            south = max(int(round((lat - 0.5 + 90.0) * GEBCO_PIXELS_PER_DEGREE)), 0)
+            north = int(round((lat + 0.5 + 90.0) * GEBCO_PIXELS_PER_DEGREE))
+            band = elevation.isel(lat=slice(south, north)).to_numpy().astype(np.float32)
+            blocks = _cell_blocks(band, GEBCO_PIXELS_PER_DEGREE).transpose(1, 0, 2).reshape(360, -1)
+            land, sea = _land_and_sea_means(blocks)
+            frames.append(pd.DataFrame({"latitude": float(lat), "longitude": np.arange(-180.0, 180.0),
+                                        "land_elevation_m": land, "sea_depth_m": sea}))
+    return pd.concat(frames, ignore_index=True)
+
+
+CELL_HALF_DIAGONAL_DEG = 0.5 * 2.0 ** 0.5
+
+
+def build_sea_zones(eez_path: Path = EEZ_SHAPEFILE, elevation_csv: Path = CELL_ELEVATION_CSV) -> pd.DataFrame:
+    """The per-cell table of the module docstring."""
+    import geopandas as gpd
+
+    lat, lon = (grid.ravel() for grid in np.meshgrid(np.arange(-90.0, 90.0), np.arange(-180.0, 180.0), indexing="ij"))
+    # the zones are cut at the date line, and a point on a polygon's edge is not within it
+    centres = gpd.GeoDataFrame({"latitude": lat, "longitude": lon}, crs="EPSG:4326",
+                               geometry=gpd.points_from_xy(np.maximum(lon, -179.999), lat))
+
+    zones = gpd.read_file(eez_path, columns=["iso_sov1", "pol_type"]).to_crs(centres.crs)
+    held = gpd.sjoin(centres, zones, predicate="within", how="left")
+    held = held[~held.index.duplicated()]  # the rare centre on a boundary between two zones
+    table = pd.DataFrame({"latitude": lat, "longitude": lon,
+                          "eez_iso3": held["iso_sov1"].to_numpy(), "eez_type": held["pol_type"].to_numpy()})
+    table["eez_source"] = np.where(table["eez_iso3"].notna(), "centre", "none")
+    # a coastal cell's centre can lie on land, outside every zone: it takes the nearest zone that
+    # reaches the cell, so Antarctica's coast, which has no zones, stays outside them
+    elevation = pd.read_csv(elevation_csv)
+    coastal = (table["eez_iso3"].isna() & elevation["land_elevation_m"].notna() & elevation["sea_depth_m"].notna()).to_numpy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)  # distances in degrees are enough to pick the zone
+        nearest = gpd.sjoin_nearest(centres[coastal], zones, how="inner", max_distance=CELL_HALF_DIAGONAL_DEG)
+    nearest = nearest[~nearest.index.duplicated()]
+    table.loc[nearest.index, ["eez_iso3", "eez_type"]] = nearest[["iso_sov1", "pol_type"]].to_numpy()
+    table.loc[nearest.index, "eez_source"] = "nearest"
+    return table
+
+
+# ---------------------------------------------------------------------------------------------
 # Calibration sites
 # ---------------------------------------------------------------------------------------------
 
@@ -665,6 +740,10 @@ def main(argv: list[str] | None = None) -> int:
     cells.add_argument("--max-lat", type=int, default=None)
     ports = commands.add_parser("ports", help="the ports' travel times")
     ports.add_argument("--output", type=Path, default=PORT_TRAVEL_TIMES_CSV)
+    elevation = commands.add_parser("elevation", help="every cell's mean land elevation and sea depth")
+    elevation.add_argument("--output", type=Path, default=CELL_ELEVATION_CSV)
+    sea = commands.add_parser("sea", help="every cell's economic zone")
+    sea.add_argument("--output", type=Path, default=SEA_ZONES_CSV)
     sites = commands.add_parser("sites", help="the calibration sites")
     sites.add_argument("--output", type=Path, default=CALIBRATION_SITES_CSV)
     fit = commands.add_parser("fit", help="the remoteness fit")
@@ -687,6 +766,10 @@ def main(argv: list[str] | None = None) -> int:
         _write_with_provenance(frame, args.output, inputs)
     elif args.command == "ports":
         _write_with_provenance(build_port_travel_times(), args.output, {"ports": PORTS_CSV, **nelson_inputs}, decimals=5)
+    elif args.command == "elevation":
+        _write_with_provenance(build_cell_elevation(), args.output, {"gebco": GEBCO_FILE}, decimals=1)
+    elif args.command == "sea":
+        _write_with_provenance(build_sea_zones(), args.output, {"eez": EEZ_SHAPEFILE, "cell_elevation": CELL_ELEVATION_CSV})
     elif args.command == "sites":
         frame = build_calibration_sites()
         inputs = {**LOCATION_FACTOR_TABLES, "gazetteer": GEONAMES_AU_FILE, "ports": PORTS_CSV, **nelson_inputs}

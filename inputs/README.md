@@ -17,7 +17,7 @@ Every modelling assumption other than technology costs, one value per key with i
 the plant's reference output (`plant`); land-cover availability, protected-area statuses, slope classes and PV row geometry (`land`);
 the rule for the cells a campaign solves (`run_cells`); the wind wake factor and the land
 correction's thresholds (`weather`); what counts as a water source (`water_sources`); and the
-remoteness table chosen, the slope factors and the water pipeline's unit costs (`site_costs`);
+remote factor and cold rule, the slope factors and the water pipeline's unit costs (`site_costs`), the costs of plants at sea (`offshore`);
 and the physical constants with a source, such as the heating values that turn energy into
 tonnes (`physical`).
 `model/parameters.py` reads it; the land, geography and site-cost tables and every run manifest

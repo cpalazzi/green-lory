@@ -1,7 +1,7 @@
 {
   "written_by": "python -m model.site_costs",
   "rows": 18039,
-  "sha256": "aa0bfff7bedd0721e72502a86e589d5a8159e4674ac4770896aea1b80e4b778b",
+  "sha256": "df2641a7a3f0d860ffb6ea2b1a567236fedec64949d971d5c00a4b0213fc024e",
   "currency": "USD2020",
   "inputs": {
     "land_table": {
@@ -19,11 +19,15 @@
     "port_travel_times": {
       "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/port_travel_times.csv",
       "sha256": "31b9544f90fd478f9bd89e8f34066a721312b15c197ba4c02614ddbe149676ff"
+    },
+    "cell_elevation": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/cell_elevation.csv",
+      "sha256": "18ea501d9f6b3770d5325066f578328ec868bf4ae62e1d4b59fd5b6a2df629e0"
     }
   },
   "parameters_yaml": {
     "path": "inputs/parameters.yaml",
-    "sha256": "355ddc416c69f1d42f386a6e8a14b24c999f524085cf5cb342ff1e4aba0c126c"
+    "sha256": "9b5859970539b24966446772a5054c621dac913009e31db624a2cf428ca6f416"
   },
   "parameters": {
     "land_cells_beyond_the_geography": 1788,

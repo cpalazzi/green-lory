@@ -14,10 +14,14 @@ mechanisms. Everything here except the three transcribed tables is generated, wi
 | `ghd2025_capital_installation_factors.csv` | GHD (2025) Table 8.2: the capital cities' installation factors relative to Melbourne | hand |
 | `cell_geography.csv` | Every 1-degree cell from 55 S to 83 N: travel time to the nearest city of 5,000 to 5 million people (median over the cell's land pixels), distance to the nearest network port, sea and inland-water areas by class, whether the cell holds a water source (sea and lakes at least 10 % of it, or large rivers at least 1 %) and the distance to the nearest one (also with every saline lake, with none, and without the rivers) | `python -m model.site_geography cells` |
 | `port_travel_times.csv` | The 1,377 ports of the shipping network with their travel times to a city of 5,000 to 5 million people, at the port. Eight ports have none, because their coordinates lie more than 3 pixels from a land pixel on the raster (among them Manila and Jingtang); the next nearest port stands in for them | `python -m model.site_geography ports` |
+| `cell_elevation.csv` | Every 1-degree cell, 90 S to 89 N: the mean elevation of its GEBCO 2025 pixels at or above 0 m (`land_elevation_m`, for the cold rule) and the mean depth of those below (`sea_depth_m`, for a sea plant's depth class). The sub-ice grid, so bedrock under the ice sheets, which lie beyond 60 degrees anyway | `python -m model.site_geography elevation` |
+| `sea_zones.csv` | Every 1-degree cell: `eez_iso3` and `eez_type`, the sovereign and type of the exclusive economic zone; `eez_source`, `centre` if the zone holds the centre, `nearest` if the nearest zone reaches a coastal cell whose centre is on land, `none` outside every zone (international waters, Antarctica's coast among them) | `python -m model.site_geography sea` |
 | `gsw_permanent_water.csv` | For the 134 cells that would hold a water source only through a saline lake: the area where the JRC Global Surface Water occurrence layer shows water in at least half of the observations of 1984-2021, read remotely on 8 October 2026; 109 of them pass the 10 % threshold | the same, kept between runs |
 | `calibration_sites.csv` | The sites of both tables, located with the GeoNames gazetteer of Australia (Texas, Kingston SE, Campbelltown and Derwent Valley under their gazetteer names; Cardowan is a homestead, not a town), with their travel times and their distances to the nearest network port and to the state capital's port | `python -m model.site_geography sites` |
 | `remoteness_fit.json`, `remoteness_fit.md` | The fit of the equipment and installation factors to each table, and the report with every site's residual: a check since 3 November 2026, not an input | `python -m model.site_geography fit` |
-| `site_costs_center_20pct_slope20.csv` | The site costs of every cell with onshore land in the October 20 % land table (`land_center_slope20_20261008_v2`): travel time and its source (`travel_time_source`: `raster` or `port`), the equipment, installation, cold, slope, depth and labour multipliers, the nearest water source and the water price (USD2020/m3) | `green-lory site-costs --land <land table> --output <csv>` |
+| `site_costs_center_20pct_slope20.csv` | The site costs of every cell with onshore land in the October 20 % land table (`land_center_slope20_20261008_v2`): travel time and its source (`travel_time_source`: `raster` or `port`), the equipment, installation, cold, slope, depth and labour multipliers, the nearest water source and the water price (USD2020/m3). `plant_multiplier`, `wind_equipment_ratio` and `wind_build_ratio` are 1 | `green-lory site-costs --land <land table> --output <csv>` |
+| `site_costs_sea_20pct.csv` | The same columns for the 40,197 sea plants of a sea run, with `sea_depth_m`, `depth_class` and `eez_iso3` (see below) | `python -m model.sea_cells` |
+| `site_costs_sea_flat_20pct.csv` | The flat runs' table at sea (`bflat`): the same rows with the depth-class costs (`plant_multiplier`, `wind_equipment_ratio`, `wind_build_ratio`) and every location factor 1 | `python -m model.sea_cells --flat-site-costs-output` |
 
 ## The remote factor
 
@@ -37,6 +41,23 @@ November 2026). With d the travel time in days from a city of 20,000:
 Nothing is fitted beyond the anchor. Against the Australian factors, which the rule did not use,
 the build factor is 0.04 below GHD's on average (RMSE 0.087) and 0.19 below Aurecon's, and the
 equipment factor 0.01 above Aurecon's (`tests/test_site_costs.py`).
+
+## Plants at sea
+
+A sea run solves the land runs' plant with wind at sea and no PV, so it differs only in its data:
+its land table, its weather stack and `site_costs_sea_20pct.csv` (`model/sea_cells.py`). Its rows:
+
+1. A cell holds a sea plant if at least 1 % of it is sea and it has a sea depth. Frozen sea
+   counts as sea, and the cold rule prices it. A coastal cell can so hold a land plant in the
+   land run and a sea plant in the sea run, each on its own area.
+2. `depth_class` follows the mean depth: `fixed` up to 70 m, `floating` to 1,000 m, `deep` beyond.
+3. Wind (`offshore` in `../parameters.yaml`): the turbine is the equipment part, and the
+   foundation, array cables and development the build part, without DEA's substation and export
+   cable. `wind_equipment_ratio` and `wind_build_ratio` are these over the technology YAML's
+   onshore costs. In deep water both are 3.
+4. Every other technology takes `plant_multiplier`: 1.72, 2 or 3 by class.
+5. The remote factor uses the nearest port's travel time plus the sea leg beyond 175 km. The cold
+   rule applies by latitude. Water is desalinated at the source price with no pipeline.
 
 ## The fit (a check)
 

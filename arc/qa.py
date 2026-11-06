@@ -670,9 +670,10 @@ def _cost_scope_expectations(manifest: dict[str, Any], execution: dict[str, Any]
 
 
 def _check_site_costs(combined: pd.DataFrame, expectations: dict[str, Any]) -> dict[str, Any]:
-    """Every cell carries the site-cost table's equipment multiplier (times its cold factor) and
-    water price, and a build multiplier between its installation factor (times its cold factor)
-    and that times its slope factor."""
+    """Every cell carries the site-cost table's water price, and capacity-weighted equipment and
+    build multipliers within the table's range. Equipment: the table's value times its cold
+    factor, times wind's ratio or the plant multiplier (both 1 in a land run). Build: the same
+    with the installation factor, up to that times the slope factor."""
     path = expectations["site_costs_csv"]
     if expectations.get("site_costs_sha256") and _sha256(path) != expectations["site_costs_sha256"]:
         raise ValueError(f"Site-cost table changed since the manifest was written: {path}")
@@ -685,12 +686,16 @@ def _check_site_costs(combined: pd.DataFrame, expectations: dict[str, Any]) -> d
     if "equipment_cost_multiplier" not in combined.columns:
         raise ValueError("Results with site costs must report equipment_cost_multiplier")
     equipment = pd.to_numeric(merged["equipment_cost_multiplier"], errors="raise")
-    if not ((equipment - merged["equipment_cost_multiplier_table"] * merged["cold_multiplier"]).abs() <= 1e-9).all():
+    base_equipment = merged["equipment_cost_multiplier_table"] * merged["cold_multiplier"]
+    parts = merged[["wind_equipment_ratio", "plant_multiplier"]]
+    if not ((equipment >= base_equipment * parts.min(axis=1) - 1e-9) & (equipment <= base_equipment * parts.max(axis=1) + 1e-9)).all():
         raise ValueError("Result equipment multipliers differ from the site-cost table")
     base_build = (merged["installation_multiplier"] * merged["labour_multiplier"] * merged["depth_multiplier"]
                   * merged["cold_multiplier"])
     build = pd.to_numeric(merged["build_cost_multiplier"], errors="raise")
-    if not ((build >= base_build - 1e-9) & (build <= base_build * merged["slope_multiplier"] + 1e-9)).all():
+    parts = merged[["wind_build_ratio", "plant_multiplier"]]
+    if not ((build >= base_build * parts.min(axis=1) - 1e-9)
+            & (build <= base_build * merged["slope_multiplier"] * parts.max(axis=1) + 1e-9)).all():
         raise ValueError("Result build multipliers lie outside the site-cost table's range")
     water = pd.to_numeric(merged["water_cost_usd_per_m3"], errors="raise")
     if not ((water - merged["water_cost_usd_per_m3_table"]).abs() <= 1e-9 * merged["water_cost_usd_per_m3_table"].abs().clip(lower=1.0)).all():

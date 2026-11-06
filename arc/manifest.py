@@ -365,7 +365,8 @@ SITE_COSTS_SCOPE_PATTERN = re.compile(r"^site_costs_(amelired|ameli|wacc\d+(?:p\
 # Columns a site-cost table must have (model/site_costs.py)
 SITE_COST_COLUMNS = (
     "latitude", "longitude", "equipment_cost_multiplier", "installation_multiplier", "cold_multiplier",
-    "slope_multiplier", "depth_multiplier", "labour_multiplier", "water_source_cost_usd_per_m3", "water_cost_usd_per_m3",
+    "plant_multiplier", "wind_equipment_ratio", "wind_build_ratio", "slope_multiplier", "depth_multiplier",
+    "labour_multiplier", "water_source_cost_usd_per_m3", "water_cost_usd_per_m3",
     "land_cost_usd_per_km2_year",
 )
 
@@ -558,8 +559,8 @@ def build_site_cost_scope(
             raise ValueError(f"{site_costs_csv}:{number}: the water source price is not the YAML baseline {baseline}")
         if float(row["land_cost_usd_per_km2_year"]) != 0.0:
             raise ValueError(f"{site_costs_csv}:{number}: a site-cost scope without land rent needs zero land cost")
-        for column in ("equipment_cost_multiplier", "installation_multiplier", "cold_multiplier", "slope_multiplier",
-                       "depth_multiplier", "labour_multiplier"):
+        for column in ("equipment_cost_multiplier", "installation_multiplier", "cold_multiplier", "plant_multiplier",
+                       "slope_multiplier", "depth_multiplier", "labour_multiplier"):
             value = float(row[column])
             if not math.isfinite(value) or value < 1.0:
                 raise ValueError(f"{site_costs_csv}:{number}: {column}={value} is not a multiplier of at least 1")

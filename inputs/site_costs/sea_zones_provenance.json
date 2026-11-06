@@ -1,0 +1,19 @@
+{
+  "written_by": "python -m model.site_geography",
+  "rows": 64800,
+  "sha256": "bd2819f27f8d0f24bebb3be7daee53266e24967d941f61a65736e7c5234c879e",
+  "parameters": {
+    "path": "inputs/parameters.yaml",
+    "sha256": "fb0b4f0b2fc4358fb44c37de83d9995ac602c2cfd5da3b02965992114f76f97a"
+  },
+  "inputs": {
+    "eez": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/marine_regions/world_eez_v12_wfs/eez.shp",
+      "sha256": "bb68ebda72f96ecf4f6428cd11079c50ec94eb2ffc4f711e092698dbb79066e5"
+    },
+    "cell_elevation": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/site_costs/cell_elevation.csv",
+      "sha256": "18ea501d9f6b3770d5325066f578328ec868bf4ae62e1d4b59fd5b6a2df629e0"
+    }
+  }
+}

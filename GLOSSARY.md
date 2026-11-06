@@ -128,6 +128,7 @@ pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run
 | `land20c`, `land2c`, `land20oct`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`c` centred build of 23 Sep 2026, `oct` the October build of 8 Oct 2026 with slope classes up to 20 degrees and protected land counted on land only, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |
 | `fixed`, `track`, `both` | PV technologies offered |
 | `4h` | four-hour weather step (default is hourly) |
+| `offshore` | a sea run (`model/sea_cells.py`): the same plant with wind at sea and no PV, wind and the plant at the costs of their depth class, which are the base costs of a plant at sea; `bflat` adds nothing to them, `bspat` adds the location factors (remote factor, cold, labour), as on land |
 | `glannuity` | legacy model with green-lory's per-technology annuity instead of the workbook factor |
 | `legacyrule` | capacity from the recovered legacy rule instead of green-lory's land method |
 | `pilot3cells` | supply pilot at the three focal cells |
@@ -175,6 +176,8 @@ efficiencies and the tracking flag; the September reports name them.
 | Focal cells | Atacama (−23, −69), northwest Australia (−23, 117), central Australia (−21, 135): the cells whose changes drove the network divergence |
 | MOD-AMB | The Verschuur et al. (2024) scenario used as the primary endpoint, with RCP4.5 and 70 % ammonia adoption |
 | Supplier table | The network model's input exported from a surface by `python -m model.suppliers export`: `suppliers_USD2018.csv` (one row per cell: `LCOA` in USD2018/t, `Max_capacity` in Mt/yr, `iso3`, ...) and `suppliers_USD2018_provenance.json` (input hashes, currency conversion, cutoff, exclusions, the CSV's hash). Called a supplier contract, with `contract.json`, until 30 October 2026 |
+| Sea plant | A plant at sea, solved in a sea run (`model/sea_cells.py`): the same plant as a land run with wind at sea and no PV. A coastal cell can hold a land plant and a sea plant, each on its own area and each its own supplier (a sea plant's `Index` ends in `_sea`). |
+| Lowest feasible plant | What a combined land and sea map shows: a cell's cheapest plant that can make the 1 Mt/yr reference output (`results.lowest_feasible_plant`), the cutoff of the network's suppliers. |
 | Release | An immutable copy of the source tree on ARC (`green-lory-releases/<id>`) with a hashed file inventory; every ARC job runs from one |
 | Campaign | An output tree on ARC (`green-lory-campaigns/<campaign>/`); runs are written below it by results class, run id and stage |
 | Accepted gap | The network optimality gap at which a result is accepted: 1.5 %, the public deposit's own tolerance (decided 5 Oct 2026) |

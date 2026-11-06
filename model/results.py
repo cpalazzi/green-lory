@@ -7,6 +7,7 @@ results/campaigns/.
 - ``output_dir``, ``load_surface``, ``load_network_suppliers``: outputs by run id;
 - ``at_cells``, ``focal_cell_table``: rows at named cells (the three focal cells by default);
 - ``coast_distance_bands``, ``lcoa_by_band``, ``production_by_band``: coast against inland;
+- ``lowest_feasible_plant``: one plant per cell from a land run and a sea run, for combined maps;
 - ``plot_map`` (interactive, plotly) and ``plot_map_static`` (matplotlib, for papers): any
   column of a surface on the 1-degree grid.
 """
@@ -22,9 +23,11 @@ import plotly.graph_objects as go
 
 from . import runs
 from .config import COUNTRIES_GEOJSON, REPO_ROOT
+from .parameters import parameter
 
 FOCAL_CELLS = {"Atacama": (-23.0, -69.0), "NW Australia": (-23.0, 117.0), "Central Australia": (-21.0, 135.0)}
 CAPACITY_COLUMN = "scaled_design_max_gridless_onshore_ammonia_capacity_t"
+REFERENCE_OUTPUT_MT_PER_YEAR = float(parameter("plant.reference_output_mt_per_year"))
 COAST_BANDS = ([-1, 100, 300, 5000], ["coast <100 km", "100-300 km", "inland >300 km"])
 
 # Where the result table sits inside a run's output directory, by kind of output
@@ -166,6 +169,23 @@ def production_by_band(banded: pd.DataFrame, suppliers: Mapping[str, pd.DataFram
 
 
 # --- maps -------------------------------------------------------------------------------------
+
+def lowest_feasible_plant(land: pd.DataFrame, sea: pd.DataFrame,
+                          minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR) -> pd.DataFrame:
+    """Each cell's cheapest plant that can make the reference output, from a land and a sea run.
+
+    A cell can hold a land plant and a sea plant, on separate areas, but a map shows one number.
+    Every LCOA is that of the reference design (1 Mt/yr), so a plant whose area cannot reach that
+    output cannot make ammonia at that cost at scale, and it does not count: the same cutoff as
+    the network's suppliers. A cell with no such plant is left out. Column site says which plant
+    is shown; its own capacity column gives what the cell can make at that cost, and the supply
+    curve, not this table, adds the two plants of a cell.
+    """
+    plants = pd.concat([land.assign(site="land"), sea.assign(site="sea")], ignore_index=True)
+    feasible = plants[plants[CAPACITY_COLUMN] >= minimum_mt_per_year * 1e6]
+    cheapest = feasible.sort_values("lcoa_eur_per_t").drop_duplicates(["latitude", "longitude"])
+    return cheapest.sort_values(["latitude", "longitude"]).reset_index(drop=True)
+
 
 def _cell_id(lat: float, lon: float, decimals: int = 2) -> str:
     return f"{lat:.{decimals}f}_{lon:.{decimals}f}"

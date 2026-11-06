@@ -8,7 +8,8 @@ For each onshore cell of a land table, site_cost_table() gives
   20,000 people, through a value at the anchor, a fly-in community (remote_multiplier). Every
   point gets one: the travel time is the raster's, or the nearest port's plus the sea leg
   (travel_min_to_city; travel_time_source records which);
-- cold_multiplier, on both parts of every technology: at high latitude or altitude (cold_rule);
+- cold_multiplier, on both parts of every technology: at high latitude or altitude (cold_rule),
+  the altitude being the mean of the cell's land (cell_elevation.csv);
 - slope_multiplier, on the build part of PV and wind only: the mean factor of the slope classes
   of the land the plant's share takes, flattest first (SLOPE_CLASS_FACTORS);
 - depth_multiplier and labour_multiplier, both 1 (inputs/parameters.yaml): the table covers
@@ -20,7 +21,8 @@ For each onshore cell of a land table, site_cost_table() gives
 The remote and cold rules are in inputs/parameters.yaml with their sources. A technology's
 equipment multiplier is equipment x cold, and its build multiplier installation x labour x depth
 x cold, times the slope factor for PV and wind; fixed O&M is a fraction of the overnight cost, so
-it follows both multipliers (model/technology.py).
+it follows both multipliers (model/technology.py). A sea run's table (model/sea_cells.py) has the
+same columns; in a land run plant_multiplier, wind_equipment_ratio and wind_build_ratio are 1.
 
     python -m model.site_costs --land <land table> --output <site costs csv>
     green-lory site-costs --land <land table> --output <site costs csv>
@@ -41,7 +43,7 @@ import pandas as pd
 
 from .config import DEFAULT_TECH_YAML, SITE_COSTS_DIR, SLOPE_CLASS_COLUMNS, repo_path
 from .parameters import eur2020_per, file_record, parameter
-from .site_geography import PORT_TRAVEL_TIMES_CSV, nearest_km
+from .site_geography import CELL_ELEVATION_CSV, PORT_TRAVEL_TIMES_CSV, nearest_km
 
 CELL_GEOGRAPHY_CSV = SITE_COSTS_DIR / "cell_geography.csv"
 ONSHORE_LAND_PCT_MIN = 1e-6
@@ -209,25 +211,26 @@ def site_cost_table(
     land_table: pd.DataFrame,
     geography: pd.DataFrame,
     ports: pd.DataFrame,
+    elevation: pd.DataFrame,
     *,
     water_source_usd_per_m3: float,
     water_m3_per_t: float,
 ) -> tuple[pd.DataFrame, dict]:
     """Per-cell site costs for the land table's cells with onshore land (module docstring)."""
-    missing = [column for column in (*SLOPE_CLASS_COLUMNS, "elevation_m") if column not in land_table.columns]
+    missing = [column for column in SLOPE_CLASS_COLUMNS if column not in land_table.columns]
     if missing:
-        raise ValueError(f"The land table has no {', '.join(missing)}; rebuild it with model.land_table")
+        raise ValueError(f"The land table has no slope classes ({', '.join(missing)}); rebuild it with model.land_table")
     shares = pd.to_numeric(land_table["land_competition_fraction"]).unique()
     if len(shares) != 1:
         raise ValueError("land_competition_fraction must be uniform within a land table")
     # onshore land above rounding noise (sea cells can carry 1e-14 % from the spherical weights)
-    cells = land_table[land_table["onshore_land_pct"] > ONSHORE_LAND_PCT_MIN][
-        ["latitude", "longitude", "elevation_m", *SLOPE_CLASS_COLUMNS]]
+    cells = land_table[land_table["onshore_land_pct"] > ONSHORE_LAND_PCT_MIN][["latitude", "longitude", *SLOPE_CLASS_COLUMNS]]
     # the geography covers 55 S to 83 N (the lakes database); land cells beyond it (Antarctica) get
     # no site costs, and runs refuse any cell without a row
     in_range = cells["latitude"].between(geography["latitude"].min(), geography["latitude"].max())
     beyond = int((~in_range).sum())
     table = cells[in_range].merge(geography, on=["latitude", "longitude"], how="left", validate="one_to_one")
+    table = table.merge(elevation[["latitude", "longitude", "land_elevation_m"]], on=["latitude", "longitude"], how="left")
     uncovered = table["port_distance_km"].isna()
     if uncovered.any():
         examples = ", ".join(f"({lat:g}, {lon:g})" for lat, lon in table.loc[uncovered, ["latitude", "longitude"]].head(5).to_numpy())
@@ -244,7 +247,10 @@ def site_cost_table(
     out["travel_time_source"] = np.where(by_port, "port", "raster")
     out["equipment_cost_multiplier"] = remote_multiplier(travel_min, REMOTE_EQUIPMENT_AT_ANCHOR)
     out["installation_multiplier"] = remote_multiplier(travel_min, REMOTE_BUILD_AT_ANCHOR)
-    out["cold_multiplier"] = cold_rule(table["latitude"], table["elevation_m"])
+    out["cold_multiplier"] = cold_rule(table["latitude"], table["land_elevation_m"])
+    out["plant_multiplier"] = 1.0
+    out["wind_equipment_ratio"] = 1.0
+    out["wind_build_ratio"] = 1.0
     out["slope_multiplier"] = slope_multiplier(table, float(shares[0]))
     out["depth_multiplier"] = DEPTH_MULTIPLIER
     out["labour_multiplier"] = LABOUR_MULTIPLIER
@@ -282,8 +288,9 @@ def load_site_cost_overrides(path: str | Path, tech_names) -> dict:
     """A site-cost table as cell overrides: {(lat, lon): {tech: {...}, "__location__": {...}}}.
 
     Every technology gets an equipment multiplier (equipment x cold) and a build multiplier
-    (installation x labour x depth x cold, times the slope factor for PV and wind); the location
-    entry carries the water price and the land cost.
+    (installation x labour x depth x cold, times the slope factor for PV and wind), wind times its
+    ratios and the others times plant_multiplier; the location entry carries the water price and
+    the land cost.
     """
     from .plant import normalize_component_name
 
@@ -294,8 +301,10 @@ def load_site_cost_overrides(path: str | Path, tech_names) -> dict:
         base_build = row.installation_multiplier * row.labour_multiplier * row.depth_multiplier * row.cold_multiplier
         entry = {
             name: {
-                "equipment_cost_multiplier": float(row.equipment_cost_multiplier * row.cold_multiplier),
-                "build_cost_multiplier": float(base_build * (row.slope_multiplier if name in SLOPE_TECHS else 1.0)),
+                "equipment_cost_multiplier": float(row.equipment_cost_multiplier * row.cold_multiplier
+                                                   * (row.wind_equipment_ratio if name == "wind" else row.plant_multiplier)),
+                "build_cost_multiplier": float(base_build * (row.slope_multiplier if name in SLOPE_TECHS else 1.0)
+                                               * (row.wind_build_ratio if name == "wind" else row.plant_multiplier)),
             }
             for name in names
         }
@@ -329,6 +338,7 @@ def write_site_cost_table(
     tech_yaml: Path = DEFAULT_TECH_YAML,
     geography_csv: Path = CELL_GEOGRAPHY_CSV,
     ports_csv: Path = PORT_TRAVEL_TIMES_CSV,
+    elevation_csv: Path = CELL_ELEVATION_CSV,
 ) -> pd.DataFrame:
     from .technology import load_tech_meta
 
@@ -337,6 +347,7 @@ def write_site_cost_table(
         pd.read_csv(land_csv),
         pd.read_csv(geography_csv),
         load_ports(ports_csv),
+        pd.read_csv(elevation_csv),
         # The source price is the YAML's baseline (the flat runs' price): the desalination price
         # at sea, lake and river alike. Fresh water could be treated more cheaply; charging the
         # desalination price is a deliberate shadow price that protects freshwater for other uses
@@ -354,7 +365,8 @@ def write_site_cost_table(
         "inputs": {
             name: {"path": str(path), "sha256": _sha256(path)}
             for name, path in (("land_table", land_csv), ("tech_yaml", tech_yaml),
-                               ("cell_geography", geography_csv), ("port_travel_times", ports_csv))
+                               ("cell_geography", geography_csv), ("port_travel_times", ports_csv),
+                               ("cell_elevation", elevation_csv))
         },
         "parameters_yaml": file_record(),
         "parameters": parameters,
@@ -370,12 +382,14 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="technology YAML: the water source price, the water use and the currency")
     parser.add_argument("--geography", type=Path, default=CELL_GEOGRAPHY_CSV)
     parser.add_argument("--port-travel-times", type=Path, default=PORT_TRAVEL_TIMES_CSV)
+    parser.add_argument("--cell-elevation", type=Path, default=CELL_ELEVATION_CSV)
 
 
 def run(args: argparse.Namespace) -> int:
     table = write_site_cost_table(
         repo_path(args.land), repo_path(args.output), tech_yaml=repo_path(args.tech_yaml),
         geography_csv=repo_path(args.geography), ports_csv=repo_path(args.port_travel_times),
+        elevation_csv=repo_path(args.cell_elevation),
     )
     print(f"wrote {args.output}: {len(table)} cells")
     return 0

@@ -91,7 +91,6 @@ def _land_table():
         "latitude": [-23.0, -23.0, -24.0],
         "longitude": [117.0, 151.0, 152.0],
         "onshore_land_pct": [100.0, 30.0, 0.0],
-        "elevation_m": [400.0, 20.0, -50.0],
         "land_competition_fraction": [0.2, 0.2, 0.2],
         SLOPE_CLASS_COLUMNS[0]: [10.0, 100.0, 0.0],
         SLOPE_CLASS_COLUMNS[1]: [5.0, 0.0, 0.0],
@@ -125,9 +124,14 @@ def _equipment(days):
     return 1.0 + 0.6 * np.log2(1.0 + days) / np.log2(1.85)
 
 
-def _table(land=None, geography=None):
+def _elevation():
+    return pd.DataFrame({"latitude": [-23.0, -23.0], "longitude": [117.0, 151.0], "land_elevation_m": [400.0, 20.0]})
+
+
+def _table(land=None, geography=None, elevation=None):
     return site_costs.site_cost_table(_land_table() if land is None else land, _geography() if geography is None else geography,
-                                      _ports(), water_source_usd_per_m3=2.0, water_m3_per_t=1.5)
+                                      _ports(), _elevation() if elevation is None else elevation,
+                                      water_source_usd_per_m3=2.0, water_m3_per_t=1.5)
 
 
 def test_site_cost_table_combines_the_factors():
@@ -165,7 +169,7 @@ def test_a_port_without_a_travel_time_is_left_out(tmp_path):
 
 
 def test_cold_raises_the_pipeline_and_both_parts_of_every_technology(tmp_path):
-    table, _ = _table(land=_land_table().assign(elevation_m=[3500.0, 20.0, -50.0]))
+    table, _ = _table(elevation=_elevation().assign(land_elevation_m=[3500.0, 20.0]))
     warm, _ = _table()
     assert table.cold_multiplier.tolist() == [1.25, 1.0]
     pipeline = warm.water_pipeline_cost_usd_per_m3.iloc[0]
@@ -177,11 +181,9 @@ def test_cold_raises_the_pipeline_and_both_parts_of_every_technology(tmp_path):
     assert cold["build_cost_multiplier"] == pytest.approx(1.25 * table.installation_multiplier.iloc[0])
 
 
-def test_site_cost_table_refuses_land_tables_without_slope_classes_elevation_or_geography():
-    with pytest.raises(ValueError, match="land_pct_slope"):
+def test_site_cost_table_refuses_land_tables_without_slope_classes_or_geography():
+    with pytest.raises(ValueError, match="slope classes"):
         _table(land=_land_table().drop(columns=list(SLOPE_CLASS_COLUMNS)))
-    with pytest.raises(ValueError, match="elevation_m"):
-        _table(land=_land_table().drop(columns="elevation_m"))
     with pytest.raises(ValueError, match="no geography row"):
         _table(geography=_geography().iloc[:1])
 

@@ -537,6 +537,7 @@ def test_site_cost_results_must_carry_the_table_values(tmp_path):
     pd.DataFrame({
         "latitude": [-23.0, -23.0], "longitude": [117.0, 151.0],
         "equipment_cost_multiplier": [1.05, 1.01], "installation_multiplier": [1.34, 1.09], "cold_multiplier": [1.0, 1.25],
+        "plant_multiplier": [1.0, 1.0], "wind_equipment_ratio": [1.0, 1.0], "wind_build_ratio": [1.0, 1.0],
         "slope_multiplier": [1.2, 1.0], "depth_multiplier": [1.0, 1.0], "labour_multiplier": [1.0, 1.0],
         "water_cost_usd_per_m3": [7.2, 2.28], "land_cost_usd_per_km2_year": [0.0, 0.0],
     }).to_csv(table, index=False)
