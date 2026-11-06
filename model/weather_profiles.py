@@ -16,9 +16,11 @@ ERA5 points weighted by their land area within the cell, and a sea profile, weig
 water area. The weights are those of model/weather_land.py for cells with land and water
 (inputs/weather/era5_point_weights_1deg.csv); other cells are land if their land share
 (inputs/site_costs/cell_geography.csv) reaches weather.land_correction.full_land_share and sea if
-they have no land. Onshore sites read the land profiles (Solar, SolarTracking, WindPowers);
-offshore sites the sea profile of the offshore turbine (WindOffshore). The wake factor
-(weather.wind_wake_factor) is applied when the profiles are loaded (model/weather.py), not here.
+they have no land, with a land profile too, from all their points, since the land table counts
+atolls the geography does not. A land run's stack holds the land profiles (Solar, SolarTracking, WindPowers);
+a sea run's (stack --sea) holds the sea profile of the offshore turbine as its WindPowers, and no
+PV output. The wake factor (weather.wind_wake_factor) is applied when the profiles are loaded
+(model/weather.py), not here.
 
     python -m model.weather_profiles check --cutout <cutout.nc> --output <report.json>
     python -m model.weather_profiles convert --cutout <cutout.nc> --cells <south>:<north> --output <band.nc>
@@ -68,13 +70,15 @@ STACK_FILES = {
     "solar": ("Solar", "Solar"),
     "solar_tracking": ("SolarTracking", "Solar"),
     "wind": ("WindPowers", "Wind"),
-    "wind_offshore": ("WindOffshore", "Wind"),
 }
 
 # Standard atmosphere (ISO 2533) below 11 km: rho / rho0 = (1 - L h / T0)^(g M / (R L) - 1)
 SEA_LEVEL_TEMPERATURE_K = 288.15
 LAPSE_RATE_K_PER_M = 0.0065
 DENSITY_EXPONENT = 9.80665 * 0.0289644 / (8.31446 * LAPSE_RATE_K_PER_M) - 1.0  # 4.2559
+
+# The land share of a cell without land, so that it has a land profile (band_cells)
+MIN_LAND_SHARE = 1e-6
 
 # DEA's reference conditions for the check: 2050 full-load hours per MW (onshore and offshore
 # wind net of wakes; PV per MW of AC) and the cells that stand for them (Denmark and its North Sea)
@@ -240,7 +244,9 @@ def band_cells(south: int, north: int, geography: pd.DataFrame | None = None) ->
         geography = pd.read_csv(GEOGRAPHY_CSV, usecols=["latitude", "longitude", "cell_area_km2", "land_km2"])
     shares = geography.assign(land_share=geography["land_km2"] / geography["cell_area_km2"])[["latitude", "longitude", "land_share"]]
     cells = cells.merge(shares, on=["latitude", "longitude"], how="left")
-    cells["land_share"] = cells["land_share"].fillna(0.0)  # beyond the geography table: sea
+    # beyond the geography table: sea. A cell of no land still gets a land profile from all its
+    # points, its sea profile unchanged: the land table, from MODIS, holds atolls the geography lacks
+    cells["land_share"] = cells["land_share"].fillna(0.0).clip(lower=MIN_LAND_SHARE)
     return cells
 
 
@@ -389,15 +395,21 @@ def check(cutout_path: Path, output: Path) -> dict:
 # Stack (any machine)
 # ---------------------------------------------------------------------------------------------
 
-def write_stack(bands: list[Path], output_dir: Path) -> dict:
+def write_stack(bands: list[Path], output_dir: Path, sea: bool = False) -> dict:
     """Stitch band files into the weather stack: per technology three longitude bands, every
-    latitude of -90 to 89 (NaN outside the bands, and where a cell has no land or no sea)."""
+    latitude of -90 to 89 (NaN outside the bands, and at sea where a cell has no sea).
+
+    A land run's stack holds the wind on land; a sea run's (sea=True) the wind at sea and no PV
+    output, so the same plant is solved there without PV (model/sea_cells.py)."""
     output_dir.mkdir(parents=True, exist_ok=False)
     combined = xr.concat([xr.open_dataset(path, chunks={"time": 744}) for path in sorted(bands)], dim="latitude").sortby("latitude")
     if combined["latitude"].to_index().duplicated().any():
         raise ValueError("band files overlap in latitude")
     combined = combined.reindex(latitude=CELL_LATITUDES.astype(np.int32), longitude=CELL_LONGITUDES.astype(np.int32))
-    record = {"bands": {path.name: _sha256(path) for path in sorted(bands)}, "attributes": dict(combined.attrs), "files": {}}
+    if sea:
+        combined["wind"] = combined["wind_offshore"]
+        combined["solar"] = combined["solar_tracking"] = xr.zeros_like(combined["wind_offshore"])
+    record = {"bands": {path.name: _sha256(path) for path in sorted(bands)}, "attributes": dict(combined.attrs), "files": {}, "sea": sea}
     for name, (prefix, variable) in STACK_FILES.items():
         for suffix, west, east in LONGITUDE_BANDS:
             part = combined[name].sel(longitude=slice(west, east)).rename(variable).to_dataset()
@@ -422,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     stack_parser = sub.add_parser("stack", help="stitch band files into a weather directory")
     stack_parser.add_argument("--bands", type=Path, required=True)
     stack_parser.add_argument("--output", type=Path, required=True)
+    stack_parser.add_argument("--sea", action="store_true", help="a sea run's stack: the wind at sea, no PV output")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if args.command == "check":
@@ -434,7 +447,7 @@ def main(argv: list[str] | None = None) -> int:
         south, north = (int(value) for value in args.cells.split(":"))
         convert_band(args.cutout, south, north, args.output)
     else:
-        record = write_stack(sorted(args.bands.glob("band_*.nc")), args.output)
+        record = write_stack(sorted(args.bands.glob("band_*.nc")), args.output, sea=args.sea)
         print(f"wrote {len(record['files'])} files to {args.output}")
     return 0
 

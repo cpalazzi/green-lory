@@ -41,6 +41,17 @@ def test_pv_per_mw_of_ac_scales_by_dc_ac_and_caps_at_one():
     np.testing.assert_allclose(wp.pv_per_mw_ac(np.array([0.0, 0.4, 0.8, 0.9])), [0.0, 0.5, 1.0, 1.0])
 
 
+def test_a_cell_of_no_land_still_gets_a_land_profile():
+    geography = pd.DataFrame({"latitude": [-16.0], "longitude": [-144.0], "cell_area_km2": [11800.0], "land_km2": [0.0]})
+    cells = wp.band_cells(-16, -16, geography)
+    lats, lons = np.array([-16.25, -16.0, -15.75]), np.arange(-180.0, 180.0, 0.25)
+    weights = wp.cell_point_weights(lats, lons, cells)
+    land, has_land = wp.aggregation_matrix(weights, "land", len(cells), len(lats), len(lons))
+    sea, has_sea = wp.aggregation_matrix(weights, "sea", len(cells), len(lats), len(lons))
+    assert has_land.all() and has_sea.all()
+    np.testing.assert_allclose(land.toarray(), sea.toarray())  # all its points, for both
+
+
 def _cell(lat, lon, share):
     return pd.DataFrame({"latitude": [float(lat)], "longitude": [float(lon)], "land_share": [share]})
 
@@ -95,7 +106,7 @@ def test_stack_is_read_by_the_weather_loader(tmp_path):
     (tmp_path / "bands").mkdir()
     band.to_netcdf(tmp_path / "bands" / "band_-23_-22.nc")
     record = wp.write_stack(sorted((tmp_path / "bands").glob("band_*.nc")), tmp_path / "stack")
-    assert sorted(record["files"]) == sorted(f"{prefix}{suffix}.nc" for prefix in ("Solar", "SolarTracking", "WindPowers", "WindOffshore")
+    assert sorted(record["files"]) == sorted(f"{prefix}{suffix}.nc" for prefix in ("Solar", "SolarTracking", "WindPowers")
                                             for suffix in ("", "1", "2"))
     stack = weather.ProfileStack(tmp_path / "stack")
     frame = weather.cell_profiles(stack, -23, 151)
@@ -104,3 +115,8 @@ def test_stack_is_read_by_the_weather_loader(tmp_path):
     assert frame["wind"].iloc[0] == pytest.approx(0.4 * weather.WIND_WAKE_FACTOR)
     assert np.isnan(stack.resources["solar"].sel(latitude=10, longitude=0).values).all()  # outside the band
     stack.close()
+    wp.write_stack(sorted((tmp_path / "bands").glob("band_*.nc")), tmp_path / "sea", sea=True)
+    with weather.ProfileStack(tmp_path / "sea") as sea:
+        frame = weather.cell_profiles(sea, -23, 151)
+    assert frame["wind"].iloc[0] == pytest.approx(0.5 * weather.WIND_WAKE_FACTOR)  # the wind at sea
+    assert frame["solar"].iloc[0] == 0.0 and frame["solar_tracking"].iloc[0] == 0.0
