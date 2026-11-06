@@ -1,6 +1,8 @@
 """model/weather_profiles.py: the one-degree profiles from the ERA5 cutout (no atlite needed)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -39,6 +41,16 @@ def test_air_density_follows_the_standard_atmosphere():
 
 def test_pv_per_mw_of_ac_scales_by_dc_ac_and_caps_at_one():
     np.testing.assert_allclose(wp.pv_per_mw_ac(np.array([0.0, 0.4, 0.8, 0.9])), [0.0, 0.5, 1.0, 1.0])
+
+
+def test_convert_takes_a_band_south_of_the_equator(monkeypatch):
+    # "-75:-61" after a space reads as an option, so the job script passes --cells=-75:-61
+    seen = {}
+    monkeypatch.setattr(wp, "convert_band", lambda cutout, south, north, output: seen.update(south=south, north=north))
+    wp.main(["convert", "--cutout", "cutout.nc", "--cells=-75:-61", "--output", "band.nc"])
+    assert seen == {"south": -75, "north": -61}
+    script = (Path(__file__).resolve().parents[1] / "arc" / "jobs" / "11_weather_profiles.sh").read_text()
+    assert '--cells="${SOUTH}:${NORTH}"' in script
 
 
 def test_a_cell_of_no_land_still_gets_a_land_profile():

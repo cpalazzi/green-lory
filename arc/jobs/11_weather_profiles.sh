@@ -48,7 +48,7 @@ case "$ARC_MODE" in
     BAND="$ARC_OUTPUT/band_${SOUTH}_${NORTH}.nc"
     [[ -e "$BAND" ]] && { echo "ERROR: refusing to overwrite $BAND" >&2; exit 2; }
     mkdir -p "$ARC_OUTPUT"
-    "$PY" -m model.weather_profiles convert --cutout "$CUTOUT" --cells "${SOUTH}:${NORTH}" --output "$BAND"
+    "$PY" -m model.weather_profiles convert --cutout "$CUTOUT" --cells="${SOUTH}:${NORTH}" --output "$BAND"
     sha256sum "$BAND"
     ;;
   stack)
