@@ -1,6 +1,7 @@
 """model/weather_profiles.py: the one-degree profiles from the ERA5 cutout (no atlite needed)."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -114,12 +115,14 @@ def test_stack_is_read_by_the_weather_loader(tmp_path):
     shape = (len(times), len(lats), len(lons))
     band = xr.Dataset({name: (("time", "latitude", "longitude"), np.full(shape, value, dtype=np.float32))
                        for name, value in (("solar", 0.2), ("solar_tracking", 0.3), ("wind", 0.4), ("wind_offshore", 0.5))},
-                      coords={"time": times, "latitude": lats, "longitude": lons})
+                      coords={"time": times, "latitude": lats, "longitude": lons},
+                      attrs={"cutout": "cutout_2019.nc", "smooth_power_curve": 1, "dc_ac_ratio": 1.25})
     (tmp_path / "bands").mkdir()
     band.to_netcdf(tmp_path / "bands" / "band_-23_-22.nc")
     record = wp.write_stack(sorted((tmp_path / "bands").glob("band_*.nc")), tmp_path / "stack")
     assert sorted(record["files"]) == sorted(f"{prefix}{suffix}.nc" for prefix in ("Solar", "SolarTracking", "WindPowers")
                                             for suffix in ("", "1", "2"))
+    assert json.loads((tmp_path / "stack" / "provenance.json").read_text())["attributes"]["smooth_power_curve"] == 1
     stack = weather.ProfileStack(tmp_path / "stack")
     frame = weather.cell_profiles(stack, -23, 151)
     assert frame["solar"].iloc[0] == pytest.approx(0.2)

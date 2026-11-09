@@ -409,7 +409,9 @@ def write_stack(bands: list[Path], output_dir: Path, sea: bool = False) -> dict:
     if sea:
         combined["wind"] = combined["wind_offshore"]
         combined["solar"] = combined["solar_tracking"] = xr.zeros_like(combined["wind_offshore"])
-    record = {"bands": {path.name: _sha256(path) for path in sorted(bands)}, "attributes": dict(combined.attrs), "files": {}, "sea": sea}
+    # NetCDF attributes come back as NumPy numbers, which JSON does not take
+    attributes = {key: value.tolist() if hasattr(value, "tolist") else value for key, value in combined.attrs.items()}
+    record = {"bands": {path.name: _sha256(path) for path in sorted(bands)}, "attributes": attributes, "files": {}, "sea": sea}
     for name, (prefix, variable) in STACK_FILES.items():
         for suffix, west, east in LONGITUDE_BANDS:
             part = combined[name].sel(longitude=slice(west, east)).rename(variable).to_dataset()
