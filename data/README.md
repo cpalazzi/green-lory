@@ -14,8 +14,9 @@ doi:10.1016/j.jclepro.2022.133045) and the original lcoa-opt model. The paper sa
 data come from the ERA5 reanalysis; the files carry no metadata of their own. Nine NetCDF-3
 files, three longitude bands per technology (unsuffixed = 180 W to 61 W, `1` = 60 W to 59 E,
 `2` = 60 E to 179 E; the suffix is a longitude partition, not a year), 1.51 GB each. Used
-unchanged by the frozen legacy model (`legacy_lcoa/`) and by every green-lory run
-(`weather_dir` in `run_defaults` of `../runs.yaml`).
+unchanged by the frozen legacy model (`legacy_lcoa/`), by the reconciling run and by every
+green-lory run before November 2026 (`weather_dir` in `run_defaults` of `../runs.yaml`); the
+campaign runs since read the ERA5 profiles of the next section.
 
 | File | SHA-256 |
 |---|---|
@@ -63,6 +64,39 @@ tracked in `../inputs/weather/era5_point_weights_1deg.csv`; the factors are comp
 | File | What it is | SHA-256 |
 |---|---|---|
 | `land_correction/weather_land_correction_2019.nc` | Wind factors of the 10,971 cells with at least 1 % water (job 13442443, release `20261008-weather-land-v2`, campaign `green-lory-campaigns/weather_land_correction_20261008_v2/`); the inland floor binds in 1,182 cells. On ARC in `green-lory/data/weather_data/land_correction/` (read-only), so releases reach it through their `data/weather_data` link. A first version of 8 October (job 13441218) was withdrawn | `ad49b8120da80c414aef4cfb2d503ad8330f4b1c27697477827a45f368c7c1cf` |
+
+## ERA5 2019 profiles (`weather_data/era5_2019_1deg/`, `weather_data/era5_2019_1deg_sea/`)
+
+Hourly output per MW for fixed PV, tracking PV and wind, 8,760 hours of 2019 on the same 1-degree
+grid and in the same file layout as Salmon's profiles, built from the green-condor ERA5 2019
+cutout with atlite 0.4.1 (`../model/weather_profiles.py`, settings in `weather.profiles` of
+`../inputs/parameters.yaml`; `../CAMPAIGN_PLAN.md`, section 7a). Wind: DEA 2050's turbines (6 MW
+at 110 m on land, 35 MW at 220 m at sea) as stretched NREL reference curves, smoothed (Hörsch et
+al. 2018, eq. 8), with the speed normalised to the air density at the site; the wake factor is
+applied when a run loads them. PV: output per MW of AC (x 1.25 DC/AC, capped at 1), fixed at the
+latitude-optimal tilt and single-axis tracking. Each cell's land profile averages its land
+pixels and its sea profile its sea pixels; the land stack holds the land profiles, the sea
+stack the wind at sea as `WindPowers` and zero PV (`stack --sea`). The campaign runs of November
+2026 read them (`weather_dir` in `../runs.yaml`).
+
+Built on ARC from release `20261106-profiles-v3` (bands 1-11, array 13623198) and
+`20261109-profiles-v4` (the stacks, jobs 13631579 and 13631580: the first stacks, 13623199-200,
+wrote the files but failed on their `provenance.json`), in
+`green-lory-campaigns/weather_profiles_20261106_v2/`, linked as `green-lory/data/weather_data/era5_2019_1deg`
+and `era5_2019_1deg_sea`. Each folder's `provenance.json` gives the band files, their hashes and
+the settings.
+
+| File | SHA-256, land | SHA-256, sea |
+|---|---|---|
+| `Solar.nc` | `307910d49d993c8e93aa386d26669cc07b4db75f1df0881e93cd7951672237e3` | `d9683aa788903b17baad60e47f3b944adde18c88bea660fb8aaf8862ac2b8ffd` |
+| `Solar1.nc` | `d6d81aaa58e46c4101ff26b2777cd34e68002f00b8edd9c190e6550263295d4b` | `6a91393eda136e6b5b46ada54f0b0b5f1c7cf855a0729b6ba67d8da8001f53c8` |
+| `Solar2.nc` | `df0bf662525542a4b7aa475ff0be6e7d8438caeb7993f0de02066088d64110c8` | `3c3762fc036f8a714f4e3dafcc90e09ef0b867f26a2f95de22234c97e63a71d9` |
+| `SolarTracking.nc` | `76d81f328dfde6940df08256f644ce79c48c4b9aa5520a5d77928d95138f41b9` | `d9683aa788903b17baad60e47f3b944adde18c88bea660fb8aaf8862ac2b8ffd` |
+| `SolarTracking1.nc` | `ba80bebf0c486ef4076052ae725665bf2692b8f3001c7af5cf154b8caaab209e` | `6a91393eda136e6b5b46ada54f0b0b5f1c7cf855a0729b6ba67d8da8001f53c8` |
+| `SolarTracking2.nc` | `79129a3cf7996c1fc52939feeff6965c7bafb0dccb9e854a70fb0c1929b16464` | `3c3762fc036f8a714f4e3dafcc90e09ef0b867f26a2f95de22234c97e63a71d9` |
+| `WindPowers.nc` | `ce814e790a49b1d311f88031b39b80c0a611812169ef9e089f733b298918a95d` | `d4af8ab9dffe1478c0323bd0327f2fa6c76e73a65a50bbcc3cf9346ffa72d5a5` |
+| `WindPowers1.nc` | `ad9e4ee9953a8be114defda1c17229e41bdba78df9c7f7995c0fd4a27b04a468` | `7cb0166652424c3e31f997f4f6b66aebb6d4929360320cb0ed361fccc8c993f7` |
+| `WindPowers2.nc` | `148f74b8ca973b6df6ded036f6b3bfa33662e525647ef44781373a89244a49d6` | `94ec102a13168743502f1e3d13a5833dbf179416db5cecffcc903f6df37c4912` |
 
 ## Land and terrain inputs
 

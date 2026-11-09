@@ -770,9 +770,22 @@ markets) stays with the network model.
   4.5.1) computes speed as sqrt(u2 + v2) and scales 100 to 120 m by 1.023, and used an IEC class III
   curve for India; Salmon's global curve is not documented. DEA's turbine is 281 W/m2, the one
   whose costs the model uses.
-- **Global conversion (6 November):** release 20261106-profiles-v2 (commit 46ae5cf, clean); campaign
-  folder `green-lory-campaigns/weather_profiles_20261106_v1/`: bands 1-11 as array 13622975 (short,
-  32 cores, 64 GB), then the land and sea stacks, jobs 13622977 and 13622978, after the bands.
+- **Global conversion (6 November):** a first attempt (release 20261106-profiles-v2, folder
+  `weather_profiles_20261106_v1`, array 13622975) failed at once on every band south of the equator:
+  the job script passed `--cells -75:-61`, which the argument parser reads as an option. Fixed in
+  fe99393 (`--cells=-75:-61`, with a test) and cancelled. Rerun from release 20261106-profiles-v3
+  (fe99393), folder `green-lory-campaigns/weather_profiles_20261106_v2/`: bands 1-11 as array
+  13623198 (short, 32 cores, 64 GB; 1 h 11 min to 3 h 21 min each). The stacks (13623199-200)
+  wrote every file but failed on `provenance.json` (NetCDF attributes read back as NumPy
+  integers); fixed in `write_stack` and rerun on 9 November from release 20261109-profiles-v4
+  (jobs 13631579-80) into `land/` and `sea/`, linked as `data/weather_data/era5_2019_1deg` and
+  `era5_2019_1deg_sea` (`data/README.md`). Every land run cell (16,885) and sea run cell (40,197)
+  has all 8,760 hours. Against Salmon's profiles as C2 read them, on the 1,317 validation cells:
+  wind hours 0.58 at the median (0.52 to 0.70 between the 10th and 90th percentiles), fixed PV
+  1.17 (1.11 to 1.31). Wind at sea, after the wake factor: median 3,575 h (fixed 2,792, floating
+  3,295, deep 3,701); DEA's North Sea cell 4,768 h, Dogger Bank 4,479 h.
+- **Campaign `campaign_20261109_v1` (9 November):** smoke stage of the four land and four sea runs
+  from release 20261106-profiles-v3 (shards 13631640-50 and 13631677-87, with their QA jobs).
   The stacks are linked into the shared data as `data/weather_data/era5_2019_1deg` and
   `era5_2019_1deg_sea`, the `weather_dir` of the campaign runs.
 - **Campaign runs (defined 6 November, `runs.yaml`):** C2, S1, F and S2 read the new profiles and
@@ -780,8 +793,8 @@ markets) stays with the network model.
   (`land_sea_20261105_v2`, 40,197 cells), the flat or spatial sea site costs and, for F and S2,
   the finance table by cell. Sea runs use their own smoke and diagnostic cells
   (`inputs/cells/diagnostic_cells_sea.csv`: Dogger Bank, Kerguelen shelf, mid-Atlantic). The runs
-  go from release 20261106-campaign-v2 (clean); 20261106-campaign-v1, staged with the definitions
-  uncommitted, was not used.
+  go from release 20261106-profiles-v3, which holds these definitions too; releases
+  20261106-campaign-v1 and -v2 were staged before the fix and not used.
 - **Atolls (found 5 November, before the bands ran):** 24 run cells of the Tuamotus (14 to 22 S)
   have land in the land table, from MODIS, and none in `cell_geography.csv`, so they would have
   had no land profile and no solution. `band_cells` now gives every cell a land profile, from all
