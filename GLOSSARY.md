@@ -72,7 +72,7 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `finance_csv`, `finance_csv_sha256` | Finance table: interest rates by country (`iso3`) or by cell (`lat, lon`), per technology or `all` (`--finance-csv`; `inputs/README.md`); the hash pins the file. A run sets this or `interest_rate` |
 | `interest_rate` | One interest rate (a fraction, e.g. 0.05) for every technology at every cell (`--interest-rate`), instead of a finance table |
 | `site_costs_csv`, `site_costs_csv_sha256` | Optional site-cost table of the run's land table (`green-lory site-costs`): equipment and build multipliers and the water price per cell (`--site-costs-csv`); runs without it are flat |
-| `weather_land_correction`, `weather_land_correction_sha256` | Optional factors that rescale the profiles of cells with water to their land (`model/weather_land.py`, `--weather-land-correction`); runs before October 2026 have none |
+| `weather_land_correction`, `weather_land_correction_sha256` | Optional factors that rescale Salmon's profiles of cells with water to their land (`model/weather_land.py`, `--weather-land-correction`); runs before October 2026 and the runs on the ERA5 profiles have none |
 | `time_step_h`, `temporal_accounting`, `ramp_limit_basis` | Weather step and the matching accounting options, see [Run options](#run-options) |
 | `site_costs_in_headline` | Whether water (and land rent, zero so far) enters the headline LCOA; false passes `--exclude-site-costs` |
 | `water_eur2020_per_m3` | Flat water price |
@@ -104,8 +104,8 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `--land-csv` | path | Land table from `model/land_table.py`; its `land_competition_fraction` column is the share of suitable land open to ammonia (2 % or 20 %). |
 | `--locations-csv` / `--global-locations` | path | Restricts the run to listed `lat,lon` cells (the key runs use onshore cells with suitable land). |
 | `--pv-policy` (`pv_policy` in `runs.yaml`) | `both`, `fixed`, `tracking` | Which PV the plant may build; `fixed` switches tracking PV off. |
-| `weather_dir` (`runs.yaml`) | path | The weather profile folder; every run uses `data/weather_data/salmon2022_pv_wind_2019_hourly_1deg`. Its profiles average the whole 1-degree cell, sea and lakes included. |
-| `--weather-land-correction` (`weather_land_correction`) | path | Factors by month and hour that rescale the profiles of cells with at least 1 % water to the cell's land, from ERA5 at 0.25 degrees. |
+| `weather_dir` (`runs.yaml`) | path | The weather profile folder. The campaign's land runs use `data/weather_data/era5_2019_1deg` and its sea runs `data/weather_data/era5_2019_1deg_sea`, built from the ERA5 2019 cutout with atlite (`model/weather_profiles.py`): each cell's land profile weights its ERA5 points by their land area, and its sea profile by their water area. The other runs use the default of `run_defaults`, `data/weather_data/salmon2022_pv_wind_2019_hourly_1deg`, whose profiles average the whole 1-degree cell, sea and lakes included. |
+| `--weather-land-correction` (`weather_land_correction`) | path | Factors by month and hour that rescale Salmon's profiles of cells with at least 1 % water to the cell's land, from ERA5 at 0.25 degrees. The ERA5 profiles need none, since they weight each cell's points by land area. |
 
 ## Run identifiers
 
