@@ -1,0 +1,10 @@
+{
+  "source": "United Nations Statistics Division, Standard country or area codes for statistical use (M49), overview table",
+  "url": "https://unstats.un.org/unsd/methodology/m49/overview/",
+  "retrieved": "2026-11-10",
+  "downloaded_page_sha256": "b9048114f6e7f2abda83bf03d4263c9d7cd1bd7230e3d0461025ee7839a7a1fb",
+  "method": "the English table of the page (id downloadTableEN), one row per country or area, keyed by its ISO-alpha3 code: M49 code, name, region, sub-region and intermediate region, as published",
+  "rows": 248,
+  "sha256": "4657d013d618f8259c73c81919ee559330792b91fcc0d9cdeaa6e1bcf41340ee",
+  "not_listed": "M49 lists neither Taiwan (TWN) nor Kosovo (XKO), which inputs/cells/cell_countries.csv uses; model/results.py (cell_regions) gives them the region and sub-region of their neighbours: Asia, Eastern Asia and Europe, Southern Europe"
+}

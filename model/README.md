@@ -21,7 +21,7 @@ a run uses them:
 | `sea_cells.py` | The inputs of a sea run from a land table: which cells hold a sea plant, the sea as wind area, wind's costs and the plant multiplier by depth class. `python -m model.sea_cells --land <table> --land-output <csv> --site-costs-output <csv> --locations-output <csv>` |
 | `surface.py` | Running the plant over many cells, serially or in forked workers, with a numerical retry chain (`python -m model.surface --help`) |
 | `runs.py` | Run definitions (`../runs.yaml`) and the execution record (`../run_store.csv`); the `run_surface` arguments of a defined run |
-| `results.py` | Reading results by run id: surfaces, network suppliers, rows at the focal cells, coast against inland, maps `lowest_feasible_plant` gives one plant per cell from a land and a sea run, for combined maps. |
+| `results.py` | Reading results by run id: surfaces, network suppliers, rows at the focal cells, coast against inland; the maps, supply curves and tables of `../notebooks/results.ipynb` (`plot_maps`, `plot_supply_curves`, `summary_table`); `lowest_feasible_plant` gives one plant per cell from a land and a sea run, for combined maps |
 | `suppliers.py` | A QA-passed surface as a supplier table of the green-porpoise network model (`export`), and post-hoc land-share variants (`derive`); the network runs in the green-porpoise repository A sea run joins with `--sea-surface`, its plants as separate suppliers. |
 | `cli.py` | The `green-lory` command: `list`, `show`, `table`, `status`, `path`, `run`, `map`, `site-costs`, `shell` |
 

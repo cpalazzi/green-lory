@@ -109,6 +109,9 @@ results/campaigns/<campaign>/...                                                
 outputs by run id from the local copies under `results/campaigns/`
 (`results.load_surface(run_id)`, `results.focal_cell_table(...)`, coast-against-inland tables),
 and `green-lory map <run id> --output lcoa.html` (or `.png`) draws a run's LCOA.
+`notebooks/results.ipynb` walks through a campaign's results: the location factors, maps of the
+LCOA case by case, what each case adds to the cost, the plants at sea, supply curves, and the base
+case on two weather sources.
 
 ## Planned layout
 
