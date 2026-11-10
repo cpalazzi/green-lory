@@ -585,6 +585,10 @@ Done and still to do in this step (8 October):
 
 ## 5. Campaign
 
+The cases are named `base`, `site`, `finance` and `all` from 10 November 2026, as in the code, the
+results notebook and the green-serval paper; the dated entries of this plan call them C2, S1, F and
+S2, and `base_4h` C1.
+
 All runs:
 - DEA 2050 costs, fixed-tilt PV, co-located land, 2019 weather.
 - Land applied after the solve, capacity from the scaled design.
@@ -592,13 +596,13 @@ All runs:
 
 | Run | Step | Build | Water | Finance | Network |
 |---|---|---|---|---|---|
-| C1 flat, 4 h: dropped for now (14 Oct); step 4 measured the four-hour effect on 1,317 cells | 4 h | flat | flat 2 EUR/m³ | uniform 5 % | no |
-| C2 flat, 1 h (base): `gl_dea2050_wacc5_bflat_wflat_land20oct_fixed` | 1 h | flat | flat | uniform 5 % | yes |
-| S1 spatial: `gl_dea2050_wacc5_bspat_wspat_land20oct_fixed` | 1 h | equipment by port; installation by city x slope (x depth, x labour = 1) | spatial | uniform 5 % | yes |
-| F finance only: `gl_dea2050_amelilc_bflat_wflat_land20oct_fixed` (added 14 Oct) | 1 h | flat | flat | Ameli low-carbon by country | no |
-| S2 spatial + finance: `gl_dea2050_amelilc_bspat_wspat_land20oct_fixed` | 1 h | as S1 | spatial | Ameli low-carbon by country (decided 14 Oct, until the collaborator's table) | yes |
-| Build only, water only | derived from S1 and C2 | as S1 / flat | flat / spatial | uniform 5 % | no |
-| 2 % variants | derived | | | | C2, S2 |
+| `base_4h` (C1) flat, 4 h: dropped for now (14 Oct); step 4 measured the four-hour effect on 1,317 cells | 4 h | flat | flat 2 EUR/m³ | uniform 5 % | no |
+| `base` (C2) flat, 1 h: `gl_dea2050_wacc5_bflat_wflat_land20oct_fixed` | 1 h | flat | flat | uniform 5 % | yes |
+| `site` (S1) spatial: `gl_dea2050_wacc5_bspat_wspat_land20oct_fixed` | 1 h | equipment by port; installation by city x slope (x depth, x labour = 1) | spatial | uniform 5 % | yes |
+| `finance` (F) finance only: `gl_dea2050_amelilc_bflat_wflat_land20oct_fixed` (added 14 Oct) | 1 h | flat | flat | Ameli low-carbon by country | no |
+| `all` (S2) spatial + finance: `gl_dea2050_amelilc_bspat_wspat_land20oct_fixed` | 1 h | as `site` | spatial | Ameli low-carbon by country (decided 14 Oct, until the collaborator's table) | yes |
+| Build only, water only | derived from `site` and `base` | as `site` / flat | flat / spatial | uniform 5 % | no |
+| 2 % variants | derived | | | | `base`, `all` |
 
 - **Design (14 October):** the paper (green-serval) asks what spatially varying water, build
   and finance costs do to the global cost of green ammonia. C2, S1, F and S2 give each factor

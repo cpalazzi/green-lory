@@ -10,11 +10,11 @@ the inputs again before it accepts the shards.
     python -m arc.manifest write --output <run dir>/manifest.json ...   (every option: --help)
     python -m arc.manifest verify --manifest <run dir>/manifest.json
 
-Two cost scopes. The flat one of the key runs and C1/C2
+Two cost scopes. The flat one of the key runs and the campaign's base cases
 (``flat_<finance>_uniform_baseline_water_no_land_rent``): interest rates from the run, one rate
 (``waccN``) or a finance table varying by cell or country (``amelired``, ``ameli``), uniform
 baseline water from the YAML,
-no build or remoteness multipliers, no land rent. The site-cost one of S1/S2
+no build or remoteness multipliers, no land rent. The site-cost one of the campaign's site and all
 (``site_costs_<finance>_no_land_rent``, finance also ``ameli``): the same finance, and the
 multipliers and the water price of a site-cost table (model/site_costs.py), whose source price
 must be the YAML's baseline; no land rent.

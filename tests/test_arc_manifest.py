@@ -1,5 +1,5 @@
 """arc/manifest.py: verifying a manifest's inputs, the flat cost scopes of the key runs and the
-site-cost scopes of S1/S2."""
+site-cost scopes of the campaign's site and all cases."""
 import hashlib
 import io
 import json

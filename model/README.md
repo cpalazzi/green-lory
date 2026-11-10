@@ -48,9 +48,9 @@ modelling choices in `../MODEL_CHOICES.md`.
 
 ## Site costs: the cost mechanisms
 
-Runs with site costs (S1 and S2 of the campaign) read a site-cost table built for their land
-table (`green-lory site-costs --land <table> --output <csv>`, `site_costs.py`); flat runs (C1,
-C2) have none and use the YAML's uniform water price. Each technology's overnight cost is
+Runs with site costs (the campaign's `site` and `all`) read a site-cost table built for their land
+table (`green-lory site-costs --land <table> --output <csv>`, `site_costs.py`); flat runs (`base`,
+`base_4h`) have none and use the YAML's uniform water price. Each technology's overnight cost is
 `tech_cost_per_mw` x equipment multiplier + `build_cost_per_mw` x build multiplier, annualised
 at the cell's interest rate; fixed O&M is a share of that cost, so it follows both multipliers
 (`technology.apply_cell_overrides`). The result rows report the capacity-weighted
