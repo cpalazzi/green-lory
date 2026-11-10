@@ -104,3 +104,10 @@ def test_maps_draw_a_small_surface():
     assert figure.data[0].type == "choropleth" and len(figure.data[0].locations) == 2
     static, axes = results.plot_map_static(frame, show_country_borders=False)
     assert axes.get_images()
+
+
+def test_run_store_locations_are_folders():
+    # text after the folder, such as a remark in brackets, would make output_dir name a folder that does not exist
+    for record in runs.load_run_store():
+        location = record["location"].strip().replace("; local copy ", ";")
+        assert not any(character.isspace() for character in location), record["run_id"]
