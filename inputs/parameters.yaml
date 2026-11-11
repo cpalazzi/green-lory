@@ -149,7 +149,9 @@ offshore:
   floating_foundation_eur_per_mw: 675000.0
   # Every technology but wind, by depth class. fixed: a jacket platform is 42 % of a 300 t/d
   # offshore plant's capital cost (Brener 2022, MSc thesis, Oxford), x1.72. floating: a process
-  # plant on a moored hull at the first-of-a-kind level of floating LNG (Scott 2018; Rystad 2025).
+  # plant on a moored hull at the cost of a large purpose-built floating LNG plant, x2: Prelude
+  # cost 2,000 USD per t/yr of capacity, about twice the 1,044 of a new onshore plant on the US
+  # Gulf Coast, Corpus Christi trains 1-2 (Songhurst 2018, OIES NG137, Table 2).
   # deep: on ships, speculative; floating wind at 500 m and 1,000 km from shore is 2.5-3.5 times
   # onshore (Salmon and Bañares-Alcántara 2022, Table 2)
   plant_multiplier:
