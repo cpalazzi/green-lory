@@ -591,13 +591,36 @@ runs:
       The capacities of all at sea x 5 x the unprotected share of each cell's sea; LCOA and
       designs are the parent's.
 
+  # The 20 % sensitivity at sea, for the networks of base and all at 20 %: the parents' capacities
+  # x the unprotected share of each cell's water (`derive --multiplier 1 --protected-areas ...`)
+  gl_dea2050_wacc5_bflat_wflat_land20oct_fixed_offshore_mpa:
+    role: campaign base at sea, 20 % of the sea outside protected areas (share sensitivity)
+    runner: derived
+    derived_from: gl_dea2050_wacc5_bflat_wflat_land20oct_fixed_offshore
+    land_share: 0.2
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of base at sea x the unprotected share of each cell's sea; LCOA and designs
+      are the parent's.
+
+  gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore_mpa:
+    role: campaign all at sea, 20 % of the sea outside protected areas (share sensitivity)
+    runner: derived
+    derived_from: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore
+    land_share: 0.2
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of all at sea x the unprotected share of each cell's sea; LCOA and designs
+      are the parent's.
+
 
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above
 # (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and
 # finds the cheapest way to supply the 2050 ammonia bunker demand from it. Every network uses
 # `network_defaults` unless its entry says otherwise. The network code is in the green-porpoise
 # repository (legacy_gpo/, linked here): submitted with legacy_gpo/arc/submit_network_run.sh
-# there. The networks below ran from green-lory releases 20260914-v3 and 20260916-network-tools-v1.
+# there. The September networks ran from green-lory releases 20260914-v3 and
+# 20260916-network-tools-v1 with network_defaults; the campaign networks at the end override them.
 # `report_name` is the letter the September 2026 reports used (reconciliation/DECISION.md section 4);
 # GLOSSARY.md lists every letter, including the runs that were not kept.
 
@@ -671,3 +694,70 @@ networks:
     description: >-
       The legacy plant with green-lory's annuity convention and the stated land method on the
       centred 2 % table: the legacy model as close to the improved stack as it goes.
+
+  # The campaign networks (11 November 2026): the corrected equations (legacy_gpo --corrected in
+  # green-porpoise, chosen 14 October 2026; legacy_gpo/README.md there), solved to within 1 % of
+  # the optimum (D6), on the supplier tables of the four cases with all the land and sea the rules
+  # leave and of base and all with 20 % of it. Each table holds the land run's plants and the sea
+  # run's (`sea_supplier_run`); the network keeps the 4,000 cheapest suppliers that can make
+  # 1 Mt/yr, each at most 10 Mt/yr. Submitted from green-porpoise release 20261111-legacy-gpo-v1.
+
+  gpo_gl_dea2050_wacc5_bflat_wflat_land100oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign base
+    supplier_run: gl_dea2050_wacc5_bflat_wflat_land100oct_fixed
+    sea_supplier_run: gl_dea2050_wacc5_bflat_wflat_land100oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of base on all the land and sea the rules leave.
+
+  gpo_gl_dea2050_wacc5_bspat_wspat_land100oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign site
+    supplier_run: gl_dea2050_wacc5_bspat_wspat_land100oct_fixed
+    sea_supplier_run: gl_dea2050_wacc5_bspat_wspat_land100oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of site on all the land and sea the rules leave.
+
+  gpo_gl_dea2050_amelilc_bflat_wflat_land100oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign finance
+    supplier_run: gl_dea2050_amelilc_bflat_wflat_land100oct_fixed
+    sea_supplier_run: gl_dea2050_amelilc_bflat_wflat_land100oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of finance on all the land and sea the rules leave.
+
+  gpo_gl_dea2050_amelilc_bspat_wspat_land100oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign all
+    supplier_run: gl_dea2050_amelilc_bspat_wspat_land100oct_fixed
+    sea_supplier_run: gl_dea2050_amelilc_bspat_wspat_land100oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of all on all the land and sea the rules leave.
+
+  gpo_gl_dea2050_wacc5_bflat_wflat_land20oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign base, share sensitivity
+    supplier_run: gl_dea2050_wacc5_bflat_wflat_land20oct_fixed
+    sea_supplier_run: gl_dea2050_wacc5_bflat_wflat_land20oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of base on 20 % of the land and sea the rules leave (share sensitivity).
+
+  gpo_gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign all, share sensitivity
+    supplier_run: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed
+    sea_supplier_run: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of all on 20 % of the land and sea the rules leave (share sensitivity).

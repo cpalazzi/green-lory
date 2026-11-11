@@ -84,7 +84,7 @@ The four networks of 28 September (key runs) have no letter; their ids are
 | `source`, `harness`, `cells`, `annuity`, `release` | Legacy runs: frozen source, harness command, cell lists, annuity convention, ARC release |
 | `config` | Supply pilots: the experiment configuration |
 | `report_name` | Networks: the name the September reports used (table above) |
-| `supplier_run` | Networks: the run whose supplier table the network reads; `archived` is the published table |
+| `supplier_run`, `sea_supplier_run` | Networks: the run whose supplier table the network reads (`archived` is the published table), and the sea run whose plants join it as further suppliers |
 | `equations`, `demand`, `routes`, `maritime_costs`, `supplier_cutoff_mt_per_year` | Networks: green-porpoise formulation, demand scenario, pipeline routing (`iso1000`: same country or within 1,000 km, length x 1.1), shipping costs, smallest supplier admitted |
 | `solver_time_limit_s`, `solver_gap_target`, `accepted_gap` | Networks: solver limits, and the optimality gap at which a result is accepted (1.5 %, the deposit's tolerance) |
 
@@ -145,6 +145,7 @@ call them C2, S1, F and S2, and `base_4h` C1.
 | `legacyrule` | capacity from the recovered legacy rule instead of green-lory's land method |
 | `pilot3cells` | supply pilot at the three focal cells |
 | `iso1000`, `1mt` | networks: routes within the same country or 1,000 km; 1 Mt/yr supplier cutoff |
+| `sea`, `corrected` | networks: the supplier table also holds the sea run's plants (`sea_supplier_run`); the corrected equations (`--corrected` of `legacy_gpo` in green-porpoise: storage per tonne, the small-port cap, demand only at ports with transport data, distinct cells, no supplier activity binary), solved to within 1 % |
 
 ## Run store
 

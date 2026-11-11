@@ -27,7 +27,7 @@ changing the choice needs only post-processing of the existing key surfaces or a
 | Build cost, land rent | flat build cost (multiplier 1), no land rent. Spatial runs: equipment factor by distance to the nearest port, installation factor by travel time to a city of 20,000, slope factor on PV and wind (`model/README.md`, cost mechanisms; calibration table open at the step-3 review) | 23 Sep, 7-8 Oct | `cost_scope`, `site_costs_csv`; `inputs/parameters.yaml` (site_costs) |
 | Cells | onshore cells with suitable land (16,509) | 23 Sep | `--global-locations`; the rule in `inputs/parameters.yaml` (run_cells) |
 | Grid | no grid backstop | Sep | wrapper |
-| Networks | 1 Mt/yr supplier cutoff; deposited equations; results accepted at the deposit's 1.5 % gap, each run's gap reported | 16 Sep, 5 Oct | `network_defaults` in `runs.yaml` |
+| Networks | 1 Mt/yr supplier cutoff; the campaign networks use the corrected equations (`--corrected` of `legacy_gpo` in green-porpoise) solved to within 1 %, with the sea plants as further suppliers; the September networks used the deposited equations, accepted at the deposit's 1.5 % gap; each run's gap reported | 16 Sep, 5 Oct, 14 Oct, 11 Nov | `network_defaults` and the networks in `runs.yaml` |
 
 The capacity choice above replaces section 7.2 of the archived 16 September decision, which
 named land-enforced finite-site solves; `reconciliation/DECISION.md` states it.
