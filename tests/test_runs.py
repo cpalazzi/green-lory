@@ -92,6 +92,7 @@ class RunDefinitionsTest(unittest.TestCase):
         networks = load_networks(RUNS_FILE)
         for network in networks.values():
             self.assertTrue(network["supplier_run"] == "archived" or network["supplier_run"] in runs)
+            self.assertTrue(network.get("sea_supplier_run") is None or network["sea_supplier_run"] in runs)
         letters = {network.get("report_name"): network_id for network_id, network in networks.items()}
         self.assertEqual(letters["A2"], "gpo_archived_iso1000_1mt")
         self.assertEqual(letters["E"], "gpo_ll_xcost45_ameli_bflat_wnone_landarch_track_4h_iso1000_1mt")
@@ -118,6 +119,8 @@ class RunDefinitionsTest(unittest.TestCase):
             ({"runs": {"base": run, "d": {**derived, "derived_from": "missing"}}}, "derived_from"),
             ({"runs": {"base": run, "d": {**derived, "derived_from": "d"}}}, "forms a cycle"),
             ({"runs": {"base": run}, "networks": {"n": {"supplier_run": "missing"}}}, "supplier_run 'missing'"),
+            ({"runs": {"base": run}, "networks": {"n": {"supplier_run": "base", "sea_supplier_run": "sea"}}},
+             "sea_supplier_run 'sea'"),
             ({"runs": {"base": run}, "networks": {"base": {"supplier_run": "archived"}}}, "both a run and a network"),
             (
                 {"runs": {"base": run, "d": derived}, "networks": {

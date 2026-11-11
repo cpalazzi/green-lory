@@ -189,6 +189,36 @@ class SeaSupplierTests(unittest.TestCase):
         self.assertEqual(record["sea"]["exported_positive_capacity_rows"], 3)
         self.assertEqual(record["sea"]["international_waters_rows"], 1)
         self.assertEqual(record["sea"]["run_id"], "r2")
+        self.assertIsNone(record["sea"]["derivation"])
+
+    def test_export_takes_a_derived_sea_table(self):
+        # a sea run's variant at another share, without its protected water, is exported against
+        # its parent's check report, as a derived land table is
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            land, land_manifest, land_qa = self._write(folder, "land", self.land)
+            parent, sea_manifest, sea_qa = self._write(folder, "sea", self.sea)
+            reference, zones, protected = folder / "reference.csv", folder / "zones.csv", folder / "protected.csv"
+            self.reference.to_csv(reference, index=False)
+            self.zones.to_csv(zones, index=False)
+            self.zones[["latitude", "longitude"]].assign(protected_water_pct=[0.0, 0.0, 100.0]).to_csv(protected, index=False)
+            provenance = derive_land_share(parent, 5.0, 0.2, folder / "sea100", protected_areas=protected)
+            args = SimpleNamespace(surface=land, qa=land_qa, manifest=land_manifest, country_reference=reference, output=folder / "out",
+                                   allow_diagnostic=False, minimum_capacity=1., drop_unassigned=False,
+                                   sea_surface=folder / "sea100" / "global_run_results.csv", sea_qa=sea_qa, sea_manifest=sea_manifest,
+                                   sea_zones=zones, sea_derived_provenance=None)
+            with self.assertRaisesRegex(ValueError, "check report"):  # the derived table is not the one the report checked
+                suppliers.export(args)
+            args.sea_derived_provenance = folder / "sea100" / "provenance.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                suppliers.export(args)
+            table = pd.read_csv(folder / "out" / suppliers.SUPPLIER_TABLE)
+            record = json.loads((folder / "out" / suppliers.SUPPLIER_PROVENANCE).read_text())
+        # the cell at (0, 173) is all protected water: its sea plant has no capacity left
+        self.assertEqual(list(table.Index), ["54_-4_1000000.0", "54_-4_1000000.0_sea", "40_-40_1000000.0_sea"])
+        self.assertEqual(list(table.Max_capacity), [2.0, 20.0, 20.0])
+        self.assertEqual(record["sea"]["derivation"]["multiplier"], 5.0)
+        self.assertEqual(record["sea"]["derivation"]["parent_surface"]["sha256"], provenance["parent_surface"]["sha256"])
 
 
 class LegacyNetworkInterfaceTest(unittest.TestCase):

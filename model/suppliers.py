@@ -234,11 +234,13 @@ def export(args):
     land_suppliers = len(supplier)
     sea = None
     if getattr(args, "sea_surface", None) is not None:
-        sea_frame, sea_qa, _, sea_identity, _ = read_checked_surface(args.sea_surface, args.sea_qa, args.sea_manifest, args.allow_diagnostic)
+        sea_frame, sea_qa, _, sea_identity, sea_derivation = read_checked_surface(
+            args.sea_surface, args.sea_qa, args.sea_manifest, args.allow_diagnostic, getattr(args, "sea_derived_provenance", None))
         sea_supplier = convert(sea_frame, reference, minimum, sea_zones=pd.read_csv(args.sea_zones))
         supplier = pd.concat([supplier, sea_supplier], ignore_index=True)
         sea = {**sea_identity, "source_rows": len(sea_frame), "exported_positive_capacity_rows": len(sea_supplier),
                "international_waters_rows": int(sea_supplier.iso3.eq(INTERNATIONAL_WATERS_ISO3).sum()),
+               "derivation": sea_derivation,
                "inputs": {name: {"path": str(path.resolve()), "sha256": digest(path)} for name, path in
                           [("surface", args.sea_surface), ("qa", args.sea_qa), ("manifest", args.sea_manifest), ("zones", args.sea_zones)]}}
     args.output.mkdir(parents=True, exist_ok=False)
@@ -339,6 +341,8 @@ def main(argv: list[str] | None = None) -> None:
                    help="Drop cells without a country polygon (NaN country) instead of rejecting the export; counted in the provenance file")
     for name in ("sea-surface", "sea-qa", "sea-manifest"):
         p.add_argument(f"--{name}", type=Path, default=None, help="a sea run's plants, as further suppliers")
+    p.add_argument("--sea-derived-provenance", type=Path, default=None,
+                   help="provenance.json of a post-hoc variant of the sea run (--sea-qa then identifies its parent)")
     p.add_argument("--sea-zones", type=Path, default=SEA_ZONES_CSV)
     p.add_argument("--minimum-capacity", type=float, default=0., help="Explicit minimum annual capacity in Mt; raw surface stays unchanged")
     d = commands.add_parser("derive", help="a land-share variant of an after_solve surface")

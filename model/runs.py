@@ -159,6 +159,10 @@ def load_networks(path: str | Path = RUNS_FILE) -> dict[str, dict[str, Any]]:
             raise RunDefinitionError(
                 f"Network {network_id}: supplier_run {supplier!r} is neither {ARCHIVED_SUPPLIER!r} nor a run in {path}"
             )
+        # a sea run whose plants join the supplier table as further suppliers (model/suppliers.py)
+        sea_supplier = network.get("sea_supplier_run")
+        if sea_supplier is not None and sea_supplier not in runs:
+            raise RunDefinitionError(f"Network {network_id}: sea_supplier_run {sea_supplier!r} is not a run in {path}")
         name = network.get("report_name")
         if name is not None:
             if str(name).casefold() in report_names:
