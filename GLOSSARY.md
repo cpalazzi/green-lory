@@ -122,7 +122,10 @@ paper: `base` (`gl_dea2050_wacc5_bflat_wflat_land20oct_fixed`: uniform 5 % WACC,
 uniform water), `site` (`..._wacc5_bspat_wspat_...`: the site-cost table's build costs and water),
 `finance` (`..._amelilc_bflat_wflat_...`: Ameli low-carbon WACC by country) and `all`
 (`..._amelilc_bspat_wspat_...`: both), each with a sea run (`_offshore`); `base_4h` is the
-four-hour variant of `base`. The run store's notes and `CAMPAIGN_PLAN.md` before 10 November 2026
+four-hour variant of `base`. From 11 November 2026 the land runs of the four cases are the derived `..._land100oct_...`
+variants (all the land that the land rules leave), with the `..._land20oct_...` runs as the 20 %
+sensitivity; their sea runs are the derived `..._land100oct_fixed_offshore_mpa` variants (all of
+each cell's sea outside protected areas), with 20 % of that sea as the sensitivity. The run store's notes and `CAMPAIGN_PLAN.md` before 10 November 2026
 call them C2, S1, F and S2, and `base_4h` C1.
 
 | Token | Meaning |
@@ -133,10 +136,11 @@ call them C2, S1, F and S2, and `base_4h` C1.
 | `wacc5`, `ameli`, `amelired`, `amelilc` | uniform 5 % WACC; Ameli reduced WACC by country (`ameli` in key run 2, `amelired` in the reconciling run); Ameli low-carbon (current) WACC by country (the campaign's `finance` and `all`) |
 | `bflat`, `bspat` | site-cost multipliers 1 everywhere, or the site-cost table's: remote factor, cold, slope, depth and labour |
 | `wflat`, `wspat`, `wnone` | uniform baseline water (2 EUR2020/m³ from 24 Sep 2026), spatial water, no water cost |
-| `land20c`, `land2c`, `land20oct`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`c` centred build of 23 Sep 2026, `oct` the October build of 8 Oct 2026 with slope classes up to 20 degrees and protected land counted on land only, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |
+| `land20c`, `land2c`, `land20oct`, `land100oct`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`100` all the land that the land rules leave, `c` centred build of 23 Sep 2026, `oct` the October build of 8 Oct 2026 with slope classes up to 20 degrees and protected land counted on land only, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |
 | `fixed`, `track`, `both` | PV technologies offered |
 | `4h` | four-hour weather step (default is hourly) |
 | `offshore` | a sea run (`model/sea_cells.py`): the same plant with wind at sea and no PV, wind and the plant at the costs of their depth class, which are the base costs of a plant at sea; `bflat` adds nothing to them, `bspat` adds the location factors (remote factor, cold, labour), as on land |
+| `mpa` | a sea run whose plants leave out the protected share of the cell's water (`protected_water_pct` of `inputs/site_costs/protected_areas.csv`: the WDPA areas of the land rule's statuses in the marine and coastal realms); the sea runs before 11 November 2026 counted it |
 | `glannuity` | legacy model with green-lory's per-technology annuity instead of the workbook factor |
 | `legacyrule` | capacity from the recovered legacy rule instead of green-lory's land method |
 | `pilot3cells` | supply pilot at the three focal cells |
@@ -213,7 +217,7 @@ efficiencies and the tracking flag; the September reports name them.
 |---|---|
 | `cell_anchor` | Always `center`: the cell labelled (lat, lon) covers lat ± 0.5, lon ± 0.5, like the weather nodes. Tables of September 2026 and earlier were labelled by the south-west corner or the north edge and are refused. |
 | `onshore_land_pct`, `area` | MODIS land fraction of the cell and the cell's spherical area (km²). |
-| `protected_area_pct`, `slope_suitable_land_pct`, `land_exclusion_factor` | Protected land as a share of the cell (WDPA polygons on the land-cover grid, water inside them left out; the whole protected area until 8 October 2026), share of land at or below the slope limit (20 degrees, 15 until October 2026), and their combined factor (multiplied by the land share in the 2 % / 20 % tables). |
+| `protected_area_pct`, `slope_suitable_land_pct`, `land_exclusion_factor` | Protected land as a share of the cell (`protected_land_km2` of `inputs/site_costs/protected_areas.csv`: WDPA polygons on the land-cover grid, water inside them left out; the whole protected area until 8 October 2026), share of land at or below the slope limit (20 degrees, 15 until October 2026), and their combined factor (multiplied by the land share in the 2 % / 20 % tables). |
 | `land_pct_slope_upto_8p5deg`, `_8p5_to_14deg`, `_14_to_20deg`, `_above_20deg` | Share of the cell's land in each slope class, from which the site costs take the slope factor. |
 | `solar_area_km2`, `wind_onshore_area_km2`, `renewable_union_area_classwise_nested_v1_km2` | Suitable area per technology after exclusions and share; the union is a classwise nested lower bound of the physical union. |
 | `solar_density_mw_per_km2`, `wind_density_mw_per_km2` | Latitude-packed First Solar fixed-tilt density (about 106 MW/km² at the equator) and 5 MW/km² wind. When the table has no `solar_density_method` column, `model/land.py` recomputes the PV density from the YAML instead (73.6 MW/km² at 23°); which rule to keep is open (`MODEL_CHOICES.md`). |

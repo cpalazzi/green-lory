@@ -498,6 +498,99 @@ runs:
     notes: >-
       Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
 
+# The campaign's land runs with all the land that the land rules leave (100 % land share): the
+# base of the green-serval paper from 11 November 2026, with the 20 % runs above as the
+# sensitivity. The land-cover shares already leave out land that serves other uses (cropland,
+# forest, cities); the 20 % share stood for competition from other renewable energy, as the
+# 2 % of Salmon (2022) and Verschuur (2024) did. No new solve: land does not enter the solve, so
+# capacities scale with the share (x 5, `python -m model.suppliers derive`, run locally on the
+# copied merged tables; provenance.json beside each table). The sea runs follow below.
+
+  gl_dea2050_wacc5_bflat_wflat_land100oct_fixed:
+    role: campaign base, all the land that remains
+    runner: derived
+    derived_from: gl_dea2050_wacc5_bflat_wflat_land20oct_fixed
+    land_share: 1.0
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_100pct_slope20.csv
+    notes: >-
+      The capacities of base x 5; LCOA and designs are the parent's.
+
+  gl_dea2050_wacc5_bspat_wspat_land100oct_fixed:
+    role: campaign site, all the land that remains
+    runner: derived
+    derived_from: gl_dea2050_wacc5_bspat_wspat_land20oct_fixed
+    land_share: 1.0
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_100pct_slope20.csv
+    notes: >-
+      The capacities of site x 5; LCOA and designs are the parent's.
+
+  gl_dea2050_amelilc_bflat_wflat_land100oct_fixed:
+    role: campaign finance, all the land that remains
+    runner: derived
+    derived_from: gl_dea2050_amelilc_bflat_wflat_land20oct_fixed
+    land_share: 1.0
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_100pct_slope20.csv
+    notes: >-
+      The capacities of finance x 5; LCOA and designs are the parent's.
+
+  gl_dea2050_amelilc_bspat_wspat_land100oct_fixed:
+    role: campaign all, all the land that remains
+    runner: derived
+    derived_from: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed
+    land_share: 1.0
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_100pct_slope20.csv
+    notes: >-
+      The capacities of all x 5; LCOA and designs are the parent's.
+
+# The campaign's sea runs on all of each cell's sea outside protected areas (100 % share), the
+# base at sea of the green-serval paper from 11 November 2026, with 20 % of that sea as the
+# sensitivity, as on land. The sea build leaves out the protected share of each cell's water
+# (protected_water_pct of inputs/site_costs/protected_areas.csv: the WDPA areas of the land rule's
+# statuses in the marine and coastal realms, `python -m model.site_geography protected-areas`;
+# model/sea_cells.py). These runs apply it after the solve, with the share, since the sea area
+# does not enter the solve either (`python -m model.suppliers derive --multiplier 5
+# --protected-areas ...`, run locally on the copied merged tables; provenance.json beside each table).
+
+  gl_dea2050_wacc5_bflat_wflat_land100oct_fixed_offshore_mpa:
+    role: campaign base at sea, all the sea outside protected areas
+    runner: derived
+    derived_from: gl_dea2050_wacc5_bflat_wflat_land20oct_fixed_offshore
+    land_share: 1.0
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of base at sea x 5 x the unprotected share of each cell's sea; LCOA and
+      designs are the parent's.
+
+  gl_dea2050_wacc5_bspat_wspat_land100oct_fixed_offshore_mpa:
+    role: campaign site at sea, all the sea outside protected areas
+    runner: derived
+    derived_from: gl_dea2050_wacc5_bspat_wspat_land20oct_fixed_offshore
+    land_share: 1.0
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of site at sea x 5 x the unprotected share of each cell's sea; LCOA and
+      designs are the parent's.
+
+  gl_dea2050_amelilc_bflat_wflat_land100oct_fixed_offshore_mpa:
+    role: campaign finance at sea, all the sea outside protected areas
+    runner: derived
+    derived_from: gl_dea2050_amelilc_bflat_wflat_land20oct_fixed_offshore
+    land_share: 1.0
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of finance at sea x 5 x the unprotected share of each cell's sea; LCOA and
+      designs are the parent's.
+
+  gl_dea2050_amelilc_bspat_wspat_land100oct_fixed_offshore_mpa:
+    role: campaign all at sea, all the sea outside protected areas
+    runner: derived
+    derived_from: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore
+    land_share: 1.0
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of all at sea x 5 x the unprotected share of each cell's sea; LCOA and
+      designs are the parent's.
+
 
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above
 # (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and
