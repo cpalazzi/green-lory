@@ -120,8 +120,10 @@ pv slot (`_explicitcomp`, `_offshore`); anything no token covers goes in the run
 The campaign's four cases have names, used in the code, the results notebook and the green-serval
 paper: `base` (`gl_dea2050_wacc5_bflat_wflat_land20oct_fixed`: uniform 5 % WACC, flat build costs,
 uniform water), `site` (`..._wacc5_bspat_wspat_...`: the site-cost table's build costs and water),
-`finance` (`..._amelilc_bflat_wflat_...`: Ameli low-carbon WACC by country) and `all`
-(`..._amelilc_bspat_wspat_...`: both), each with a sea run (`_offshore`); `base_4h` is the
+`finance` (`..._amelired_bflat_wflat_...`: Ameli reduced WACC by country, the series of
+Verschuur et al. 2024; from 11 November 2026, with the `..._amelilc_...` runs, Ameli low-carbon
+WACC, as a sensitivity, and as the cases until the new runs are solved) and `all`
+(`..._amelired_bspat_wspat_...`: both), each with a sea run (`_offshore`); `base_4h` is the
 four-hour variant of `base`. From 11 November 2026 the land runs of the four cases are the derived `..._land100oct_...`
 variants (all the land that the land rules leave), with the `..._land20oct_...` runs as the 20 %
 sensitivity; their sea runs are the derived `..._land100oct_fixed_offshore_mpa` variants (all of
@@ -133,7 +135,7 @@ call them C2, S1, F and S2, and `base_4h` C1.
 | `gl`, `ll`, `gpo` | green-lory plant model, legacy-lcoa plant model, green-porpoise network |
 | `rep_...` | the reconciling run, which keeps its September id (`rep` for replication mode) |
 | `dea2050`, `dea2030`, `way2050`, `xcost45` | technology cost basis (see [Sources and terms](#sources-and-terms)) |
-| `wacc5`, `ameli`, `amelired`, `amelilc` | uniform 5 % WACC; Ameli reduced WACC by country (`ameli` in key run 2, `amelired` in the reconciling run); Ameli low-carbon (current) WACC by country (the campaign's `finance` and `all`) |
+| `wacc5`, `ameli`, `amelired`, `amelilc` | uniform 5 % WACC; Ameli reduced WACC by country (`ameli` in key run 2; `amelired` in the reconciling run and, from 11 November 2026, the campaign's `finance` and `all`); Ameli low-carbon (current) WACC by country (their sensitivity; the campaign's `finance` and `all` from 14 October to 11 November 2026) |
 | `bflat`, `bspat` | site-cost multipliers 1 everywhere, or the site-cost table's: remote factor, cold, slope, depth and labour |
 | `wflat`, `wspat`, `wnone` | uniform baseline water (2 EUR2020/m³ from 24 Sep 2026), spatial water, no water cost |
 | `land20c`, `land2c`, `land20oct`, `land100oct`, `land2sw`, `landleg2`, `landleg2c`, `landarch` | land share and land build (`100` all the land that the land rules leave, `c` centred build of 23 Sep 2026, `oct` the October build of 8 Oct 2026 with slope classes up to 20 degrees and protected land counted on land only, `sw` the mislabelled September build, `leg` the legacy land step or the stated method, `arch` the archived capacity column) |

@@ -321,7 +321,7 @@ runs:
       base with the water of site.
 
   gl_dea2050_amelilc_bflat_wflat_land20oct_fixed:
-    role: campaign finance (finance only)
+    role: low-carbon WACC sensitivity of campaign finance (finance only)
     runner: green_lory
     description: >-
       Campaign finance (finance only, hourly): as base, with Ameli et al.'s (2021) low-carbon (current) WACC by
@@ -348,7 +348,7 @@ runs:
     weather_dir: data/weather_data/era5_2019_1deg
 
   gl_dea2050_amelilc_bspat_wspat_land20oct_fixed:
-    role: campaign all (site costs and finance)
+    role: low-carbon WACC sensitivity of campaign all (site costs and finance)
     runner: green_lory
     description: >-
       Campaign all (site costs and finance, hourly): the build costs and water of site with the interest rates of finance
@@ -438,7 +438,7 @@ runs:
       Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
 
   gl_dea2050_amelilc_bflat_wflat_land20oct_fixed_offshore:
-    role: campaign finance at sea
+    role: low-carbon WACC sensitivity of campaign finance at sea
     runner: green_lory
     description: >-
       The plant of finance at sea: as base at sea, with each cell's interest rate from its economic zone (Ameli et
@@ -469,7 +469,7 @@ runs:
       Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
 
   gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore:
-    role: campaign all at sea
+    role: low-carbon WACC sensitivity of campaign all at sea
     runner: green_lory
     description: >-
       The plant of all at sea: the location factors of site at sea with the interest rates of finance at sea
@@ -525,7 +525,7 @@ runs:
       The capacities of site x 5; LCOA and designs are the parent's.
 
   gl_dea2050_amelilc_bflat_wflat_land100oct_fixed:
-    role: campaign finance, all the land that remains
+    role: low-carbon WACC sensitivity of campaign finance, all the land that remains
     runner: derived
     derived_from: gl_dea2050_amelilc_bflat_wflat_land20oct_fixed
     land_share: 1.0
@@ -534,7 +534,7 @@ runs:
       The capacities of finance x 5; LCOA and designs are the parent's.
 
   gl_dea2050_amelilc_bspat_wspat_land100oct_fixed:
-    role: campaign all, all the land that remains
+    role: low-carbon WACC sensitivity of campaign all, all the land that remains
     runner: derived
     derived_from: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed
     land_share: 1.0
@@ -572,7 +572,7 @@ runs:
       designs are the parent's.
 
   gl_dea2050_amelilc_bflat_wflat_land100oct_fixed_offshore_mpa:
-    role: campaign finance at sea, all the sea outside protected areas
+    role: low-carbon WACC sensitivity of campaign finance at sea, all the sea outside protected areas
     runner: derived
     derived_from: gl_dea2050_amelilc_bflat_wflat_land20oct_fixed_offshore
     land_share: 1.0
@@ -582,7 +582,7 @@ runs:
       designs are the parent's.
 
   gl_dea2050_amelilc_bspat_wspat_land100oct_fixed_offshore_mpa:
-    role: campaign all at sea, all the sea outside protected areas
+    role: low-carbon WACC sensitivity of campaign all at sea, all the sea outside protected areas
     runner: derived
     derived_from: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore
     land_share: 1.0
@@ -604,7 +604,7 @@ runs:
       are the parent's.
 
   gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore_mpa:
-    role: campaign all at sea, 20 % of the sea outside protected areas (share sensitivity)
+    role: low-carbon WACC sensitivity of campaign all at sea, 20 % of the sea outside protected areas (share sensitivity)
     runner: derived
     derived_from: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore
     land_share: 0.2
@@ -613,6 +613,173 @@ runs:
       The capacities of all at sea x the unprotected share of each cell's sea; LCOA and designs
       are the parent's.
 
+
+# The campaign's finance and all with Ameli et al.'s (2021) reduced WACC by country, the series of
+# Verschuur et al. (2024), decided on 11 November 2026 so that the finance case compares with that
+# literature; the low-carbon (current) series of the ..._amelilc_... runs above is a sensitivity
+# until the collaborator's rates by country and technology replace both. The reduced series is
+# 5.1 % in most regions and 1.8-4.6 % in Japan, Western Europe, the UK, the United States and
+# Canada; at sea, international waters keep 11.8 % (offshore.international_waters_interest_rate).
+# The sea table (inputs/finance/ameli2021_reduced_wacc_sea_cells.csv) is model/sea_cells.py's
+# sea_finance_table over the 40,197 sea cells with the reduced table by country; the same call
+# reproduces the low-carbon sea table exactly. The 100 % variants are derived after the solve, as
+# for the other cases.
+
+  gl_dea2050_amelired_bflat_wflat_land20oct_fixed:
+    role: campaign finance (finance only)
+    runner: green_lory
+    description: >-
+      Campaign finance (finance only, hourly): as base, with Ameli et al.'s (2021) reduced WACC by
+      country for every technology, the series of Verschuur et al. (2024), instead of a uniform 5 %
+    results_class: 50_campaign
+    job_token: camp-finred
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed
+    finance_csv: inputs/finance/ameli2021_reduced_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
+    finance_csv_sha256: 76e3a8af38911505b89b6de5ff2ae03210dc278bbd19257cb9b1f8edb8b34477
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0
+    cost_scope: flat_ameli_uniform_baseline_water_no_land_rent
+    land_share: 0.20
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
+    land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg
+
+  gl_dea2050_amelired_bspat_wspat_land20oct_fixed:
+    role: campaign all (site costs and finance)
+    runner: green_lory
+    description: >-
+      Campaign all (site costs and finance, hourly): the build costs and water of site with the
+      interest rates of finance (Ameli et al.'s 2021 reduced WACC by country)
+    results_class: 50_campaign
+    job_token: camp-allred
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed
+    finance_csv: inputs/finance/ameli2021_reduced_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
+    finance_csv_sha256: 76e3a8af38911505b89b6de5ff2ae03210dc278bbd19257cb9b1f8edb8b34477
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price; each cell adds its pipeline
+    cost_scope: site_costs_ameli_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_center_20pct_slope20.csv
+    site_costs_csv_sha256: df2641a7a3f0d860ffb6ea2b1a567236fedec64949d971d5c00a4b0213fc024e
+    land_share: 0.20
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_20pct_slope20.csv
+    land_table_sha256: 0495b732e75c3784a9219327243ce212db41ee465dffaa1c22dce9ffa65ec7eb
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg
+
+  gl_dea2050_amelired_bflat_wflat_land20oct_fixed_offshore:
+    role: campaign finance at sea
+    runner: green_lory
+    description: >-
+      The plant of finance at sea: as base at sea, with each cell's interest rate from its economic
+      zone (Ameli et al.'s 2021 reduced WACC; 11.8 % in international waters)
+    results_class: 50_campaign
+    job_token: camp-finred-sea
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed  # no PV output at sea
+    finance_csv: inputs/finance/ameli2021_reduced_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
+    finance_csv_sha256: 4e7c405696eac9f888a4cf066eef8a346995ff5323117c911bb408d037ba8992
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price: desalinated at the site, no pipeline
+    cost_scope: site_costs_ameli_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_sea_flat_20pct.csv
+    site_costs_csv_sha256: 30ea97bf6558a3f667399e5e78638bf5cdccc2a86dcf7f963bc69b6b522dd684
+    land_share: 0.20
+    land_table: land_sea_20261105_v2/max_capacities_sea_20pct.csv
+    land_table_sha256: 56b38c9f0fdc90621f213e374be9d128af832ac62f36b807bae1d475af15c2fc
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg_sea
+    notes: >-
+      Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
+
+  gl_dea2050_amelired_bspat_wspat_land20oct_fixed_offshore:
+    role: campaign all at sea
+    runner: green_lory
+    description: >-
+      The plant of all at sea: the location factors of site at sea with the interest rates of
+      finance at sea (Ameli et al.'s 2021 reduced WACC)
+    results_class: 50_campaign
+    job_token: camp-allred-sea
+    tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
+    plant_dir: model/plants/ammonia_plant_1mt
+    pv_policy: fixed  # no PV output at sea
+    finance_csv: inputs/finance/ameli2021_reduced_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
+    finance_csv_sha256: 4e7c405696eac9f888a4cf066eef8a346995ff5323117c911bb408d037ba8992
+    time_step_h: 1
+    temporal_accounting: snapshot_weighted
+    ramp_limit_basis: per_hour
+    site_costs_in_headline: true
+    water_eur2020_per_m3: 2.0  # the source price: desalinated at the site, no pipeline
+    cost_scope: site_costs_ameli_no_land_rent
+    site_costs_csv: inputs/site_costs/site_costs_sea_20pct.csv
+    site_costs_csv_sha256: 5a62eb4d980bc3485a43011a906ebd47b13ed7b86c6ac1091d064dcaba709907
+    land_share: 0.20
+    land_table: land_sea_20261105_v2/max_capacities_sea_20pct.csv
+    land_table_sha256: 56b38c9f0fdc90621f213e374be9d128af832ac62f36b807bae1d475af15c2fc
+    land_constraint: after_solve
+    capacity_rule: scaled_reference_design
+    land_allocation: colocated
+    weather_dir: data/weather_data/era5_2019_1deg_sea
+    notes: >-
+      Global stage over the 40,197 sea cells (land_sea_20261105_v2/locations_sea_20261105.csv).
+
+  gl_dea2050_amelired_bflat_wflat_land100oct_fixed:
+    role: campaign finance, all the land that remains
+    runner: derived
+    derived_from: gl_dea2050_amelired_bflat_wflat_land20oct_fixed
+    land_share: 1.0
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_100pct_slope20.csv
+    notes: >-
+      The capacities of finance x 5; LCOA and designs are the parent's.
+
+  gl_dea2050_amelired_bflat_wflat_land100oct_fixed_offshore_mpa:
+    role: campaign finance at sea, all the sea outside protected areas
+    runner: derived
+    derived_from: gl_dea2050_amelired_bflat_wflat_land20oct_fixed_offshore
+    land_share: 1.0
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of finance at sea x 5 x the unprotected share of each cell's sea; LCOA and
+      designs are the parent's.
+
+  gl_dea2050_amelired_bspat_wspat_land100oct_fixed:
+    role: campaign all, all the land that remains
+    runner: derived
+    derived_from: gl_dea2050_amelired_bspat_wspat_land20oct_fixed
+    land_share: 1.0
+    land_table: land_center_slope20_20261008_v2/max_capacities_center_100pct_slope20.csv
+    notes: >-
+      The capacities of all x 5; LCOA and designs are the parent's.
+
+  gl_dea2050_amelired_bspat_wspat_land100oct_fixed_offshore_mpa:
+    role: campaign all at sea, all the sea outside protected areas
+    runner: derived
+    derived_from: gl_dea2050_amelired_bspat_wspat_land20oct_fixed_offshore
+    land_share: 1.0
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of all at sea x 5 x the unprotected share of each cell's sea; LCOA and
+      designs are the parent's.
 
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above
 # (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and
@@ -723,7 +890,7 @@ networks:
     description: The land and sea plants of site on all the land and sea the rules leave.
 
   gpo_gl_dea2050_amelilc_bflat_wflat_land100oct_fixed_sea_iso1000_1mt_corrected:
-    role: campaign finance
+    role: low-carbon WACC sensitivity of campaign finance
     supplier_run: gl_dea2050_amelilc_bflat_wflat_land100oct_fixed
     sea_supplier_run: gl_dea2050_amelilc_bflat_wflat_land100oct_fixed_offshore_mpa
     equations: corrected
@@ -733,7 +900,7 @@ networks:
     description: The land and sea plants of finance on all the land and sea the rules leave.
 
   gpo_gl_dea2050_amelilc_bspat_wspat_land100oct_fixed_sea_iso1000_1mt_corrected:
-    role: campaign all
+    role: low-carbon WACC sensitivity of campaign all
     supplier_run: gl_dea2050_amelilc_bspat_wspat_land100oct_fixed
     sea_supplier_run: gl_dea2050_amelilc_bspat_wspat_land100oct_fixed_offshore_mpa
     equations: corrected
@@ -753,7 +920,7 @@ networks:
     description: The land and sea plants of base on 20 % of the land and sea the rules leave (share sensitivity).
 
   gpo_gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_sea_iso1000_1mt_corrected:
-    role: campaign all, share sensitivity
+    role: low-carbon WACC sensitivity of campaign all, share sensitivity
     supplier_run: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed
     sea_supplier_run: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore_mpa
     equations: corrected
