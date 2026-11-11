@@ -100,6 +100,23 @@ class LandShareTest(unittest.TestCase):
             self.assertAlmostEqual(provenance["effective_land_competition_fraction"], 0.02)
             self.assertEqual(json.loads((Path(directory) / "two_percent" / "provenance.json").read_text())["multiplier"], 0.1)
 
+    def test_a_sea_run_leaves_out_its_protected_water(self):
+        with tempfile.TemporaryDirectory() as directory:
+            surface, protected = Path(directory) / "surface.csv", Path(directory) / "protected_areas.csv"
+            pd.DataFrame({"latitude": [-48.0, 55.0, 10.0], "longitude": [70.0, 2.0, -30.0], "lcoa_eur_per_t": [400.0, 700.0, 900.0],
+                          "land_constraint": "after_solve", CAPACITY: [2e6, 4e6, 1e6]}).to_csv(surface, index=False)
+            # the third cell is not in the table: none of its sea is protected
+            pd.DataFrame({"latitude": [55.0, -48.0], "longitude": [2.0, 70.0], "protected_water_pct": [25.0, 100.0]}).to_csv(protected, index=False)
+            provenance = derive_land_share(surface, 5.0, 0.20, Path(directory) / "sea100", protected_areas=protected)
+            derived = pd.read_csv(Path(directory) / "sea100" / "global_run_results.csv")
+            self.assertEqual(derived[CAPACITY].tolist(), [0.0, 15e6, 5e6])
+            self.assertEqual(derived["protected_water_pct"].tolist(), [100.0, 25.0, 0.0])
+            self.assertEqual(derived["lcoa_eur_per_t"].tolist(), [400.0, 700.0, 900.0])
+            self.assertEqual(provenance["protected_areas"]["cells_with_protected_water"], 2)
+            with self.assertRaises(ValueError):  # already applied
+                derive_land_share(Path(directory) / "sea100" / "global_run_results.csv", 1.0, 1.0, Path(directory) / "again",
+                                  protected_areas=protected)
+
     def test_only_after_solve_surfaces_rescale(self):
         with tempfile.TemporaryDirectory() as directory:
             surface = Path(directory) / "surface.csv"

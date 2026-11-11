@@ -39,8 +39,10 @@ land:
     10: 0.2
     13: 0.03  # rooftop PV
     16: 1.0
-  # Protected land: WDPA polygons (February 2026) of these statuses are excluded
+  # Protected land: WDPA polygons (February 2026) of these statuses and realms are excluded
+  # (inputs/site_costs/protected_areas.csv, model/protected_areas.py)
   protected_area_statuses: [designated, inscribed, established]
+  protected_area_realms: [terrestrial, coastal]
   # Slope classes of the land tables, upper bounds in degrees (GEBCO 2025): no build-cost uplift
   # up to 8.5 degrees (15 % grade, the limit of standard single-axis trackers); land above the
   # last bound is excluded (decided 7 October 2026, CAMPAIGN_PLAN.md section 0a; the September
@@ -127,6 +129,9 @@ offshore:
   # start (weather.land_correction.full_land_share). Frozen sea counts as sea: the cold rule
   # (site_costs.cold) prices it, and nothing is left out for ice
   min_sea_share: 0.01
+  # Protected water: the WDPA polygons of land.protected_area_statuses in these realms are left
+  # out of the sea a plant may use, as those of land.protected_area_realms are on land
+  protected_area_realms: [marine, coastal]
   # Fixed foundations "can be used in water depths of up to 70 metres" (DEA p. 208); floating
   # beyond, water deeper than 1,000 m excluded from NREL's floating resource (Musial et al. 2016)
   fixed_max_depth_m: 70.0

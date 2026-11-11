@@ -1,0 +1,27 @@
+{
+  "written_by": "python -m model.site_geography",
+  "rows": 64440,
+  "sha256": "902a436dcfc4158bd4460b423cb9d7d01d30917ad23b55f810444fbbfd43cb1c",
+  "parameters": {
+    "path": "inputs/parameters.yaml",
+    "sha256": "7777ff8d74dd261a8e48acf818e74dd5c0df546bf47915fdfeb3a1f7faa3936b"
+  },
+  "inputs": {
+    "wdpa_0": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/land/WDPA_Feb2026_Public_shp_0/WDPA_Feb2026_Public_shp-polygons.shp",
+      "sha256": "281bf66cb2dce856a10c4176d4a259e6581785b8d4eb72176275242799771827"
+    },
+    "wdpa_1": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/land/WDPA_Feb2026_Public_shp_1/WDPA_Feb2026_Public_shp-polygons.shp",
+      "sha256": "56cbdd3bf450f8e61a82383550b38aef3e9d1efd61f35e80c7c53c3c44a40be5"
+    },
+    "wdpa_2": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/land/WDPA_Feb2026_Public_shp_2/WDPA_Feb2026_Public_shp-polygons.shp",
+      "sha256": "f28ae36dd5465e42d33a54914904b5ac4041095f23a0bf4db13b32ff8fd136e9"
+    },
+    "land_cover": {
+      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/MCD12C1.A2022001.061.2023244164746.hdf",
+      "sha256": "5b12c573975da5cb1b119973411e119e6b749b88a0056c68668b9a261b3e56cc"
+    }
+  }
+}

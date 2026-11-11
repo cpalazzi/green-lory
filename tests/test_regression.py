@@ -35,7 +35,9 @@ The land build, rerun for latitudes -24 to -22 (1,080 cells, including two focal
 held the rows of the accepted centred 100 % table of 23 September 2026 until 8 October 2026,
 when protected land replaced protected area (model/land_table.py, _protected_land_pct): inland
 cells moved by at most 0.18 percentage points of protection, coastal cells with protected
-water regained land (Ningaloo, 22 S 114 E: exclusion factor 0 to 0.58).
+water regained land (Ningaloo, 22 S 114 E: exclusion factor 0 to 0.58). Since 11 November 2026
+the land build reads protected land from the protected-area table (model/protected_areas.py);
+the test builds that table for the band from the WDPA files first.
 
     python -m pytest -m slow tests/test_regression.py
 
@@ -129,14 +131,17 @@ def test_land_build_reproduces_a_band_of_the_accepted_table(tmp_path):
     if not all(path.exists() for path in inputs):
         pytest.skip("land inputs not present")
     from model import land_table
+    from model.protected_areas import protected_area_table
 
+    cells = pd.DataFrame([(float(lat), float(lon)) for lat in (-24, -23, -22) for lon in range(-180, 180)],
+                         columns=["latitude", "longitude"])
+    protected = tmp_path / "protected_areas.csv"
+    protected_area_table(cells, tuple(config.WDPA_SHAPEFILES), config.LAND_COVER_FILE).to_csv(protected, index=False)
     output = tmp_path / "band.csv"
-    argv = ["--output", str(output), "--land-competition-fraction", "1.0", "--include-offshore-wind",
-            "--land-cover", str(config.LAND_COVER_FILE), "--slope-raster", str(config.GEBCO_FILE),
-            "--max-slope-degrees", "15", "--min-lat", "-24", "--max-lat", "-22"]
-    for shapefile in config.WDPA_SHAPEFILES:
-        argv += ["--protected-area", str(shapefile)]
-    land_table.main(argv)
+    land_table.main(["--output", str(output), "--land-competition-fraction", "1.0", "--include-offshore-wind",
+                     "--land-cover", str(config.LAND_COVER_FILE), "--slope-raster", str(config.GEBCO_FILE),
+                     "--max-slope-degrees", "15", "--min-lat", "-24", "--max-lat", "-22",
+                     "--protected-areas", str(protected)])
 
     expected = pd.read_csv(LAND_BAND).set_index(["latitude", "longitude"]).sort_index()
     actual = pd.read_csv(output).set_index(["latitude", "longitude"]).sort_index()

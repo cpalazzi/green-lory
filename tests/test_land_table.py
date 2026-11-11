@@ -16,8 +16,6 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import pytest
-import geopandas as gpd
-from shapely.geometry import box
 
 from model.land import (
     CLASSWISE_NESTED_UNION_AREA_COLUMN,
@@ -36,7 +34,6 @@ from model.land_table import (
     _bin_coordinates,
     _cell_area_km2,
     _protected_land_pct,
-    _rasterise_polygons,
     _wrap_longitude_labels,
     apply_land_competition_scenario,
     build_land_availability_table,
@@ -117,25 +114,17 @@ def test_binning_and_longitude_wrap():
     np.testing.assert_array_equal(_wrap_longitude_labels([180.0, 179.0, -180.0]), [-180.0, 179.0, -180.0])
 
 
-def test_polygons_are_rasterised_by_subpixel_centre():
-    # a 0.2 x 0.1 degree box on a 0.05-degree grid covering 0.5 S to 0.5 N from -180
-    mask = _rasterise_polygons([box(-179.9, 0.0, -179.7, 0.1)], 0.5, 20, 7200, 0.05)
-    assert mask.sum() == 4 * 2
-    assert mask[8:10, 2:6].all()
-
-
-def test_protected_land_leaves_out_protected_water(tmp_path):
-    # cell (0, 0): its west half is land, its east half water; a protected area covers the
-    # east half of the land and all the water
-    cube = _cube([(-0.5, -0.5, 0.5, 0.0)])
-    path = tmp_path / "wdpa.gpkg"
-    gpd.GeoDataFrame({"STATUS": ["Designated"], "REALM": ["Coastal"]},
-                     geometry=[box(-0.25, -0.5, 0.5, 0.5)], crs="EPSG:4326").to_file(path)
-    cells = pd.DataFrame({"latitude": [0.0], "longitude": [0.0]})
-    with mock.patch.dict(sys.modules, _fake_pyhdf(cube)):
-        result = _protected_land_pct(cells, (path,), Path("synthetic.hdf"), 1.0, FINE)
-    # a quarter of the cell is protected land (the old rule counted three quarters)
-    assert result["protected_area_pct"].iloc[0] == pytest.approx(25.0, abs=0.01)
+def test_protected_land_is_read_from_the_protected_area_table(tmp_path):
+    # model/protected_areas.py measures the protected land (tests/test_protected_areas.py); the
+    # land table divides it by the cell's area
+    cells = pd.DataFrame({"latitude": [0.0, 60.0], "longitude": [0.0, 10.0]})
+    area = _cell_area_km2(cells["latitude"], 1.0)
+    path = tmp_path / "protected_areas.csv"
+    cells.assign(protected_land_km2=[area[0] / 4, 0.0]).to_csv(path, index=False)
+    assert _protected_land_pct(cells, path, 1.0)["protected_area_pct"].tolist() == pytest.approx([25.0, 0.0])
+    assert _protected_land_pct(cells, None, 1.0)["protected_area_pct"].tolist() == [0.0, 0.0]
+    with pytest.raises(ValueError, match="no row for 1 cells"):
+        _protected_land_pct(cells.assign(longitude=[0.0, 11.0]), path, 1.0)
 
 
 def test_cell_area_uses_the_centred_south_edge():

@@ -1,16 +1,17 @@
 """Build land tables: how much land in each 1-degree cell is suitable for wind and for PV.
 
-The inputs are the MODIS land-cover class fractions (MCD12C1, 0.05 degrees), the World
-Database on Protected Areas and the GEBCO terrain grid (data/README.md). For each cell centred
+The inputs are the MODIS land-cover class fractions (MCD12C1, 0.05 degrees), the protected-area
+table (inputs/site_costs/protected_areas.csv, from the World Database on Protected Areas:
+model/protected_areas.py) and the GEBCO terrain grid (data/README.md). For each cell centred
 on an integer coordinate the builder
 
 1. averages MODIS class fractions over the cell with exact spherical weights and applies the
    suitability factor of each class for wind and for PV (Salmon and Banares-Alcantara 2022,
    Table 1; Verschuur et al. 2024);
-2. removes protected land (WDPA polygons) and, unless skipped, land steeper than
-   ``max_slope_degrees`` (slopes computed from GEBCO), and records the share of the cell's land
-   in each slope class (SLOPE_CLASSES), from which model/site_costs.py takes the slope factor
-   of the build cost;
+2. removes protected land (protected_land_km2 of the protected-area table) and, unless skipped,
+   land steeper than ``max_slope_degrees`` (slopes computed from GEBCO), and records the share
+   of the cell's land in each slope class (SLOPE_CLASSES), from which model/site_costs.py takes
+   the slope factor of the build cost;
 3. keeps a share of what remains (``land_competition_fraction``: 1.0 for the full build,
    0.2 or 0.02 for the derived tables);
 4. converts areas to power: 200 km2/GW for wind, and for fixed PV the row packing of a First
@@ -19,8 +20,7 @@ on an integer coordinate the builder
 The union of wind and PV land is the classwise nested lower bound described in land.py.
 
     python -m model.land_table --output <table.csv> --land-cover <MCD12C1.hdf> \
-        --protected-area <WDPA_0.shp> --protected-area <WDPA_1.shp> --protected-area <WDPA_2.shp> \
-        --slope-raster <GEBCO.nc> --max-slope-degrees 20
+        --protected-areas inputs/site_costs/protected_areas.csv --slope-raster <GEBCO.nc> --max-slope-degrees 20
     python -m model.land_table --base-csv <100 % table> --output <20 % table> --land-competition-fraction 0.2
 
 The full global build takes several hours (ARC job arc/jobs/00_build_land_constraints.sh); a
@@ -35,9 +35,8 @@ import logging
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Tuple
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -62,7 +61,6 @@ DEFAULT_LAND_COMPETITION_FRACTION = 1.0
 WIND_LAND_USE_KM2_PER_GW = float(parameter("land.wind_land_use_km2_per_gw"))
 # Land above the last slope class bound is excluded
 DEFAULT_MAX_SLOPE_DEGREES = SLOPE_CLASSES[-2][1]
-PROTECTED_AREA_STATUSES = frozenset(str(status).lower() for status in parameter("land.protected_area_statuses"))
 
 # Fixed-tilt PV rows
 FIRST_SOLAR_MODULE_WIDTH_M = float(parameter("land.solar_module_width_m"))
@@ -188,7 +186,7 @@ class LandAvailabilityConfig:
     lat_bounds: Tuple[float, float] = (-75.0, 75.0)
     include_offshore_wind: bool = False
     land_competition_fraction: float = DEFAULT_LAND_COMPETITION_FRACTION
-    protected_area_paths: Tuple[Path, ...] = tuple()
+    protected_areas_csv: Path | None = None
     slope_raster_path: Path | None = None
     max_slope_degrees: float = DEFAULT_MAX_SLOPE_DEGREES
     skip_slope_exclusion: bool = False
@@ -203,7 +201,7 @@ class LandAvailabilityConfig:
             lat_bounds=self.lat_bounds,
             include_offshore_wind=bool(self.include_offshore_wind),
             land_competition_fraction=float(self.land_competition_fraction),
-            protected_area_paths=tuple(repo_path(path) for path in self.protected_area_paths),
+            protected_areas_csv=repo_path(self.protected_areas_csv) if self.protected_areas_csv is not None else None,
             slope_raster_path=repo_path(self.slope_raster_path) if self.slope_raster_path is not None else None,
             max_slope_degrees=float(self.max_slope_degrees),
             skip_slope_exclusion=bool(self.skip_slope_exclusion),
@@ -465,159 +463,26 @@ def _attach_bathymetry_depth(df: pd.DataFrame, bathymetry_path: Path) -> pd.Data
 # Protected areas
 # ---------------------------------------------------------------------------------------------
 
-# WDPA polygons are rasterised on a grid this many times finer than the land cover (0.005
-# degrees for MODIS's 0.05): a sub-pixel is protected when its centre lies inside a polygon.
-PROTECTED_SUBPIXELS = 10
-# Largest number of sub-pixel centres tested against one polygon at once
-_PROTECTED_POINT_BLOCK = 4_000_000
+def _protected_land_pct(df: pd.DataFrame, protected_areas_csv: Path | None, coarse_degree: float) -> pd.DataFrame:
+    """Protected land as a percentage of each cell's area: protected_land_km2 of the protected-area
+    table (inputs/site_costs/protected_areas.csv, model/protected_areas.py). Nothing is protected
+    without a table.
 
-
-def _valid_geometries(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    frame = frame[frame.geometry.notna() & ~frame.geometry.is_empty].copy()
-    if frame.empty:
-        return frame
-    try:
-        frame = frame.set_geometry(frame.geometry.make_valid())
-    except AttributeError:  # pragma: no cover - depends on shapely/geopandas version
-        frame = frame.set_geometry(frame.geometry.buffer(0))
-    return frame[frame.geometry.notna() & ~frame.geometry.is_empty]
-
-
-def _filter_protected_areas(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    if frame.empty:
-        return frame
-
-    output = frame.copy()
-    if "STATUS" in output.columns:
-        status = output["STATUS"].astype(str).str.lower().str.strip()
-        output = output[status.isin(PROTECTED_AREA_STATUSES)]
-
-    if "REALM" in output.columns:
-        realm = output["REALM"].astype(str).str.lower().str.strip()
-        output = output[realm != "marine"]
-    elif "MARINE" in output.columns:
-        marine = output["MARINE"].astype(str).str.lower().str.strip()
-        output = output[~marine.isin({"2", "true", "marine"})]
-
-    return _valid_geometries(output)
-
-
-def _rasterise_polygons(geometries, north: float, n_rows: int, n_cols: int, step: float) -> np.ndarray:
-    """Boolean grid (north-up, from -180 degrees) of the sub-pixels whose centre lies in a polygon."""
-    import shapely
-
-    mask = np.zeros((n_rows, n_cols), dtype=bool)
-    south = north - n_rows * step
-    for geometry in geometries:
-        min_x, min_y, max_x, max_y = geometry.bounds
-        min_y, max_y = max(min_y, south), min(max_y, north)
-        if max_y <= min_y:
-            continue
-        first_col = max(int(np.ceil((min_x + 180.0) / step - 0.5)), 0)
-        last_col = min(int(np.floor((max_x + 180.0) / step - 0.5)), n_cols - 1)
-        first_row = max(int(np.ceil((north - max_y) / step - 0.5)), 0)
-        last_row = min(int(np.floor((north - min_y) / step - 0.5)), n_rows - 1)
-        if last_col < first_col or last_row < first_row:
-            continue
-        shapely.prepare(geometry)
-        xs = -180.0 + step * (np.arange(first_col, last_col + 1) + 0.5)
-        rows_per_block = max(1, _PROTECTED_POINT_BLOCK // len(xs))
-        for block_start in range(first_row, last_row + 1, rows_per_block):
-            block_end = min(block_start + rows_per_block, last_row + 1)
-            ys = north - step * (np.arange(block_start, block_end) + 0.5)
-            grid_x, grid_y = np.meshgrid(xs, ys)
-            inside = shapely.contains_xy(geometry, grid_x, grid_y)
-            mask[block_start:block_end, first_col:last_col + 1] |= inside
-    return mask
-
-
-def _protected_land_pct(
-    df: pd.DataFrame,
-    protected_area_paths: Tuple[Path, ...],
-    land_cover_path: Path,
-    coarse_degree: float,
-    fine_degree: float,
-) -> pd.DataFrame:
-    """Protected land as a percentage of each cell's area, measured on the land cover's grid.
-
-    Each land-cover pixel's protected share (WDPA polygons rasterised at fine_degree /
-    PROTECTED_SUBPIXELS) is weighted by the pixel's land fraction (one minus its MODIS water
-    fraction) and its spherical area. Water inside a protected area, the sea of a coastal park or
-    a lake, therefore does not count against the cell's land, and protected land never exceeds
-    the land the table counts. (Until October 2026 the whole protected area, water included, was
-    divided by the cell's land, which removed the land of hundreds of coastal cells.)
+    Water inside a protected area, the sea of a coastal park or a lake, does not count against the
+    cell's land, and protected land never exceeds the land the table counts. (Until October 2026
+    the whole protected area, water included, was divided by the cell's land, which removed the
+    land of hundreds of coastal cells.)
     """
-    output = df.copy()
-    output["protected_area_pct"] = 0.0
-    if not protected_area_paths:
-        return output
-    for path in protected_area_paths:
-        if not path.exists():
-            raise FileNotFoundError(f"Protected-area vector file not found: {path}")
-    from pyhdf.SD import SD, SDC
-
-    group = int(round(coarse_degree / fine_degree))
-    half = group // 2
-    step = fine_degree / PROTECTED_SUBPIXELS
-    n_cols = int(round(360.0 / fine_degree))
-    labels = np.sort(output["latitude"].astype(float).unique())
-    chunk_degree = max(coarse_degree, 5.0)
-    chunks = [labels[(labels >= edge) & (labels < edge + chunk_degree)]
-              for edge in np.arange(labels.min(), labels.max() + chunk_degree, chunk_degree)]
-    chunks = [chunk for chunk in chunks if len(chunk)]
-    LOGGER.info("Protected land: %d latitude chunks across %d WDPA source files.", len(chunks), len(protected_area_paths))
-    stage_started = time.perf_counter()
-    results = []
-    sd = SD(str(land_cover_path), SDC.READ)
-    try:
-        sds = sd.select("Land_Cover_Type_1_Percent")
-        for index, chunk in enumerate(chunks, start=1):
-            chunk_started = time.perf_counter()
-            # the chunk's cells as a contiguous band of whole cells
-            cell_rows = np.arange(chunk.max(), chunk.min() - coarse_degree / 2, -coarse_degree)
-            north = float(chunk.max()) + _half_cell(coarse_degree)
-            south = float(chunk.min()) - _half_cell(coarse_degree)
-            first_row = int(round((90.0 - north) / fine_degree))
-            last_row = int(round((90.0 - south) / fine_degree))
-            water = np.asarray(sds[first_row:last_row, 0:n_cols, MODIS_WATER_CLASS:MODIS_WATER_CLASS + 1],
-                               dtype=float)[:, :, 0] / 100.0
-
-            geometries = []
-            for path in protected_area_paths:
-                protected = gpd.read_file(path, bbox=(-180.0, south, 180.0, north))
-                if protected.empty:
-                    continue
-                protected = protected.set_crs("EPSG:4326") if protected.crs is None else protected.to_crs("EPSG:4326")
-                geometries.extend(_filter_protected_areas(protected).geometry)
-            mask = _rasterise_polygons(geometries, north, (last_row - first_row) * PROTECTED_SUBPIXELS,
-                                       n_cols * PROTECTED_SUBPIXELS, step)
-            share = mask.reshape(last_row - first_row, PROTECTED_SUBPIXELS, n_cols, PROTECTED_SUBPIXELS).mean(axis=(1, 3))
-
-            row_north = north - fine_degree * np.arange(last_row - first_row)
-            pixel_km2 = (EARTH_RADIUS_KM ** 2) * np.deg2rad(fine_degree) * (
-                np.sin(np.deg2rad(row_north)) - np.sin(np.deg2rad(row_north - fine_degree)))
-            protected_land = share * (1.0 - water).clip(0.0, 1.0) * pixel_km2[:, None]
-            # coarse column b covers [b - 180.5, b - 179.5): roll by half a cell, as the land cover does
-            protected_land = np.roll(protected_land, half, axis=1)
-            per_cell = protected_land.reshape(len(cell_rows), group, -1, group).sum(axis=(1, 3))
-            areas = _cell_area_km2(pd.Series(cell_rows), coarse_degree).to_numpy()
-            lon_labels = -180.0 + coarse_degree * np.arange(per_cell.shape[1])
-            for row, lat in enumerate(cell_rows):
-                results.append(pd.DataFrame({"latitude": float(lat), "longitude": lon_labels,
-                                             "protected_area_pct": 100.0 * per_cell[row] / areas[row]}))
-            elapsed = time.perf_counter() - stage_started
-            LOGGER.info(
-                "Protected-land chunk %d/%d lat [%.1f, %.1f): %d polygons, chunk=%s, elapsed=%s, eta=%s",
-                index, len(chunks), south, north, len(geometries),
-                _format_eta(time.perf_counter() - chunk_started), _format_eta(elapsed),
-                _format_eta(elapsed / index * (len(chunks) - index)),
-            )
-    finally:
-        sd.end()
-
-    table = pd.concat(results, ignore_index=True)
-    output = output.drop(columns=["protected_area_pct"]).merge(table, on=["latitude", "longitude"], how="left")
-    output["protected_area_pct"] = output["protected_area_pct"].fillna(0.0).clip(0.0, 100.0)
+    output = df.drop(columns=["protected_area_pct"], errors="ignore")
+    if protected_areas_csv is None:
+        return output.assign(protected_area_pct=0.0)
+    table = pd.read_csv(protected_areas_csv, usecols=["latitude", "longitude", "protected_land_km2"])
+    output = output.merge(table, on=["latitude", "longitude"], how="left")
+    missing = output["protected_land_km2"].isna()
+    if missing.any():
+        raise ValueError(f"{protected_areas_csv} has no row for {int(missing.sum())} cells of the land table")
+    protected_km2 = output.pop("protected_land_km2")
+    output["protected_area_pct"] = (100.0 * protected_km2 / _cell_area_km2(output["latitude"], coarse_degree)).clip(0.0, 100.0)
     return output
 
 
@@ -781,13 +646,7 @@ def _slope_suitable_land_pct_from_raster(
 # ---------------------------------------------------------------------------------------------
 
 def _apply_land_exclusions(availability: pd.DataFrame, cfg: LandAvailabilityConfig) -> pd.DataFrame:
-    output = _protected_land_pct(
-        availability.copy(),
-        cfg.protected_area_paths,
-        cfg.land_cover_path,
-        cfg.coarse_degree,
-        cfg.fine_degree,
-    )
+    output = _protected_land_pct(availability.copy(), cfg.protected_areas_csv, cfg.coarse_degree)
     if cfg.skip_slope_exclusion or cfg.slope_raster_path is None:
         output["slope_suitable_land_pct"] = 100.0
         output["steep_slope_pct"] = 0.0
@@ -1126,7 +985,8 @@ def write_land_availability_table(config: LandAvailabilityConfig) -> pd.DataFram
     cfg.output_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(cfg.output_csv, index=False)
     settings = {key: (str(value) if isinstance(value, Path) else value) for key, value in asdict(cfg).items()}
-    settings["protected_area_paths"] = [str(path) for path in cfg.protected_area_paths]
+    if cfg.protected_areas_csv is not None:
+        settings["protected_areas_csv"] = {"path": str(cfg.protected_areas_csv), "sha256": _sha256(cfg.protected_areas_csv)}
     _write_provenance(cfg.output_csv, len(df), settings)
     LOGGER.info("Wrote %s rows to %s", len(df), cfg.output_csv)
     return df
@@ -1146,7 +1006,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-lat", type=float, default=-75.0)
     parser.add_argument("--max-lat", type=float, default=75.0)
     parser.add_argument("--include-offshore-wind", action="store_true", help="Count water as offshore-wind area.")
-    parser.add_argument("--protected-area", action="append", default=[], help="WDPA polygon file; repeat for each file.")
+    parser.add_argument("--protected-areas", type=str, default=None,
+                        help="Protected-area table (inputs/site_costs/protected_areas.csv); without it nothing is protected.")
     parser.add_argument("--slope-raster", type=str, default=None, help="Elevation NetCDF (GEBCO) for the slope screen.")
     parser.add_argument("--max-slope-degrees", type=float, default=DEFAULT_MAX_SLOPE_DEGREES)
     parser.add_argument("--skip-slope-exclusion", action="store_true", help="Keep land of any slope.")
@@ -1171,7 +1032,7 @@ def main(argv: list[str] | None = None) -> None:
         lat_bounds=(args.min_lat, args.max_lat),
         include_offshore_wind=args.include_offshore_wind,
         land_competition_fraction=args.land_competition_fraction,
-        protected_area_paths=tuple(Path(path) for path in args.protected_area),
+        protected_areas_csv=Path(args.protected_areas) if args.protected_areas else None,
         slope_raster_path=None if args.skip_slope_exclusion or not args.slope_raster else Path(args.slope_raster),
         max_slope_degrees=args.max_slope_degrees,
         skip_slope_exclusion=args.skip_slope_exclusion,

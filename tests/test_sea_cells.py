@@ -136,3 +136,17 @@ def test_finance_takes_the_zone_its_region_or_the_international_rate():
     assert table.tech.unique().tolist() == ["all"]
     with pytest.raises(ValueError, match="XXX"):
         sea_cells.sea_finance_table(cells.assign(eez_iso3="XXX"), by_country)
+
+
+def test_protected_water_is_left_out_of_the_sea():
+    table, keys = _land_table(), _land_table()[["latitude", "longitude"]]
+    elevation = keys.assign(sea_depth_m=[30.0, 4000.0, 180.0, 3600.0, np.nan, np.nan])
+    zones = keys.assign(eez_iso3=["GBR", np.nan, "CAN", np.nan, "USA", np.nan], eez_type="200NM", eez_source="centre")
+    geography = keys[keys.latitude > -55].assign(cell_area_km2=8000.0, sea_km2=[6000.0, 8000.0, 8000.0, 0.0, 0.0])
+    protected = keys.iloc[[0, 3]].assign(protected_water_pct=[40.0, 100.0])  # the other cells are not in the table
+    cells = sea_cells.sea_cells(table, geography, elevation, zones, protected)
+    assert cells.protected_water_pct.tolist() == [40.0, 0.0, 0.0, 100.0]
+    land_table = sea_cells.sea_land_table(table, cells)
+    assert land_table.wind_onshore_area_km2.tolist() == pytest.approx([8000.0 * 0.75 * 0.6 * 0.2, 1600.0, 1600.0, 0.0])
+    assert land_table.max_power_wind_mw.iloc[0] == pytest.approx(720.0 * 5.0)
+    assert sea_cells.sea_land_table(table, _cells()).wind_onshore_area_km2.iloc[0] == pytest.approx(1200.0)  # none protected

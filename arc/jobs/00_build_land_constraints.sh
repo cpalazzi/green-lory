@@ -76,9 +76,8 @@ SKIP_SLOPE_EXCLUSION="${ARC_SKIP_SLOPE_EXCLUSION:-0}"
 INCLUDE_OFFSHORE_WIND="${ARC_INCLUDE_OFFSHORE_WIND:-1}"
 # center: the (lat, lon) label is the cell centre, matching the weather nodes and the legacy
 # land step; southwest: label = south-west corner (the pre-September-2026 convention).
-PROTECTED_AREA_0="${ARC_PROTECTED_AREA_0:-data/WDPA_Feb2026_Public_shp_0/WDPA_Feb2026_Public_shp-polygons.shp}"
-PROTECTED_AREA_1="${ARC_PROTECTED_AREA_1:-data/WDPA_Feb2026_Public_shp_1/WDPA_Feb2026_Public_shp-polygons.shp}"
-PROTECTED_AREA_2="${ARC_PROTECTED_AREA_2:-data/WDPA_Feb2026_Public_shp_2/WDPA_Feb2026_Public_shp-polygons.shp}"
+# the protected land of each cell (python -m model.site_geography protected-areas, from the WDPA)
+PROTECTED_AREAS_CSV="${ARC_PROTECTED_AREAS_CSV:-inputs/site_costs/protected_areas.csv}"
 
 required_paths=()
 if [[ -n "$BASE_LAND_CSV" ]]; then
@@ -86,9 +85,7 @@ if [[ -n "$BASE_LAND_CSV" ]]; then
 else
   required_paths+=(
     "$LAND_COVER"
-    "$PROTECTED_AREA_0"
-    "$PROTECTED_AREA_1"
-    "$PROTECTED_AREA_2"
+    "$PROTECTED_AREAS_CSV"
   )
   if [[ "$SKIP_SLOPE_EXCLUSION" != "1" ]]; then
     required_paths+=("$SLOPE_RASTER")
@@ -127,9 +124,7 @@ if [[ -z "$BASE_LAND_CSV" ]]; then
   if [[ "$SKIP_SLOPE_EXCLUSION" != "1" ]]; then
     echo "Slope:       $SLOPE_RASTER" | tee -a "$LOGFILE"
   fi
-  echo "Protected:   $PROTECTED_AREA_0" | tee -a "$LOGFILE"
-  echo "Protected:   $PROTECTED_AREA_1" | tee -a "$LOGFILE"
-  echo "Protected:   $PROTECTED_AREA_2" | tee -a "$LOGFILE"
+  echo "Protected:   $PROTECTED_AREAS_CSV" | tee -a "$LOGFILE"
 fi
 echo "Output:      $OUTPUT_CSV" | tee -a "$LOGFILE"
 
@@ -151,9 +146,7 @@ if [[ -n "$BASE_LAND_CSV" ]]; then
 else
   cmd+=(
     --land-cover "$LAND_COVER"
-    --protected-area "$PROTECTED_AREA_0"
-    --protected-area "$PROTECTED_AREA_1"
-    --protected-area "$PROTECTED_AREA_2"
+    --protected-areas "$PROTECTED_AREAS_CSV"
   )
   if [[ "$SKIP_SLOPE_EXCLUSION" == "1" ]]; then
     cmd+=(--skip-slope-exclusion)

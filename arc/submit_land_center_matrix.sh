@@ -1,6 +1,6 @@
 #!/bin/bash
-# Submit one heavy 100 % land build (MODIS + WDPA + slope limit and slope classes, centred
-# cells) and the cheap derived land-share tables that rescale it.
+# Submit one heavy 100 % land build (MODIS, the protected-area table, slope limit and slope
+# classes, centred cells) and the cheap derived land-share tables that rescale it.
 #
 # Run on ARC from inside a pinned release directory:
 #   ARC_CAMPAIGN_DIR=/data/.../green-lory-campaigns/land_center_20260923_v1 \
@@ -34,9 +34,7 @@ cd "$ARC_REPO_DIR"
 required=(
   data/MCD12C1.A2022001.061.2023244164746.hdf
   data/GEBCO_2025_sub_ice.nc
-  data/WDPA_Feb2026_Public_shp_0/WDPA_Feb2026_Public_shp-polygons.shp
-  data/WDPA_Feb2026_Public_shp_1/WDPA_Feb2026_Public_shp-polygons.shp
-  data/WDPA_Feb2026_Public_shp_2/WDPA_Feb2026_Public_shp-polygons.shp
+  inputs/site_costs/protected_areas.csv
   data/model_bathymetry.nc
   arc/jobs/00_build_land_constraints.sh
   model/land_table.py

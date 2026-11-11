@@ -16,10 +16,13 @@
   only the scaled-design capacities do, and linearly. So the 2 % variant of a 20 % surface is
   the same table with every scaled-design capacity multiplied by 0.1, recorded in
   ``provenance.json`` with the parent's hash; ``export --derived-provenance`` checks it against
-  the parent's QA report.
+  the parent's QA report. For a sea run solved without protected areas, ``--protected-areas``
+  also leaves the protected share of each cell's water out of its sea
+  (inputs/site_costs/protected_areas.csv), as the sea build now does (model/sea_cells.py): the
+  capacities scale with the sea area too.
 
     python -m model.suppliers derive --surface <merged csv> --multiplier 0.1 --parent-share 0.20 \
-        --output-dir <new dir>
+        --output-dir <new dir> [--protected-areas inputs/site_costs/protected_areas.csv]
     python -m model.suppliers export --surface <csv> --qa <validation.json> --manifest <manifest.json> \
         --country-reference inputs/cells/country_reference_20260928_v1.csv --minimum-capacity 1 --drop-unassigned \
         --output <new dir>
@@ -269,8 +272,11 @@ def export(args):
     print(json.dumps(report, indent=2))
 
 
-def derive_land_share(surface: Path, multiplier: float, parent_share: float, output_dir: Path) -> dict:
-    """Rescale the scaled-design capacities of an after_solve surface to another land share.
+def derive_land_share(surface: Path, multiplier: float, parent_share: float, output_dir: Path,
+                      protected_areas: Path | None = None) -> dict:
+    """Rescale the scaled-design capacities of an after_solve surface to another land share and,
+    with the protected-area table protected_areas (a sea run's surface only), to each cell's sea
+    outside protected areas.
 
     Writes global_run_results.csv and provenance.json to output_dir (new) and returns the provenance.
     """
@@ -282,10 +288,18 @@ def derive_land_share(surface: Path, multiplier: float, parent_share: float, out
     scaled = [c for c in df.columns if c.startswith(CAPACITY_PREFIX)]
     if not scaled:
         raise ValueError("No scaled_design capacity columns found")
+    factor = pd.Series(multiplier, index=df.index)
+    if protected_areas is not None:
+        if "protected_water_pct" in df.columns:
+            raise ValueError("The surface already leaves protected areas out of the sea (protected_water_pct)")
+        keys = ["latitude", "longitude"]
+        protected = df[keys].merge(pd.read_csv(protected_areas)[[*keys, "protected_water_pct"]], on=keys, how="left")
+        df["protected_water_pct"] = protected["protected_water_pct"].fillna(0.0).to_numpy()
+        factor = factor * (1.0 - df["protected_water_pct"] / 100.0)
     for c in scaled:
-        df[c] = pd.to_numeric(df[c], errors="coerce") * multiplier
+        df[c] = pd.to_numeric(df[c], errors="coerce") * factor
     if "scaled_design_renewable_capacity_scale_factor" in df.columns:
-        df["scaled_design_renewable_capacity_scale_factor"] = pd.to_numeric(df["scaled_design_renewable_capacity_scale_factor"], errors="coerce") * multiplier
+        df["scaled_design_renewable_capacity_scale_factor"] = pd.to_numeric(df["scaled_design_renewable_capacity_scale_factor"], errors="coerce") * factor
     df["land_share_multiplier_applied"] = multiplier
     df["land_competition_fraction_effective"] = parent_share * multiplier
     out = output_dir / "global_run_results.csv"
@@ -300,6 +314,11 @@ def derive_land_share(surface: Path, multiplier: float, parent_share: float, out
         "columns_rescaled": scaled + (["scaled_design_renewable_capacity_scale_factor"] if "scaled_design_renewable_capacity_scale_factor" in df.columns else []),
         "lcoa_columns_untouched": True,
         "justification": "land_constraint=after_solve: the reference design is solved without land; capacity scales linearly with the land share",
+        "protected_areas": None if protected_areas is None else {
+            "path": str(Path(protected_areas).resolve()), "sha256": digest(Path(protected_areas)),
+            "rule": "capacities also x (1 - protected_water_pct / 100): the cell's sea outside protected areas, as model/sea_cells.py",
+            "cells_with_protected_water": int((df["protected_water_pct"] > 0).sum()),
+        },
         "output": {"path": str(out.resolve()), "sha256": digest(out), "rows": int(len(df))},
     }
     (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2))
@@ -327,11 +346,14 @@ def main(argv: list[str] | None = None) -> None:
     d.add_argument("--multiplier", type=float, required=True, help="capacity multiplier, e.g. 0.1 for 20 %% -> 2 %%")
     d.add_argument("--parent-share", type=float, required=True)
     d.add_argument("--output-dir", type=Path, required=True)
+    d.add_argument("--protected-areas", type=Path, default=None,
+                   help="a sea run's surface: leave the protected share of each cell's water out too (inputs/site_costs/protected_areas.csv)")
     args = parser.parse_args(argv)
     if args.command == "export":
         export(args)
     else:
-        print(json.dumps(derive_land_share(args.surface, args.multiplier, args.parent_share, args.output_dir), indent=2))
+        print(json.dumps(derive_land_share(args.surface, args.multiplier, args.parent_share, args.output_dir,
+                                           protected_areas=args.protected_areas), indent=2))
 
 
 if __name__ == "__main__":

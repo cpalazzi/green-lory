@@ -4,8 +4,9 @@ A sea run solves the land runs' plant with wind at sea and no PV, at the site, w
 cable. It differs from a land run only in its data, so a coastal cell can hold a land plant in
 the land run and a sea plant in the sea run:
 
-- its land table (sea_land_table) gives the plant the cell's sea, at the land table's share, as
-  wind area, and no PV area;
+- its land table (sea_land_table) gives the plant the cell's sea outside protected areas (less
+  the protected share of the cell's water, inputs/site_costs/protected_areas.csv:
+  model/protected_areas.py), at the land table's share, as wind area, and no PV area;
 - its weather stack (python -m model.weather_profiles stack --sea) holds the wind at sea and no
   PV output;
 - its site-cost table (sea_site_cost_table) has the columns of a land run's; a flat run's
@@ -45,7 +46,7 @@ from .site_costs import (
     remote_multiplier,
     travel_min_to_city,
 )
-from .site_geography import CELL_ELEVATION_CSV, PORT_TRAVEL_TIMES_CSV, SEA_ZONES_CSV, nearest_km
+from .site_geography import CELL_ELEVATION_CSV, PORT_TRAVEL_TIMES_CSV, PROTECTED_AREAS_CSV, SEA_ZONES_CSV, nearest_km
 
 # The values below, with their sources: inputs/parameters.yaml, section offshore
 _OFFSHORE = parameter("offshore")
@@ -90,12 +91,18 @@ def wind_cost_ratios(depth_m, wind_tech_cost: float, wind_build_cost: float) -> 
     return np.where(deep, DEEP_WIND_MULTIPLIER, TURBINE_EUR_PER_MW / wind_tech_cost), np.where(deep, DEEP_WIND_MULTIPLIER, build)
 
 
-def sea_cells(land_table: pd.DataFrame, geography: pd.DataFrame, elevation: pd.DataFrame, zones: pd.DataFrame) -> pd.DataFrame:
-    """The land table's cells that hold a sea plant, with their depth, class and zone."""
+def sea_cells(land_table: pd.DataFrame, geography: pd.DataFrame, elevation: pd.DataFrame, zones: pd.DataFrame,
+              protected: pd.DataFrame | None = None) -> pd.DataFrame:
+    """The land table's cells that hold a sea plant, with their depth, class and zone, and the
+    protected share of their water (protected_water_pct of the protected-area table protected, 0
+    without it)."""
     cells = (land_table[[*KEYS, "area", "offshore_area_km2"]]
              .merge(elevation[[*KEYS, "sea_depth_m"]], on=KEYS)
              .merge(zones, on=KEYS)
              .merge(geography[[*KEYS, "cell_area_km2", "sea_km2"]], on=KEYS, how="left"))
+    if protected is not None:
+        cells = cells.merge(protected[[*KEYS, "protected_water_pct"]], on=KEYS, how="left")
+    cells["protected_water_pct"] = cells["protected_water_pct"].fillna(0.0) if protected is not None else 0.0
     # the geography stops at 55 S and 83 N: beyond it the land table's water counts as sea
     cells["sea_share"] = (cells["sea_km2"] / cells["cell_area_km2"]).fillna(cells["offshore_area_km2"] / cells["area"])
     cells = cells[(cells["sea_share"] >= MIN_SEA_SHARE) & cells["sea_depth_m"].notna()]
@@ -104,13 +111,19 @@ def sea_cells(land_table: pd.DataFrame, geography: pd.DataFrame, elevation: pd.D
     return cells
 
 
+def sea_wind_km2(area_km2, sea_share, protected_water_pct, share):
+    """The wind area of a sea plant: the cell's sea less the protected share of its water, at the share."""
+    return area_km2 * sea_share * (1.0 - np.asarray(protected_water_pct, float) / 100.0) * share
+
+
 def sea_land_table(land_table: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFrame:
-    """The land table's rows of the sea cells, the sea at the table's share as the wind area.
+    """The land table's rows of the sea cells, the sea outside protected areas at the table's
+    share as the wind area (sea_wind_km2), with the protected share of the water (protected_water_pct).
 
     A cell's budget reads wind_onshore_area_km2 whatever the site, so the column holds the sea
     here; in a sea run's results, "onshore" in the capacity columns means the plant's own area."""
-    table = land_table.merge(cells[[*KEYS, "sea_share"]], on=KEYS)
-    wind_km2 = table["area"] * table["sea_share"] * table["land_competition_fraction"]
+    table = land_table.merge(cells[[*KEYS, "sea_share", "protected_water_pct"]], on=KEYS)
+    wind_km2 = sea_wind_km2(table["area"], table["sea_share"], table["protected_water_pct"], table["land_competition_fraction"])
     share = wind_km2 / table["area"]
     for column in ("wind_area_km2", "wind_onshore_area_km2", "wind_offshore_area_km2", "renewable_union_area_km2",
                    "renewable_union_area_km2_classwise_nested_v1"):
@@ -187,12 +200,14 @@ def sea_finance_table(cells: pd.DataFrame, by_country: pd.DataFrame) -> pd.DataF
 def write_sea_inputs(land_csv: Path, land_output: Path, site_costs_output: Path, locations_output: Path, *,
                      tech_yaml: Path = DEFAULT_TECH_YAML, geography_csv: Path = CELL_GEOGRAPHY_CSV,
                      elevation_csv: Path = CELL_ELEVATION_CSV, zones_csv: Path = SEA_ZONES_CSV,
-                     ports_csv: Path = PORT_TRAVEL_TIMES_CSV, finance_csv: Path | None = None,
-                     finance_output: Path | None = None, flat_site_costs_output: Path | None = None) -> pd.DataFrame:
+                     ports_csv: Path = PORT_TRAVEL_TIMES_CSV, protected_csv: Path = PROTECTED_AREAS_CSV,
+                     finance_csv: Path | None = None, finance_output: Path | None = None,
+                     flat_site_costs_output: Path | None = None) -> pd.DataFrame:
     from .technology import load_tech_inputs, load_tech_meta
 
     land_table = pd.read_csv(land_csv)
-    cells = sea_cells(land_table, pd.read_csv(geography_csv), pd.read_csv(elevation_csv), pd.read_csv(zones_csv))
+    cells = sea_cells(land_table, pd.read_csv(geography_csv), pd.read_csv(elevation_csv), pd.read_csv(zones_csv),
+                      pd.read_csv(protected_csv))
     wind = load_tech_inputs(tech_yaml)["wind"]
     table = sea_site_cost_table(cells, load_ports(ports_csv), wind_tech_cost=float(wind["tech_cost_per_mw"]),
                                 wind_build_cost=float(wind["build_cost_per_mw"]),
@@ -213,7 +228,8 @@ def write_sea_inputs(land_csv: Path, land_output: Path, site_costs_output: Path,
         "outputs": {path.name: _sha256(path) for path in outputs},
         "inputs": {name: {"path": str(path), "sha256": _sha256(path)}
                    for name, path in (("land_table", land_csv), ("tech_yaml", tech_yaml), ("cell_geography", geography_csv),
-                                      ("cell_elevation", elevation_csv), ("sea_zones", zones_csv), ("port_travel_times", ports_csv))},
+                                      ("cell_elevation", elevation_csv), ("sea_zones", zones_csv), ("port_travel_times", ports_csv),
+                                      ("protected_areas", protected_csv))},
         "parameters_yaml": file_record(),
     }
     for path in [site_costs_output] + outputs[3:]:

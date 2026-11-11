@@ -8,6 +8,7 @@ to inputs/site_costs/:
     python -m model.site_geography ports    # port_travel_times.csv
     python -m model.site_geography elevation  # cell_elevation.csv
     python -m model.site_geography sea      # sea_zones.csv
+    python -m model.site_geography protected-areas  # protected_areas.csv
     python -m model.site_geography sites    # calibration_sites.csv
     python -m model.site_geography fit      # remoteness_fit.json and remoteness_fit.md
 
@@ -37,6 +38,12 @@ sea
     Every 1-degree cell: the sovereign and type of the exclusive economic zone holding its
     centre, or the nearest zone reaching a coastal cell whose centre is on land (Marine Regions;
     empty outside every zone).
+protected-areas
+    Every 1-degree cell from 89 S to 89 N: its land and water as the land tables count them
+    (MODIS MCD12C1), the parts of them in protected areas (WDPA) and their shares of the land and
+    of the water (model/protected_areas.py). The land tables leave the protected land out of the
+    land a plant may use (model/land_table.py), the sea runs the protected water out of the sea
+    (model/sea_cells.py).
 sites
     The sites of the two AEMO location-factor tables (inputs/site_costs/*_location_factors.csv),
     located with the GeoNames gazetteer of Australia, with their travel times (at the site) and
@@ -66,9 +73,11 @@ from .config import (
     GEBCO_FILE,
     GEONAMES_AU_FILE,
     GLWD_AREA_DIR,
+    LAND_COVER_FILE,
     NELSON_TRAVEL_TIME_DIR,
     PORTS_CSV,
     SITE_COSTS_DIR,
+    WDPA_SHAPEFILES,
 )
 from .parameters import file_record, parameter
 
@@ -81,6 +90,7 @@ CALIBRATION_SITES_CSV = SITE_COSTS_DIR / "calibration_sites.csv"
 PORT_TRAVEL_TIMES_CSV = SITE_COSTS_DIR / "port_travel_times.csv"
 CELL_ELEVATION_CSV = SITE_COSTS_DIR / "cell_elevation.csv"
 SEA_ZONES_CSV = SITE_COSTS_DIR / "sea_zones.csv"
+PROTECTED_AREAS_CSV = SITE_COSTS_DIR / "protected_areas.csv"
 GEBCO_PIXELS_PER_DEGREE = 240
 REMOTENESS_FIT_JSON = SITE_COSTS_DIR / "remoteness_fit.json"
 LOCATION_FACTOR_TABLES = {
@@ -489,6 +499,16 @@ def build_sea_zones(eez_path: Path = EEZ_SHAPEFILE, elevation_csv: Path = CELL_E
     return table
 
 
+def build_protected_areas(protected_area_paths: tuple[Path, ...] = WDPA_SHAPEFILES,
+                          land_cover_path: Path = LAND_COVER_FILE) -> pd.DataFrame:
+    """The per-cell table of the module docstring."""
+    from .protected_areas import protected_area_table
+
+    cells = pd.DataFrame([(float(lat), float(lon)) for lat in range(-89, 90) for lon in range(-180, 180)],
+                         columns=["latitude", "longitude"])
+    return protected_area_table(cells, tuple(protected_area_paths), land_cover_path)
+
+
 # ---------------------------------------------------------------------------------------------
 # Calibration sites
 # ---------------------------------------------------------------------------------------------
@@ -744,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
     elevation.add_argument("--output", type=Path, default=CELL_ELEVATION_CSV)
     sea = commands.add_parser("sea", help="every cell's economic zone")
     sea.add_argument("--output", type=Path, default=SEA_ZONES_CSV)
+    protected = commands.add_parser("protected-areas", help="the share of every cell's land and water in protected areas")
+    protected.add_argument("--output", type=Path, default=PROTECTED_AREAS_CSV)
     sites = commands.add_parser("sites", help="the calibration sites")
     sites.add_argument("--output", type=Path, default=CALIBRATION_SITES_CSV)
     fit = commands.add_parser("fit", help="the remoteness fit")
@@ -770,6 +792,9 @@ def main(argv: list[str] | None = None) -> int:
         _write_with_provenance(build_cell_elevation(), args.output, {"gebco": GEBCO_FILE}, decimals=1)
     elif args.command == "sea":
         _write_with_provenance(build_sea_zones(), args.output, {"eez": EEZ_SHAPEFILE, "cell_elevation": CELL_ELEVATION_CSV})
+    elif args.command == "protected-areas":
+        inputs = {**{f"wdpa_{index}": path for index, path in enumerate(WDPA_SHAPEFILES)}, "land_cover": LAND_COVER_FILE}
+        _write_with_provenance(build_protected_areas(), args.output, inputs)
     elif args.command == "sites":
         frame = build_calibration_sites()
         inputs = {**LOCATION_FACTOR_TABLES, "gazetteer": GEONAMES_AU_FILE, "ports": PORTS_CSV, **nelson_inputs}
