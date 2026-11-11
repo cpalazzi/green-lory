@@ -280,3 +280,132 @@ def test_potential_by_cost_band_and_region():
     matplotlib.use("Agg")
     figure = results.plot_potential_by_cost({"case": table}, title="t")
     assert [text.get_text() for text in figure.legends[0].get_texts()] == ["Americas", "sea plants"]
+
+
+def _land_run_cell(capacity_t):
+    # 2,000 MW of wind at 5 MW/km² (400 km²) and 3,000 MW of PV at 50 MW/km² (60 km²), on 6,000 km² of
+    # land whose land cover opens 960 km² to wind, 600 km² to PV and 1,200 km² to either; a tenth is
+    # protected, no slope is too steep, and the run takes 20 % of the rest
+    exclusion = 0.9 * 1.0 * 0.2
+    return pd.DataFrame({"latitude": [56.0], "longitude": [-4.0], "wind_mw": [2000.0], "solar_mw": [3000.0],
+                         "solar_tracking_mw": [0.0], "wind_density_mw_per_km2": [5.0], "solar_density_mw_per_km2": [50.0],
+                         "solar_tracking_density_mw_per_km2": [40.0], "wind_land_exclusive_fraction_effective": [0.03],
+                         "annual_ammonia_production_t": [1e6], "onshore_area_km2": [6000.0], "land_onshore_pct": [100.0],
+                         "protected_area_pct": [10.0], "slope_suitable_land_pct": [100.0], "land_competition_fraction": [0.2],
+                         "land_exclusion_factor": [exclusion], "wind_onshore_area_km2": [960.0 * exclusion],
+                         "solar_available_area_km2": [600.0 * exclusion], "renewable_union_area_km2": [1200.0 * exclusion],
+                         results.CAPACITY_COLUMN: [capacity_t]})
+
+
+def test_potential_as_the_land_rules_apply():
+    rules = results.potential_by_land_rule(_land_run_cell(0.432e6)).iloc[0]
+    assert rules["all land"] == pytest.approx(15.0)  # 6,000 km² over the 400 km² of wind of each Mt/yr
+    assert rules["land cover"] == pytest.approx(2.4)  # 960 km² of wind
+    assert rules["protected areas"] == pytest.approx(2.16) and rules["slopes"] == pytest.approx(2.16)
+    assert rules["land share"] == pytest.approx(0.432) and rules["cutoff"] == 0.0  # below 1 Mt/yr
+    with pytest.raises(ValueError, match="run's potential"):
+        results.potential_by_land_rule(_land_run_cell(0.5e6))
+    medians = results.land_share_medians(_land_run_cell(0.432e6))
+    row = medians.loc["Northern Europe"]
+    assert (row["cells"], row["land cover, wind"], row["land cover, PV"]) == (1, 16.0, 10.0)
+    assert (row["outside protected areas"], row["not too steep"], row["land share"]) == (90.0, 100.0, 20.0)
+    assert (row["all rules, wind"], row["all rules, PV"]) == (2.9, 1.8)  # 16 % x 90 % x 20 %, rounded
+    assert list(medians.index) == ["Northern Europe", "all cells"]
+    rules = results.land_rule_list(_land_run_cell(0.432e6))["what it does"]
+    assert "all of barren land; 50 % of closed shrubland and open shrubland" in rules["land cover, wind"]
+    assert "3 % of urban and built-up land" in rules["land cover, PV"] and "cropland" not in rules["land cover, PV"]
+    assert rules["land share"] == "the run takes 20 % of the land that remains" and "50 MW/km²" in rules["PV density"]
+
+
+def test_maps_of_the_land_rules():
+    import matplotlib
+    matplotlib.use("Agg")
+    figure = results.plot_land_rule_maps(results.potential_by_land_rule(_land_run_cell(0.432e6)), title="t")
+    assert [ax.get_title(loc="left") for ax in figure.axes[:4]] == ["All land", "+ land cover", "+ protected areas and slopes",
+                                                                   "+ 20 % share"]
+    assert [text.get_text() for text in figure.legends[0].get_texts()] == ["cells that cannot make 1 Mt/yr"]  # the share panel
+
+
+def _derived_cell(multiplier=5.0):
+    # the cell of _land_run_cell in a variant derived from its run (model/suppliers.py derive): the
+    # parent's area columns and land_exclusion_factor, its capacity times the multiplier, a share of 100 %
+    cell = _land_run_cell(0.432e6 * multiplier)
+    return cell.assign(land_share_multiplier_applied=multiplier, land_competition_fraction_effective=0.2 * multiplier)
+
+
+def test_land_rules_of_a_derived_land_share_variant():
+    rules = results.potential_by_land_rule(_derived_cell()).iloc[0]
+    assert rules["all land"] == pytest.approx(15.0) and rules["land cover"] == pytest.approx(2.4)
+    assert rules["slopes"] == pytest.approx(2.16) and rules["land share"] == pytest.approx(2.16)  # all that remains
+    assert rules["cutoff"] == pytest.approx(2.16) and rules["land_share"] == 1.0
+    row = results.land_share_medians(_derived_cell()).loc["Northern Europe"]
+    assert (row["land share"], row["all rules, wind"], row["all rules, PV"]) == (100.0, 14.4, 9.0)  # 16 % and 10 % x 90 %
+    assert results.land_rule_list(_derived_cell())["what it does"]["land share"] == \
+        "the run takes all the land that remains (no land share)"
+
+
+def test_maps_of_the_land_rules_of_a_derived_variant_and_extra_shares():
+    import matplotlib
+    matplotlib.use("Agg")
+    potential = results.potential_by_land_rule(_derived_cell())
+    figure = results.plot_land_rule_maps(potential, title="t")  # a share of 100 % adds no share panel
+    titles = ["All land", "+ land cover", "+ protected areas and slopes"]
+    assert [ax.get_title(loc="left") for ax in figure.axes[:3]] == titles
+    assert figure.axes[3].get_title(loc="left") == ""  # the colour bar
+    figure = results.plot_land_rule_maps(potential, title="t", shares=[0.2, 0.05])
+    assert [ax.get_title(loc="left") for ax in figure.axes[:5]] == [*titles, "+ 20 % share", "+ 5 % share"]
+
+
+def test_land_cover_shares_list_every_class():
+    table = results.land_cover_shares()
+    assert list(table.index) == list(range(18)) and table.loc[16, "class"] == "barren land"
+    assert table.loc[16, ["wind (%)", "PV (%)"]].tolist() == [100.0, 100.0]
+    assert table.loc[1, ["wind (%)", "PV (%)"]].tolist() == [0.0, 0.0]  # evergreen needleleaf forest
+    assert table.loc[0, "note"] == "wind at sea only (sea runs)" and set(table.loc[1:, "note"]) == {""}
+
+
+def test_share_sensitivity_scales_the_land_potential():
+    parent = pd.DataFrame({"latitude": [0.0, 1.0, 2.0], "longitude": 0.0, "lcoa_eur_per_t": [300.0, 310.0, 320.0],
+                           results.CAPACITY_COLUMN: [500e6, 200e6, 4e6], "land_competition_fraction": 0.2})
+    derived = parent.assign(**{results.CAPACITY_COLUMN: parent[results.CAPACITY_COLUMN] * 5.0},
+                            land_share_multiplier_applied=5.0, land_competition_fraction_effective=1.0)
+    # a sea plant on all of its sea: 100 Mt/yr, 2 Mt/yr at 2 %
+    sea = pd.DataFrame({"latitude": [10.0], "longitude": [0.0], "lcoa_eur_per_t": [500.0], results.CAPACITY_COLUMN: [100e6],
+                        "land_competition_fraction": 1.0})
+    table = results.share_sensitivity({"base": parent, "all": derived}, {"base": sea, "all": sea}, [0.02, 1.0],
+                                      volumes=(50, 70, 10_000))
+    assert list(table.index) == ["2 %", "100 %"] and table.index.name == "share"
+    pd.testing.assert_frame_equal(table["base"], table["all"])  # a parent at 20 % and its variant at 100 % agree
+    base = table["base"]
+    assert base["land plants of 1 Mt/yr"].tolist() == [2, 3]  # at 2 %, the third plant makes 0.4 Mt/yr
+    assert base["sea plants of 1 Mt/yr"].tolist() == [1, 1]
+    assert base["their potential (Gt/yr)"].tolist() == [0.1, 3.6]  # 72 and 3,620 Mt/yr
+    assert base["cost at 50 Mt/yr (EUR/t)"].tolist() == [300, 300]
+    assert base["cost at 70 Mt/yr (EUR/t)"].tolist() == [310, 300]
+    assert base["cost at 10,000 Mt/yr (EUR/t)"].isna().all()  # more than all the plants make
+    at_two = results.share_sensitivity({"base": parent}, {"base": sea}, [0.02], volumes=(71,))["base"]
+    assert at_two["cost at 71 Mt/yr (EUR/t)"].tolist() == [500]  # the land makes 70 Mt/yr and the sea the rest
+
+
+def test_plants_by_share_and_by_latitude():
+    cells = pd.DataFrame({"latitude": [56.0, 25.0], "longitude": [-4.0, 10.0], "land_competition_fraction": 0.2,
+                          results.CAPACITY_COLUMN: [0.432e6, 2e6]})  # 2.16 and 10 Mt/yr on all the land
+    table = results.plants_by_share(cells, [1.0, 0.2])
+    assert list(table.index) == ["Northern Africa", "Northern Europe", "all cells"]
+    assert table.loc["Northern Europe"].tolist() == [1, 0, 0] and table.loc["all cells"].tolist() == [2, 1, 50]
+    assert results.plants_by_share(_derived_cell(), [1.0, 0.2]).loc["Northern Europe"].tolist() == [1, 0, 0]
+    cell = _derived_cell()
+    bands = results.land_by_latitude(cell, results.potential_by_land_rule(cell))
+    row = bands.loc["23.5° N to 60° N"]
+    assert list(bands.index) == ["23.5° N to 60° N"] and row["cells"] == 1
+    assert (row["land (km²)"], row["land per Mt/yr (km²)"], row["PV density (MW/km²)"]) == (6000, 400, 50)
+    assert (row["wind share of capacity (%)"], row["potential on all land (Mt/yr)"]) == (40, 15.0)
+
+
+def test_a_derived_run_reads_its_parents_site_costs_and_the_protected_water_note():
+    sea_run = "gl_dea2050_wacc5_bflat_wflat_land100oct_fixed_offshore_mpa"
+    parent = runs.load_runs()[sea_run]["derived_from"]
+    assert runs.load_runs()[parent]["site_costs_csv"]  # the solved parent names the table
+    table = pd.DataFrame({"protected_water_pct": [0.0, 50.0, 100.0], "water_km2": [100.0, 100.0, 200.0],
+                          "protected_water_km2": [0.0, 50.0, 200.0]})
+    assert results.protected_water_note(table) == "3 cells, 2 of them with protected water\n62.5 % of the water of all of them is protected"

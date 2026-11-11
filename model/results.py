@@ -23,7 +23,15 @@ results/campaigns/.
 - ``cost_factors``, ``cell_regions``, ``plot_region_costs``: what each location factor adds to
   the cost of each cell, as stacked bars by region (UN M49 sub-regions by default);
 - ``potential_by_cost``, ``plot_potential_by_cost``, ``potential_below``: production potential by
-  cost band and UN region, as stacked histograms and a table.
+  cost band and UN region, as stacked histograms and a table;
+- ``land_rule_list``, ``land_cover_shares``, ``land_share_medians``: what sets the land a plant may
+  use, the share of each land-cover class open to wind and PV, and the median share of a cell's
+  land that each rule keeps;
+- ``potential_by_land_rule``, ``plot_land_rule_maps``, ``land_by_latitude``: production potential
+  as the land rules apply one after another, from every km² of land to the run's own potential, by
+  cell, and what sets it by band of latitude;
+- ``share_sensitivity``, ``plants_by_share``: the effect of a land share on the plants, potential
+  and costs of each case, and on the plants of each region.
 """
 from __future__ import annotations
 
@@ -128,11 +136,32 @@ DEPTH_CLASSES = {"fixed": "fixed, to 70 m", "floating": "floating, 70 to 1,000 m
 
 
 def site_cost_table(run_id: str) -> pd.DataFrame:
-    """The site-cost table of a run (site_costs_csv in runs.yaml), one row per cell."""
-    run = runs.load_runs()[run_id]
+    """The site-cost table of a run (site_costs_csv in runs.yaml; a derived run's is its solved
+    parent's), one row per cell."""
+    entries = runs.load_runs()
+    solved = runs._lineage(run_id, entries)[-1]
+    run = entries[solved]
     if not run.get("site_costs_csv"):
-        raise runs.RunDefinitionError(f"{run_id} has no site_costs_csv in runs.yaml")
+        raise runs.RunDefinitionError(f"{solved} has no site_costs_csv in runs.yaml")
     return pd.read_csv(repo_path(run["site_costs_csv"]))
+
+
+def protected_areas(cells: pd.DataFrame | None = None) -> pd.DataFrame:
+    """The protected areas of each cell (inputs/site_costs/protected_areas.csv, written by
+    python -m model.site_geography protected-areas): its land and water as the land tables count
+    them (land_km2, water_km2), the parts in protected areas (protected_land_km2,
+    protected_water_km2) and their shares (protected_land_pct, protected_water_pct), for the cells
+    of cells if given."""
+    table = pd.read_csv(REPO_ROOT / "inputs" / "site_costs" / "protected_areas.csv")
+    return table if cells is None else cells[["latitude", "longitude"]].merge(table, on=["latitude", "longitude"], how="left")
+
+
+def protected_water_note(table: pd.DataFrame) -> str:
+    """A map box for the water of protected_areas: the cells, those with some protected water,
+    and the protected share of the water of all the cells."""
+    share = table["protected_water_km2"].sum() / table["water_km2"].sum()
+    return (f"{len(table):,} cells, {(table['protected_water_pct'] > 0).sum():,} of them with protected water\n"
+            f"{100 * share:.1f} % of the water of all of them is protected")
 
 
 def depth_classes(run_id: str) -> pd.DataFrame:
@@ -811,6 +840,8 @@ RAMPS = {
     "blue": ("#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"),  # water
     "orange": ("#fde4d8", "#eb6834", "#7a2e0e"),  # construction
     "aqua": ("#d2f1e4", "#1baf7a", "#0b4f37"),  # finance
+    "violet": ("#c3b9f2", "#6250d6", "#241a66"),  # production potential; its lightest step stays clear of NO_DATA
+    "green": ("#d6efd0", "#4fa64a", "#1d5a22"),  # protected areas
 }
 # The levelised cost of ammonia: matplotlib's viridis, reversed so that yellow is the cheapest
 # (perceptually uniform, readable with colour-vision deficiency, and with no grey in it)
@@ -1011,7 +1042,7 @@ def supply_shares(frames: Mapping[str, pd.DataFrame], mt_per_year: float, *, by:
                   minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR) -> pd.DataFrame:
     """Where the cheapest mt_per_year of each surface comes from: the share (%) of the potential of
     the plants needed to reach mt_per_year, by the column by (the country by default; "no country"
-    where the result table names none, as for most sea plants). Rows: the top largest of each
+    where the result table names none, as for the sea plants and some islands). Rows: the top largest of each
     surface, the largest first."""
     shares = {}
     for name, frame in frames.items():
@@ -1379,3 +1410,278 @@ def potential_below(tables: Mapping[str, pd.DataFrame], cost: float) -> pd.DataF
                             "all sea plants": table["sea plants"].sum() if "sea plants" in table else 0.0})
         columns[name] = pd.concat([below, totals])
     return pd.DataFrame(columns).round(1)
+
+
+# --- the land rules and the production potential ------------------------------------------------
+
+# The land-cover classes of the International Geosphere-Biosphere Programme (IGBP) in MODIS MCD12C1
+IGBP_CLASSES = {0: "water", 1: "evergreen needleleaf forest", 2: "evergreen broadleaf forest",
+                3: "deciduous needleleaf forest", 4: "deciduous broadleaf forest", 5: "mixed forest",
+                6: "closed shrubland", 7: "open shrubland", 8: "woody savanna", 9: "savanna", 10: "grassland",
+                11: "permanent wetland", 12: "cropland", 13: "urban and built-up land",
+                14: "cropland and natural vegetation mosaic", 15: "snow and ice", 16: "barren land", 17: "unclassified"}
+
+
+def _land_share(surface: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """A land run's share of the land that remains, and the multiplier a derived land-share variant
+    (model/suppliers.py derive) applied to its parent's capacities: the variant keeps the parent's
+    area columns, which the multiplier scales to its own share."""
+    one = pd.Series(1.0, index=surface.index)
+    multiplier = surface["land_share_multiplier_applied"] if "land_share_multiplier_applied" in surface else one
+    share = (surface["land_competition_fraction_effective"] if "land_competition_fraction_effective" in surface
+             else surface["land_competition_fraction"])
+    return share, multiplier
+
+
+def land_cover_shares() -> pd.DataFrame:
+    """The share (%) of each IGBP land-cover class (MODIS MCD12C1) that the land rules open to wind
+    and to PV (land.wind_class_availability and land.solar_class_availability in
+    inputs/parameters.yaml). Water opens to wind at sea only, which the land runs leave out."""
+    wind = parameter("land.wind_class_availability")
+    solar = parameter("land.solar_class_availability")
+    table = pd.DataFrame({"class": IGBP_CLASSES,
+                          "wind (%)": {code: 100.0 * float(wind.get(code, 0.0)) for code in IGBP_CLASSES},
+                          "PV (%)": {code: 100.0 * float(solar.get(code, 0.0)) for code in IGBP_CLASSES}})
+    table["note"] = ""
+    table.loc[0, "note"] = "wind at sea only (sea runs)"
+    table.index.name = "IGBP code"
+    return table
+
+
+def _class_shares(availability: Mapping[int, float]) -> str:
+    """The land-cover classes open to a technology, by share: "all of barren land; 50 % of ..."."""
+    by_share: dict[float, list[str]] = {}
+    for code, share in sorted(availability.items()):
+        if code != 0 and share > 0:  # water is for wind at sea, which land runs leave out
+            by_share.setdefault(float(share), []).append(IGBP_CLASSES[int(code)])
+    parts = []
+    for share, names in sorted(by_share.items(), reverse=True):
+        listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+        parts.append(f"{'all' if share >= 1 else f'{100 * share:g} %'} of {listed}")
+    return "; ".join(parts) + "; none of the other classes"
+
+
+def land_rule_list(surface: pd.DataFrame, *, minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR) -> pd.DataFrame:
+    """Everything that sets the land a plant of a land run may use and the capacity that land holds,
+    from inputs/parameters.yaml (land) and the run's columns. One row per rule, with what it does."""
+    slope_limit = parameter("land.slope_class_upper_deg")[-1]
+    statuses = parameter("land.protected_area_statuses")
+    wind_gw_km2 = float(parameter("land.wind_land_use_km2_per_gw"))
+    solar = surface["solar_density_mw_per_km2"]
+    share = 100 * float(_land_share(surface)[0].median())
+    rules = {
+        "land cover, wind": "the share of each land-cover class (IGBP classes of MODIS MCD12C1) open to wind: "
+                            + _class_shares(parameter("land.wind_class_availability")),
+        "land cover, PV": "the share of each class open to PV: " + _class_shares(parameter("land.solar_class_availability")),
+        "protected areas": "land in protected areas of the World Database on Protected Areas with status "
+                           + ", ".join(statuses) + " is left out",
+        "slopes": f"land steeper than {slope_limit:g} degrees (GEBCO 2025) is left out",
+        "land share": (f"the run takes {share:g} % of the land that remains" if share < 100
+                       else "the run takes all the land that remains (no land share)"),
+        "wind spacing": f"{wind_gw_km2:g} km² per GW of turbines ({1000 / wind_gw_km2:g} MW/km²)",
+        "PV density": f"rows of modules that do not shade each other at noon on the winter solstice: {solar.median():.0f} MW/km² "
+                      f"at the median cell ({solar.min():.0f} to {solar.max():.0f})",
+        "wind and PV together": f"they share the land, and {100 * surface['wind_land_exclusive_fraction_effective'].median():g} % "
+                                "of a wind farm's area is closed to PV",
+        "cutoff": f"plants that cannot make {minimum_mt_per_year:g} Mt/yr are left out of the maps, supply curves and "
+                  "the network model's suppliers",
+    }
+    table = pd.DataFrame({"what it does": rules})
+    table.index.name = "rule"
+    return table
+
+
+def land_share_medians(surface: pd.DataFrame, *, by: str = "un_sub_region") -> pd.DataFrame:
+    """The median share (%) of a cell's land that each land rule keeps, over the cells of each group
+    (by: a column of cell_regions) and over all cells: the land-cover shares open to wind and to PV,
+    the land outside protected areas, the land not too steep, the run's land share, and all the rules
+    together for wind and for PV (the median of each cell's product, not the product of the medians).
+    Groups from the most land open to wind under all the rules to the least, then all cells."""
+    key = ["latitude", "longitude"]
+    land = surface["onshore_area_km2"]
+    share, multiplier = _land_share(surface)
+    cover = 1.0 / surface["land_exclusion_factor"]
+    shares = surface[key].copy()
+    shares["land cover, wind"] = surface["wind_onshore_area_km2"] * cover / land
+    shares["land cover, PV"] = surface["solar_available_area_km2"] * cover / land
+    shares["outside protected areas"] = (1.0 - (surface["protected_area_pct"] / 100.0) / (surface["land_onshore_pct"] / 100.0)).clip(0.0, 1.0)
+    shares["not too steep"] = (surface["slope_suitable_land_pct"] / 100.0).clip(0.0, 1.0)
+    shares["land share"] = share
+    shares["all rules, wind"] = surface["wind_onshore_area_km2"] * multiplier / land
+    shares["all rules, PV"] = surface["solar_available_area_km2"] * multiplier / land
+    columns = [column for column in shares if column not in key]
+    shares = shares.merge(cell_regions()[key + [by]], on=key, how="left")
+    grouped = shares.groupby(by)
+    table = (100 * grouped[columns].median()).assign(cells=grouped.size()).sort_values("all rules, wind", ascending=False)
+    table.loc["all cells"] = [*(100 * shares[columns].median()), len(shares)]
+    table.index.name = by
+    return table[["cells", *columns]].round(1).astype({"cells": int})
+
+# The land rules of a land table (model/land_table.py), in the order potential_by_land_rule applies
+# them, each on top of those before it
+LAND_RULES = {
+    "all land": "every km² of the cell's land open to wind and PV",
+    "land cover": "the share of each land-cover class open to each technology (land.wind_class_availability, land.solar_class_availability)",
+    "protected areas": "less protected areas",
+    "slopes": "less land steeper than the last slope class",
+    "land share": "the run's share of the land that remains (land_competition_fraction)",
+    "cutoff": "only the plants that can make the reference output",
+}
+
+
+def potential_by_land_rule(surface: pd.DataFrame, *, minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR) -> pd.DataFrame:
+    """The production potential (Mt/yr) of each plant of a land run as the land rules (LAND_RULES)
+    apply one after another, from every km² of the cell's land open to wind and PV to the run's
+    own potential (after "land share") and the plants that can make minimum_mt_per_year.
+
+    A run applies land after the solve, so each plant's design scales to the land of each step
+    without a new solve, as model/land.py scales it to the run's land: the potential is the design's
+    output times the smallest ratio of available to used area of wind, of PV and of the two
+    together. The areas before the exclusions and the land share are the run's areas over its
+    land_exclusion_factor. Raises ValueError if the last step does not give the run's potential.
+    Also the run's land share (land_share). Rows: plants; columns: latitude, longitude and one per rule.
+    """
+    eps = 1e-9
+    wind_used = surface["wind_mw"] / surface["wind_density_mw_per_km2"]
+    tracking = surface["solar_tracking_mw"] if "solar_tracking_mw" in surface else pd.Series(0.0, index=surface.index)
+    solar_used = (surface["solar_mw"] / surface["solar_density_mw_per_km2"]
+                  + (tracking.fillna(0.0) / surface["solar_tracking_density_mw_per_km2"]).fillna(0.0))
+    union_used = solar_used + surface["wind_land_exclusive_fraction_effective"] * wind_used
+
+    def potential(wind_km2: pd.Series, solar_km2: pd.Series, union_km2: pd.Series) -> pd.Series:
+        ratios = pd.concat([(wind_km2 / wind_used).where(wind_used > eps), (solar_km2 / solar_used).where(solar_used > eps),
+                            (union_km2 / union_used).where(union_used > eps)], axis=1).min(axis=1)
+        return surface["annual_ammonia_production_t"] * ratios.clip(lower=0.0).fillna(0.0) / 1e6
+
+    land = surface["onshore_area_km2"]
+    share, multiplier = _land_share(surface)
+    run_areas = tuple(surface[column] * multiplier
+                      for column in ("wind_onshore_area_km2", "solar_available_area_km2", "renewable_union_area_km2"))
+    cover = 1.0 / (surface["land_exclusion_factor"] * multiplier)
+    protected = (1.0 - (surface["protected_area_pct"] / 100.0) / (surface["land_onshore_pct"] / 100.0)).clip(0.0, 1.0)
+    slopes = (surface["slope_suitable_land_pct"] / 100.0).clip(0.0, 1.0)
+    factors = {"land cover": cover, "protected areas": cover * protected, "slopes": cover * protected * slopes}
+    table = surface[["latitude", "longitude"]].copy()
+    table["all land"] = potential(land, land, land)
+    for rule, factor in factors.items():
+        table[rule] = potential(*(area * factor for area in run_areas))
+    table["land share"] = potential(*run_areas)
+    if not np.allclose(table["land share"], surface[CAPACITY_COLUMN] / 1e6, rtol=1e-9, atol=1e-6):
+        raise ValueError("the land rules do not give the run's potential: is it a land run with land applied after the solve?")
+    table["cutoff"] = table["land share"].where(table["land share"] >= minimum_mt_per_year, 0.0)
+    table["land_share"] = share
+    return table
+
+
+def plot_land_rule_maps(potential: pd.DataFrame, *, title: str, limits: tuple[float, float] = (1.0, 20.0),
+                        shares: Sequence[float] | None = None):
+    """Maps of each cell's production potential (Mt/yr) as the land rules apply (potential_by_land_rule):
+    all land; with the land-cover shares; with protected areas and slopes too; and at each land share
+    in shares (by default the run's own, unless it is 100 %), which takes that share of the land
+    that remains. One linear colour scale (limits): larger potentials take the darkest colour, cells
+    below the lower limit are light grey, and each panel's box gives the potential of all the cells
+    and the cells that reach the lower limit."""
+    run_share = float(potential["land_share"].iloc[0])
+    if shares is None:
+        shares = [run_share] if run_share < 1.0 else []
+    columns = {"All land": potential["all land"], "+ land cover": potential["land cover"],
+               "+ protected areas and slopes": potential["slopes"]}
+    for share in shares:
+        columns[f"+ {100 * share:g} % share"] = potential["slopes"] * share  # every land constraint scales with the share
+    panels = {name: potential.loc[values >= limits[0], ["latitude", "longitude"]].assign(potential_mt_per_year=values[values >= limits[0]])
+              for name, values in columns.items()}
+    return plot_maps(panels, "potential_mt_per_year", title=title, label="Production potential (Mt/yr)", limits=limits,
+                     ramp=RAMPS["violet"], background=potential[["latitude", "longitude"]],
+                     background_label=f"cells that cannot make {limits[0]:g} Mt/yr",
+                     notes={name: f"{values.sum() / 1000:,.0f} Gt/yr in all\n{len(panels[name]):,} cells can make "
+                                  f"{limits[0]:g} Mt/yr" for name, values in columns.items()})
+
+
+def share_sensitivity(land: Mapping[str, pd.DataFrame], sea: Mapping[str, pd.DataFrame], shares: Sequence[float], *,
+                      volumes: Sequence[float] = (500.0, 2000.0),
+                      minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR) -> pd.DataFrame:
+    """The land and the sea plants that can make minimum_mt_per_year, their potential (Gt/yr) and the
+    cost of the last tonne at each volume (cost_at_supply, land and sea plants together) of each case
+    when the plants take each share in shares of the land and sea that the rules leave, instead of
+    their own. A run applies land after the solve, so a plant's potential scales with the share.
+    Rows: shares (%); columns: (case, quantity). A cost is missing where the plants cannot make the
+    volume."""
+    minimum = minimum_mt_per_year * 1e6
+    counts = {site: f"{site} plants of {minimum_mt_per_year:g} Mt/yr" for site in ("land", "sea")}
+    rows = {}
+    for share in shares:
+        row = {}
+        for case, frame in land.items():
+            scaled = {site: plants.assign(**{CAPACITY_COLUMN: plants[CAPACITY_COLUMN] * share / _land_share(plants)[0]})
+                      for site, plants in (("land", frame), ("sea", sea[case]))}
+            for site, plants in scaled.items():
+                row[(case, counts[site])] = int((plants[CAPACITY_COLUMN] >= minimum).sum())
+            row[(case, "their potential (Gt/yr)")] = sum(
+                plants.loc[plants[CAPACITY_COLUMN] >= minimum, CAPACITY_COLUMN].sum() for plants in scaled.values()) / 1e9
+            for volume in volumes:
+                row[(case, f"cost at {volume:,g} Mt/yr (EUR/t)")] = cost_at_supply(
+                    pd.concat(scaled.values()), volume, minimum_mt_per_year=minimum_mt_per_year)
+        rows[f"{100 * share:g} %"] = row
+    table = pd.DataFrame(rows).T
+    table.columns = pd.MultiIndex.from_tuples(table.columns)
+    table.index.name = "share"
+    for column in table.columns:
+        values = table[column].astype(float)
+        if column[1] in counts.values():
+            table[column] = values.astype(int)
+        elif column[1].startswith("cost"):
+            table[column] = values.round(0).astype("Int64")
+        else:
+            table[column] = values.round(1)
+    return table
+
+
+def plants_by_share(surface: pd.DataFrame, shares: Sequence[float], *, by: str = "un_sub_region",
+                    minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR) -> pd.DataFrame:
+    """The land plants that can make minimum_mt_per_year at each land share in shares (fractions of
+    the land that the rules leave), by region (by: a column of cell_regions) and over all cells, and
+    the percentage of the first share's plants that the last share keeps (kept (%)). A run applies
+    land after the solve, so a plant's potential scales with the share. Rows: regions from the
+    largest kept percentage to the smallest, then all cells."""
+    key = ["latitude", "longitude"]
+    potential = surface[CAPACITY_COLUMN] / _land_share(surface)[0]  # on all the land that the rules leave
+    columns = [f"{100 * share:g} %" for share in shares]
+    table = surface[key].assign(**{column: potential * share >= minimum_mt_per_year * 1e6
+                                   for column, share in zip(columns, shares)})
+    table = table.merge(cell_regions()[key + [by]], on=key, how="left")
+    counts = table.groupby(by)[columns].sum()
+    counts = counts[counts[columns[0]] > 0]
+    counts.loc["all cells"] = table[columns].sum()
+    counts = counts.astype(int)
+    counts["kept (%)"] = (100.0 * counts[columns[-1]] / counts[columns[0]]).round(0).astype(int)
+    order = counts.drop(index="all cells").sort_values("kept (%)", ascending=False).index.tolist()
+    counts.index.name = by
+    return counts.loc[[*order, "all cells"]]
+
+
+def _latitude(value: float) -> str:
+    return "0°" if value == 0 else f"{abs(value):g}° {'S' if value < 0 else 'N'}"
+
+
+def land_by_latitude(surface: pd.DataFrame, potential: pd.DataFrame, *,
+                     edges: Sequence[float] = (-90.0, -23.5, 23.5, 60.0, 90.0)) -> pd.DataFrame:
+    """Medians, by band of latitude (edges in degrees, south to north), of what sets a land plant's
+    production potential on all of its cell's land ("all land" of potential_by_land_rule): the
+    cell's land (km²), the land the plant needs per Mt/yr there (km²), the PV density (MW/km²),
+    wind's share of the generating capacity (%) and the potential (Mt/yr). Rows: bands, south to
+    north; a cell at an edge belongs to the band south of it."""
+    key = ["latitude", "longitude"]
+    cells = surface.merge(potential[key + ["all land"]], on=key)
+    tracking = cells["solar_tracking_mw"].fillna(0.0) if "solar_tracking_mw" in cells else 0.0
+    labels = [f"{_latitude(south)} to {_latitude(north)}" for south, north in zip(edges[:-1], edges[1:])]
+    cells = cells.assign(band=pd.cut(cells["latitude"], list(edges), labels=labels),
+                         land_per_mt=(cells["onshore_area_km2"] / cells["all land"]).replace(np.inf, np.nan),
+                         wind_pct=100.0 * cells["wind_mw"] / (cells["wind_mw"] + cells["solar_mw"] + tracking))
+    grouped = cells.groupby("band", observed=True)
+    whole = {"land (km²)": "onshore_area_km2", "land per Mt/yr (km²)": "land_per_mt",
+             "PV density (MW/km²)": "solar_density_mw_per_km2", "wind share of capacity (%)": "wind_pct"}
+    table = pd.DataFrame({"cells": grouped.size(),
+                          **{name: grouped[column].median().round(0).astype("Int64") for name, column in whole.items()},
+                          "potential on all land (Mt/yr)": grouped["all land"].median().round(1)})
+    table.index.name = "latitude"
+    return table
