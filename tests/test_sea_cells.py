@@ -134,6 +134,9 @@ def test_finance_takes_the_zone_its_region_or_the_international_rate():
     table = sea_cells.sea_finance_table(cells, by_country)
     assert table.interest_rate.tolist() == [0.044, 0.118, 0.118]
     assert table.tech.unique().tolist() == ["all"]
+    # international waters take the table's highest rate, whatever it is
+    reduced = by_country.assign(interest_rate=by_country.interest_rate.clip(upper=0.051))
+    assert sea_cells.sea_finance_table(cells, reduced).interest_rate.tolist() == [0.044, 0.051, 0.051]
     with pytest.raises(ValueError, match="XXX"):
         sea_cells.sea_finance_table(cells.assign(eez_iso3="XXX"), by_country)
 

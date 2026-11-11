@@ -60,7 +60,6 @@ _FIXED = _OFFSHORE["fixed_foundation"]
 FLOATING_FOUNDATION_EUR_PER_MW = float(_OFFSHORE["floating_foundation_eur_per_mw"])
 PLANT_MULTIPLIERS = {name: float(value) for name, value in _OFFSHORE["plant_multiplier"].items()}
 DEEP_WIND_MULTIPLIER = float(_OFFSHORE["deep_wind_multiplier"])
-INTERNATIONAL_WATERS_INTEREST_RATE = float(_OFFSHORE["international_waters_interest_rate"])
 REGION_OF_SMALL_STATE = {iso3: region for region, states in _OFFSHORE["ameli_region_of_small_states"].items() for iso3 in states}
 KEYS = ["latitude", "longitude"]
 
@@ -185,7 +184,8 @@ def flat_site_cost_table(table: pd.DataFrame) -> pd.DataFrame:
 
 def sea_finance_table(cells: pd.DataFrame, by_country: pd.DataFrame) -> pd.DataFrame:
     """A finance table by cell, every technology at the rate of the cell's zone: the country's
-    row, or its region's for a small state without one, or the international waters' rate."""
+    row, or its region's for a small state without one, and in international waters the highest
+    rate of by_country (offshore in inputs/parameters.yaml)."""
     rates = by_country.set_index("iso3")["interest_rate"].to_dict()
     regions = by_country.groupby("ameli_region")["interest_rate"].first().to_dict()
     rates.update({iso3: regions[region] for iso3, region in REGION_OF_SMALL_STATE.items()})
@@ -194,7 +194,7 @@ def sea_finance_table(cells: pd.DataFrame, by_country: pd.DataFrame) -> pd.DataF
     if unknown:
         raise ValueError(f"Zones without a rate: {unknown}; add them to offshore.ameli_region_of_small_states")
     return pd.DataFrame({"lat": cells["latitude"], "lon": cells["longitude"], "tech": "all",
-                         "interest_rate": zones.map(rates).fillna(INTERNATIONAL_WATERS_INTEREST_RATE)})
+                         "interest_rate": zones.map(rates).fillna(float(by_country["interest_rate"].max()))})
 
 
 def write_sea_inputs(land_csv: Path, land_output: Path, site_costs_output: Path, locations_output: Path, *,

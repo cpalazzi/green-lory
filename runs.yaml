@@ -619,7 +619,8 @@ runs:
 # literature; the low-carbon (current) series of the ..._amelilc_... runs above is a sensitivity
 # until the collaborator's rates by country and technology replace both. The reduced series is
 # 5.1 % in most regions and 1.8-4.6 % in Japan, Western Europe, the UK, the United States and
-# Canada; at sea, international waters keep 11.8 % (offshore.international_waters_interest_rate).
+# Canada; at sea, international waters take the series' highest rate, 5.1 % (offshore in
+# inputs/parameters.yaml: no premium beyond the table, so that this stays the base case).
 # The sea table (inputs/finance/ameli2021_reduced_wacc_sea_cells.csv) is model/sea_cells.py's
 # sea_finance_table over the 40,197 sea cells with the reduced table by country; the same call
 # reproduces the low-carbon sea table exactly. The 100 % variants are derived after the solve, as
@@ -686,14 +687,14 @@ runs:
     runner: green_lory
     description: >-
       The plant of finance at sea: as base at sea, with each cell's interest rate from its economic
-      zone (Ameli et al.'s 2021 reduced WACC; 11.8 % in international waters)
+      zone (Ameli et al.'s 2021 reduced WACC; 5.1 % in international waters)
     results_class: 50_campaign
     job_token: camp-finred-sea
     tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed  # no PV output at sea
-    finance_csv: inputs/finance/ameli2021_reduced_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
-    finance_csv_sha256: 4e7c405696eac9f888a4cf066eef8a346995ff5323117c911bb408d037ba8992
+    finance_csv: inputs/finance/ameli2021_reduced_wacc_sea_cells.csv  # by cell: the zone's rate, 5.1 % in international waters
+    finance_csv_sha256: e633c9b69fe9af6dae7151107189cbe9740d652b7527cc8100720db92144e5f0
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour
@@ -723,8 +724,8 @@ runs:
     tech_yaml: inputs/tech/tech_config_ammonia_plant_2050_dea_colocated.yaml
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed  # no PV output at sea
-    finance_csv: inputs/finance/ameli2021_reduced_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
-    finance_csv_sha256: 4e7c405696eac9f888a4cf066eef8a346995ff5323117c911bb408d037ba8992
+    finance_csv: inputs/finance/ameli2021_reduced_wacc_sea_cells.csv  # by cell: the zone's rate, 5.1 % in international waters
+    finance_csv_sha256: e633c9b69fe9af6dae7151107189cbe9740d652b7527cc8100720db92144e5f0
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour

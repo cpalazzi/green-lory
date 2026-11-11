@@ -160,11 +160,13 @@ offshore:
     deep: 3.0
   # In deep water wind too is its onshore cost times this
   deep_wind_multiplier: 3.0
-  # Finance runs. International waters take the highest rate in Ameli et al.'s (2021) table, that
-  # of their Africa region: no state's legal framework, insurance or offtake support (decided 30
-  # October 2026). Ameli's table has no row for these small states, whose zones hold sea cells;
-  # its rates are regional, so each takes the rate of the region it lies in
-  international_waters_interest_rate: 0.118
+  # Finance runs. International waters take the highest rate of the finance table in use
+  # (model/sea_cells.py, sea_finance_table): no state's legal framework, insurance or offtake
+  # support (decided 30 October 2026), but no premium beyond the table, so that a table used as
+  # the base case of the cost of capital stays one (11 November 2026): 5.1 % with Ameli et al.'s
+  # (2021) reduced series, 11.8 % (their Africa region) with the low-carbon series. Ameli's table
+  # has no row for these small states, whose zones hold sea cells; its rates are regional, so each
+  # takes the rate of the region it lies in
   ameli_region_of_small_states:
     AFR: [COM, CPV, MUS, STP, SYC]
     CSA: [ATG, BRB, DMA, GRD, KNA, LCA, VCT]
