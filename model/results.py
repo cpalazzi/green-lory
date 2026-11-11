@@ -841,7 +841,6 @@ RAMPS = {
     "orange": ("#fde4d8", "#eb6834", "#7a2e0e"),  # construction
     "aqua": ("#d2f1e4", "#1baf7a", "#0b4f37"),  # finance
     "violet": ("#c3b9f2", "#6250d6", "#241a66"),  # production potential; its lightest step stays clear of NO_DATA
-    "green": ("#d6efd0", "#4fa64a", "#1d5a22"),  # protected areas
 }
 # The levelised cost of ammonia: matplotlib's viridis, reversed so that yellow is the cheapest
 # (perceptually uniform, readable with colour-vision deficiency, and with no grey in it)
