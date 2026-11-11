@@ -22,6 +22,8 @@ results/campaigns/.
   ``compare_surfaces``: tables of one or several surfaces;
 - ``cost_factors``, ``cell_regions``, ``plot_region_costs``: what each location factor adds to
   the cost of each cell, as stacked bars by region (UN M49 sub-regions by default);
+- ``plot_build_factors``: the remote and cold factors on the capital cost against travel time,
+  with the Australian location factors they were checked against and the plants by travel time;
 - ``potential_by_cost``, ``plot_potential_by_cost``, ``potential_below``: production potential by
   cost band and UN region, as stacked histograms and a table;
 - ``land_rule_list``, ``land_cover_shares``, ``land_share_medians``: what sets the land a plant may
@@ -1297,6 +1299,71 @@ def _factor_key(ax, factors: Sequence[str], **extra) -> None:
     handles = [Patch(facecolor=FACTOR_COLOURS[factor], label=FACTOR_NAMES[factor]) for factor in reversed(factors)]
     ax.legend(handles=handles + list(extra.get("handles", [])), frameon=False, fontsize=9,
               loc=extra.get("loc", "upper left"), bbox_to_anchor=extra.get("bbox_to_anchor"))
+
+
+def plot_build_factors(surface: pd.DataFrame, site_costs: pd.DataFrame, *, title: str,
+                       minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR):
+    """The remote factors of model/site_costs.py against the travel time to a city of 20,000
+    people, on the installation (build) part of the capital cost and on its equipment part, alone
+    (solid) and with the cold factor (dashed); their anchor (a star); the location factors of the
+    Australian cost reviews (inputs/site_costs/calibration_sites.csv: GHD's installation factors,
+    Aurecon's installation and equipment factors), which the rule did not use; and, below, the
+    plants of surface that can make minimum_mt_per_year by travel time (site_costs, the run's
+    site-cost table), those under the cold factor darker. Travel times under 3 minutes are drawn at 3."""
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+
+    from . import site_costs as rule
+
+    key = ["latitude", "longitude"]
+    plants = surface.loc[surface[CAPACITY_COLUMN] >= minimum_mt_per_year * 1e6, key].merge(
+        site_costs[key + ["travel_time_to_city_min", "cold_multiplier"]], on=key, how="left")
+    floor = 0.05  # hours
+    plant_hours = (plants["travel_time_to_city_min"] / 60.0).clip(lower=floor)
+    hours = np.logspace(np.log10(floor), np.log10(max(plant_hours.max(), 48.0) * 1.1), 400)
+    sites = pd.read_csv(REPO_ROOT / "inputs" / "site_costs" / "calibration_sites.csv")
+    ghd, aurecon = sites[sites["source"] == "ghd2025"], sites[sites["source"] == "aurecon2024"]
+    anchor_hours = rule.REMOTE_ANCHOR_DAYS * 24.0
+    remotest_site = sites["travel_min_city_20k"].max() / 60.0
+
+    fig, (ax, low) = plt.subplots(2, 1, figsize=(10.0, 7.0), sharex=True, height_ratios=(3.0, 1.2), layout="constrained")
+    for at_anchor, colour, part in ((rule.REMOTE_BUILD_AT_ANCHOR, SERIES[1], "installation"),
+                                    (rule.REMOTE_EQUIPMENT_AT_ANCHOR, SERIES[0], "equipment")):
+        values = rule.remote_multiplier(hours * 60.0, at_anchor)
+        ax.plot(hours, values, color=colour, linewidth=2, label=f"Factor on {part}")
+        ax.plot(hours, values * rule.COLD_MULTIPLIER, color=colour, linewidth=2, linestyle="--",
+                label=f"Factor on {part}, with the cold factor")
+    ax.scatter(ghd["travel_min_city_20k"].clip(lower=floor * 60) / 60, ghd["installation_om_cost_factor"], marker="o", s=22,
+               facecolors="none", edgecolors=SERIES[1], linewidths=1.0, label="GHD 2025: installation, by site")
+    ax.scatter(aurecon["travel_min_city_20k"].clip(lower=floor * 60) / 60, aurecon["installation_cost_factor"], marker="s", s=20,
+               facecolors="none", edgecolors=SERIES[1], linewidths=1.0, label="Aurecon 2024: installation, by site")
+    ax.scatter(aurecon["travel_min_city_20k"].clip(lower=floor * 60) / 60, aurecon["equipment_cost_factor"], marker="s", s=20,
+               facecolors="none", edgecolors=SERIES[0], linewidths=1.0, label="Aurecon 2024: equipment, by site")
+    ax.scatter([anchor_hours, anchor_hours], [rule.REMOTE_BUILD_AT_ANCHOR, rule.REMOTE_EQUIPMENT_AT_ANCHOR], marker="*", s=180,
+               color=INK, zorder=5, label="Anchor: Shamattawa, Manitoba")
+    for axis in (ax, low):
+        for x in (remotest_site, anchor_hours):
+            axis.axvline(x, color=MUTED, linewidth=0.8, linestyle=":")
+    top = ax.get_ylim()[1]
+    ax.text(remotest_site, top, " remotest Australian site", rotation=90, va="top", ha="right", fontsize=8, color=MUTED)
+    ax.text(anchor_hours, top, " anchor", rotation=90, va="top", ha="right", fontsize=8, color=MUTED)
+    ax.set_xscale("log")
+    ax.set_ylabel("Factor on the capital cost (-)", color=INK)
+    ax.set_title(title, loc="left", color=INK, fontsize=12)
+    ax.grid(color=GRID, linewidth=0.5)
+    ax.legend(frameon=False, fontsize=8, loc="upper left", ncol=2)
+    bins = np.logspace(np.log10(floor), np.log10(hours[-1]), 40)
+    cold = plants["cold_multiplier"] > 1
+    low.hist([plant_hours[~cold], plant_hours[cold]], bins=bins, stacked=True, color=["#b5b4ae", MUTED], edgecolor="white", linewidth=0.5)
+    low.set_ylabel("Plants", color=INK)
+    low.set_xlabel("Travel time to a city of 20,000 people (hours, logarithmic scale)", color=INK)
+    low.grid(axis="y", color=GRID, linewidth=0.5)
+    low.legend(handles=[Patch(facecolor="#b5b4ae", label="plants"), Patch(facecolor=MUTED, label="plants under the cold factor")],
+               frameon=False, fontsize=8, loc="upper right")
+    for axis in (ax, low):
+        for side in ("top", "right"):
+            axis.spines[side].set_visible(False)
+    return fig
 
 
 def plot_region_costs(factors: pd.DataFrame, applied: Sequence[str], *, title: str, by: str = "un_sub_region"):
