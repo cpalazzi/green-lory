@@ -1,19 +1,19 @@
 {
   "written_by": "python -m model.countries",
   "rows": 54360,
-  "sha256": "fa1e0936ebde742e6cd9297664908f839f091b995c387e33d2470eb7f82407a6",
+  "sha256": "d92ab08a314a0f22e6723076cdc026d04f26e9cbfb6fe9c738929159ae3a6cf5",
   "inputs": {
     "countries": {
-      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/data/countries.geojson",
-      "sha256": "86057d2fad98ac537a66df1da995d2f7904c2c215457077853087d13fa412487"
+      "path": "data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp",
+      "sha256": "7ce119ef6342e43cff7c0c3004e0911ab7ec1988a14734372031d2012180e7bc"
     },
-    "country_reference": {
-      "path": "/Users/carlopalazzi/programming/pypsa_models/green-lory/inputs/cells/country_reference_20260928_v1.csv",
-      "sha256": "e2a7bbd54ca8a1f2924d70cf7fc0322558a3ece9b415f261815dbd41e81ef68f"
+    "countries_attributes": {
+      "path": "data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.dbf",
+      "sha256": "c5dbd3dd5fd7e2ef49051fc88562c03819e8ea63a382642df6eadd1243bf4b49"
     }
   },
   "cells_by_assignment": {
-    "nearest": 35775,
-    "overlap": 18585
+    "nearest": 34712,
+    "overlap": 19648
   }
 }

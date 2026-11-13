@@ -40,6 +40,8 @@ WDPA_SHAPEFILES = tuple(
 )
 BATHYMETRY_FILE = DATA_DIR / "model_bathymetry.nc"
 COUNTRIES_GEOJSON = DATA_DIR / "countries.geojson"
+# Natural Earth's 1:10m countries and territories, for each cell's country (model/countries.py)
+COUNTRIES_10M_SHAPEFILE = DATA_DIR / "ne_10m_admin_0_countries" / "ne_10m_admin_0_countries.shp"
 
 # The 1,377 ports of the green-porpoise shipping network (Verschuur et al. 2024)
 PORTS_CSV = DATA_DIR / "ports" / "verschuur2024_ports.csv"

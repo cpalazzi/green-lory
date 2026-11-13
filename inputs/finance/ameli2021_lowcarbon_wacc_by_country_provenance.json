@@ -1,0 +1,33 @@
+{
+  "written_by": "python -m model.countries",
+  "rows": 238,
+  "sha256": "3ba3673913295f9cd9d944093bb75bf04ae29538b23d1447b2c4a905a62c3de3",
+  "inputs": {
+    "countries": {
+      "path": "data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp",
+      "sha256": "7ce119ef6342e43cff7c0c3004e0911ab7ec1988a14734372031d2012180e7bc"
+    },
+    "countries_attributes": {
+      "path": "data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.dbf",
+      "sha256": "c5dbd3dd5fd7e2ef49051fc88562c03819e8ea63a382642df6eadd1243bf4b49"
+    },
+    "region_list": {
+      "path": "inputs/finance/ameli2021_tiam_ucl_regions.csv",
+      "sha256": "e07886920cd9a263e3f0229f9e41fa01a3c0bcf9bf631ef098514a794482f039"
+    },
+    "region_rates": {
+      "path": "inputs/finance/ameli2021_wacc_by_region.csv",
+      "sha256": "c9080f85bebf71163340a9405a10fd12f9daea7be2e2261319b7f7150e1b2c68"
+    }
+  },
+  "series": "lowcarbon",
+  "codes_by_region_basis": {
+    "sovereign listed": 170,
+    "continent Africa": 32,
+    "continent Oceania": 12,
+    "continent Americas": 11,
+    "continent Asia": 7,
+    "continent Europe": 5,
+    "Antarctica, the highest rate": 1
+  }
+}

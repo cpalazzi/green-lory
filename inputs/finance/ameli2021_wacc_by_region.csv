@@ -1,0 +1,17 @@
+region,region_name,lowcarbon,reduced
+AFR,Africa,0.118,0.051
+AUS,Australia and New Zealand,0.061,0.051
+CAN,Canada,0.054,0.046
+CHI,China,0.066,0.051
+CSA,Central and South America,0.092,0.051
+EEU,Eastern Europe,0.058,0.051
+FSU,Former Soviet Union,0.058,0.051
+IND,India,0.082,0.051
+JAP,Japan,0.024,0.018
+MEA,Middle East,0.068,0.051
+MEX,Mexico,0.118,0.051
+ODA,Other developing Asia,0.068,0.051
+SKO,South Korea,0.068,0.051
+UK,United Kingdom,0.044,0.043
+USA,United States,0.051,0.044
+WEU,Western Europe,0.042,0.040

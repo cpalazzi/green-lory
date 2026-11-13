@@ -160,19 +160,13 @@ offshore:
     deep: 3.0
   # In deep water wind too is its onshore cost times this
   deep_wind_multiplier: 3.0
-  # Finance runs. International waters take the highest rate of the finance table in use
+  # Finance runs (no parameter): a cell takes the rate of its zone's sovereign from the finance
+  # table by country, which has a row for every country of the map (model/countries.py, 13
+  # November 2026), and international waters the highest rate of the table in use
   # (model/sea_cells.py, sea_finance_table): no state's legal framework, insurance or offtake
   # support (decided 30 October 2026), but no premium beyond the table, so that a table used as
   # the base case of the cost of capital stays one (11 November 2026): 5.1 % with Ameli et al.'s
-  # (2021) reduced series, 11.8 % (their Africa region) with the low-carbon series. Ameli's table
-  # has no row for these small states, whose zones hold sea cells; its rates are regional, so each
-  # takes the rate of the region it lies in
-  ameli_region_of_small_states:
-    AFR: [COM, CPV, MUS, STP, SYC]
-    CSA: [ATG, BRB, DMA, GRD, KNA, LCA, VCT]
-    MEA: [BHR]
-    ODA: [FSM, KIR, MDV, MHL, NRU, PLW, TON, TUV, WSM]
-    WEU: [MLT]
+  # (2021) reduced series, 11.8 % (their Africa region) with the low-carbon series
 
 # Water sources (CAMPAIGN_PLAN.md section 0b; decided 7 and 9 October 2026): a cell holds a source
 # if the sea and permanent lakes and reservoirs cover at least standing_min_share of it, or large

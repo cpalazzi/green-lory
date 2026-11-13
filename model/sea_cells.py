@@ -60,7 +60,6 @@ _FIXED = _OFFSHORE["fixed_foundation"]
 FLOATING_FOUNDATION_EUR_PER_MW = float(_OFFSHORE["floating_foundation_eur_per_mw"])
 PLANT_MULTIPLIERS = {name: float(value) for name, value in _OFFSHORE["plant_multiplier"].items()}
 DEEP_WIND_MULTIPLIER = float(_OFFSHORE["deep_wind_multiplier"])
-REGION_OF_SMALL_STATE = {iso3: region for region, states in _OFFSHORE["ameli_region_of_small_states"].items() for iso3 in states}
 KEYS = ["latitude", "longitude"]
 
 
@@ -183,16 +182,16 @@ def flat_site_cost_table(table: pd.DataFrame) -> pd.DataFrame:
 
 
 def sea_finance_table(cells: pd.DataFrame, by_country: pd.DataFrame) -> pd.DataFrame:
-    """A finance table by cell, every technology at the rate of the cell's zone: the country's
-    row, or its region's for a small state without one, and in international waters the highest
-    rate of by_country (offshore in inputs/parameters.yaml)."""
+    """A finance table by cell, every technology at the rate of the cell's zone: the row of its
+    sovereign country (eez_iso3) in by_country, a table of model/countries.py, which has a row for
+    every country of the map, and in international waters the highest rate of by_country (offshore
+    in inputs/parameters.yaml)."""
     rates = by_country.set_index("iso3")["interest_rate"].to_dict()
-    regions = by_country.groupby("ameli_region")["interest_rate"].first().to_dict()
-    rates.update({iso3: regions[region] for iso3, region in REGION_OF_SMALL_STATE.items()})
     zones = cells["eez_iso3"]
     unknown = sorted(set(zones.dropna()) - set(rates))
     if unknown:
-        raise ValueError(f"Zones without a rate: {unknown}; add them to offshore.ameli_region_of_small_states")
+        raise ValueError(f"Zones without a rate: {unknown}; the finance table by country (python -m model.countries) "
+                         "needs a row for every zone's sovereign")
     return pd.DataFrame({"lat": cells["latitude"], "lon": cells["longitude"], "tech": "all",
                          "interest_rate": zones.map(rates).fillna(float(by_country["interest_rate"].max()))})
 

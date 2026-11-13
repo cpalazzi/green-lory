@@ -263,7 +263,8 @@ def test_cost_factors_add_up_to_each_case():
 
 def test_regions_of_areas_missing_from_m49():
     regions = results.cell_regions().drop_duplicates("iso3").set_index("iso3")
-    assert regions.loc["TWN", "un_sub_region"] == "Eastern Asia" and regions.loc["XKO", "un_region"] == "Europe"
+    assert regions.loc["TWN", "un_sub_region"] == "Eastern Asia" and regions.loc["GRL", "un_sub_region"] == "Northern America"
+    assert "XKO" not in regions.index  # Kosovo counts in Serbia, as in ISO 3166 (model/countries.py)
     assert regions.loc["RUS", "un_sub_region"] == "Eastern Europe"  # M49 puts all of Russia in Europe
 
 

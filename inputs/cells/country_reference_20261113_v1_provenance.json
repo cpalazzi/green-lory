@@ -1,0 +1,15 @@
+{
+  "written_by": "python -m model.countries",
+  "rows": 238,
+  "sha256": "7214c0d341b24e75c6a5d380152f0c08b568e02d7bf03aba95eccf5e12862c4d",
+  "inputs": {
+    "countries": {
+      "path": "data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp",
+      "sha256": "7ce119ef6342e43cff7c0c3004e0911ab7ec1988a14734372031d2012180e7bc"
+    },
+    "countries_attributes": {
+      "path": "data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.dbf",
+      "sha256": "c5dbd3dd5fd7e2ef49051fc88562c03819e8ea63a382642df6eadd1243bf4b49"
+    }
+  }
+}

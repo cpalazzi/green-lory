@@ -1231,7 +1231,7 @@ FACTOR_NAMES = {"base": "Base case", "construction": "Construction (site costs)"
 
 # Areas of inputs/cells/cell_countries.csv that the UN's M49 table does not list, given the
 # region and sub-region of their neighbours
-M49_ADDITIONS = {"TWN": ("Asia", "Eastern Asia"), "XKO": ("Europe", "Southern Europe")}
+M49_ADDITIONS = {"TWN": ("Asia", "Eastern Asia")}
 
 
 def cell_regions() -> pd.DataFrame:

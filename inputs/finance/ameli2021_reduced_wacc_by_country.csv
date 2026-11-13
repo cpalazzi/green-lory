@@ -1,176 +1,239 @@
-iso3,country,tech,interest_rate,ameli_region
-AFG,Afghanistan,all,0.051,ODA
-AGO,Angola,all,0.051,AFR
-ALB,Albania,all,0.051,EEU
-ARE,United Arab Emirates,all,0.051,MEA
-ARG,Argentina,all,0.051,CSA
-ARM,Armenia,all,0.051,FSU
-ATA,"Antarctica (only the run cell at 55 S 36 W: South Georgia, a UK territory; UK rate)",all,0.043,UK
-ATF,French Southern and Antarctic Lands,all,0.04,WEU
-AUS,Australia,all,0.051,AUS
-AUT,Austria,all,0.04,WEU
-AZE,Azerbaijan,all,0.051,FSU
-BDI,Burundi,all,0.051,AFR
-BEL,Belgium,all,0.04,WEU
-BEN,Benin,all,0.051,AFR
-BFA,Burkina Faso,all,0.051,AFR
-BGD,Bangladesh,all,0.051,ODA
-BGR,Bulgaria,all,0.051,EEU
-BHS,The Bahamas,all,0.051,CSA
-BIH,Bosnia and Herzegovina,all,0.051,EEU
-BLR,Belarus,all,0.051,FSU
-BLZ,Belize,all,0.051,CSA
-BOL,Bolivia,all,0.051,CSA
-BRA,Brazil,all,0.051,CSA
-BRN,Brunei,all,0.051,ODA
-BTN,Bhutan,all,0.051,ODA
-BWA,Botswana,all,0.051,AFR
-CAF,Central African Republic,all,0.051,AFR
-CAN,Canada,all,0.046,CAN
-CHE,Switzerland,all,0.04,WEU
-CHL,Chile,all,0.051,CSA
-CHN,China,all,0.051,CHI
-CIV,Ivory Coast,all,0.051,AFR
-CMR,Cameroon,all,0.051,AFR
-COD,Democratic Republic of the Congo,all,0.051,AFR
-COG,Republic of the Congo,all,0.051,AFR
-COL,Colombia,all,0.051,CSA
-CRI,Costa Rica,all,0.051,CSA
-CUB,Cuba,all,0.051,CSA
-CYP,Cyprus; Northern Cyprus,all,0.051,EEU
-CZE,Czechia,all,0.051,EEU
-DEU,Germany,all,0.04,WEU
-DJI,Djibouti,all,0.051,AFR
-DNK,Denmark,all,0.04,WEU
-DOM,Dominican Republic,all,0.051,CSA
-DZA,Algeria,all,0.051,AFR
-ECU,Ecuador,all,0.051,CSA
-EGY,Egypt,all,0.051,AFR
-ERI,Eritrea,all,0.051,AFR
-ESH,Western Sahara,all,0.051,AFR
-ESP,Spain,all,0.04,WEU
-EST,Estonia,all,0.051,FSU
-ETH,Ethiopia,all,0.051,AFR
-FIN,Finland,all,0.04,WEU
-FJI,Fiji,all,0.051,AUS
-FLK,Falkland Islands,all,0.051,CSA
-FRA,France,all,0.04,WEU
-GAB,Gabon,all,0.051,AFR
-GBR,United Kingdom,all,0.043,UK
-GEO,Georgia,all,0.051,FSU
-GHA,Ghana,all,0.051,AFR
-GIN,Guinea,all,0.051,AFR
-GMB,Gambia,all,0.051,AFR
-GNB,Guinea-Bissau,all,0.051,AFR
-GNQ,Equatorial Guinea,all,0.051,AFR
-GRC,Greece,all,0.04,WEU
-GRL,Greenland,all,0.046,CAN
-GTM,Guatemala,all,0.051,CSA
-GUY,Guyana,all,0.051,CSA
-HND,Honduras,all,0.051,CSA
-HRV,Croatia,all,0.051,EEU
-HTI,Haiti,all,0.051,CSA
-HUN,Hungary,all,0.051,EEU
-IDN,Indonesia,all,0.051,ODA
-IND,India,all,0.051,IND
-IRL,Ireland,all,0.04,WEU
-IRN,Iran,all,0.051,MEA
-IRQ,Iraq,all,0.051,MEA
-ISL,Iceland,all,0.04,WEU
-ISR,Israel,all,0.051,MEA
-ITA,Italy,all,0.04,WEU
-JAM,Jamaica,all,0.051,CSA
-JOR,Jordan,all,0.051,MEA
-JPN,Japan,all,0.018,JAP
-KAZ,Kazakhstan,all,0.051,FSU
-KEN,Kenya,all,0.051,AFR
-KGZ,Kyrgyzstan,all,0.051,FSU
-KHM,Cambodia,all,0.051,ODA
-KOR,South Korea,all,0.051,SKO
-KWT,Kuwait,all,0.051,MEA
-LAO,Laos,all,0.051,ODA
-LBN,Lebanon,all,0.051,MEA
-LBR,Liberia,all,0.051,AFR
-LBY,Libya,all,0.051,AFR
-LKA,Sri Lanka,all,0.051,ODA
-LSO,Lesotho,all,0.051,AFR
-LTU,Lithuania,all,0.051,FSU
-LUX,Luxembourg,all,0.04,WEU
-LVA,Latvia,all,0.051,FSU
-MAR,Morocco,all,0.051,AFR
-MDA,Moldova,all,0.051,FSU
-MDG,Madagascar,all,0.051,AFR
-MEX,Mexico,all,0.051,MEX
-MKD,North Macedonia,all,0.051,EEU
-MLI,Mali,all,0.051,AFR
-MMR,Myanmar,all,0.051,ODA
-MNE,Montenegro,all,0.051,EEU
-MNG,Mongolia,all,0.051,CHI
-MOZ,Mozambique,all,0.051,AFR
-MRT,Mauritania,all,0.051,AFR
-MWI,Malawi,all,0.051,AFR
-MYS,Malaysia,all,0.051,ODA
-NAM,Namibia,all,0.051,AFR
-NCL,New Caledonia,all,0.04,WEU
-NER,Niger,all,0.051,AFR
-NGA,Nigeria,all,0.051,AFR
-NIC,Nicaragua,all,0.051,CSA
-NLD,Netherlands,all,0.04,WEU
-NOR,Norway,all,0.04,WEU
-NPL,Nepal,all,0.051,ODA
-NZL,New Zealand,all,0.051,AUS
-OMN,Oman,all,0.051,MEA
-PAK,Pakistan,all,0.051,ODA
-PAN,Panama,all,0.051,CSA
-PER,Peru,all,0.051,CSA
-PHL,Philippines,all,0.051,ODA
-PNG,Papua New Guinea,all,0.051,ODA
-POL,Poland,all,0.051,EEU
-PRI,Puerto Rico,all,0.051,CSA
-PRK,North Korea,all,0.051,ODA
-PRT,Portugal,all,0.04,WEU
-PRY,Paraguay,all,0.051,CSA
-PSE,Palestine,all,0.051,MEA
-QAT,Qatar,all,0.051,MEA
-ROU,Romania,all,0.051,EEU
-RUS,Russia,all,0.051,FSU
-RWA,Rwanda,all,0.051,AFR
-SAU,Saudi Arabia,all,0.051,MEA
-SDN,Sudan,all,0.051,AFR
-SEN,Senegal,all,0.051,AFR
-SLB,Solomon Islands,all,0.051,ODA
-SLE,Sierra Leone,all,0.051,AFR
-SLV,El Salvador,all,0.051,CSA
-SOM,Somalia; Somaliland,all,0.051,AFR
-SRB,Republic of Serbia,all,0.051,EEU
-SSD,South Sudan,all,0.051,AFR
-SUR,Suriname,all,0.051,CSA
-SVK,Slovakia,all,0.051,EEU
-SVN,Slovenia,all,0.051,EEU
-SWE,Sweden,all,0.04,WEU
-SWZ,eSwatini,all,0.051,AFR
-SYR,Syria,all,0.051,MEA
-TCD,Chad,all,0.051,AFR
-TGO,Togo,all,0.051,AFR
-THA,Thailand,all,0.051,ODA
-TJK,Tajikistan,all,0.051,FSU
-TKM,Turkmenistan,all,0.051,FSU
-TLS,East Timor,all,0.051,ODA
-TTO,Trinidad and Tobago,all,0.051,CSA
-TUN,Tunisia,all,0.051,AFR
-TUR,Turkey,all,0.051,MEA
-TWN,Taiwan,all,0.051,ODA
-TZA,United Republic of Tanzania,all,0.051,AFR
-UGA,Uganda,all,0.051,AFR
-UKR,Ukraine,all,0.051,FSU
-URY,Uruguay,all,0.051,CSA
-USA,United States of America,all,0.044,USA
-UZB,Uzbekistan,all,0.051,FSU
-VEN,Venezuela,all,0.051,CSA
-VNM,Vietnam,all,0.051,ODA
-VUT,Vanuatu,all,0.051,ODA
-XKO,Kosovo,all,0.051,EEU
-YEM,Yemen,all,0.051,MEA
-ZAF,South Africa,all,0.051,AFR
-ZMB,Zambia,all,0.051,AFR
-ZWE,Zimbabwe,all,0.051,AFR
+iso3,country,tech,interest_rate,ameli_region,sovereign_iso3,region_basis
+ABW,Aruba,all,0.04,WEU,NLD,sovereign listed
+AFG,Afghanistan,all,0.051,ODA,AFG,continent Asia
+AGO,Angola,all,0.051,AFR,AGO,sovereign listed
+AIA,Anguilla,all,0.043,UK,GBR,sovereign listed
+ALA,Aland,all,0.04,WEU,FIN,sovereign listed
+ALB,Albania,all,0.051,EEU,ALB,sovereign listed
+AND,Andorra,all,0.04,WEU,AND,continent Europe
+ARE,United Arab Emirates,all,0.051,MEA,ARE,sovereign listed
+ARG,Argentina,all,0.051,CSA,ARG,sovereign listed
+ARM,Armenia,all,0.051,FSU,ARM,sovereign listed
+ASM,American Samoa,all,0.044,USA,USA,sovereign listed
+ATA,Antarctica,all,0.051,,ATA,"Antarctica, the highest rate"
+ATF,French Southern and Antarctic Lands,all,0.04,WEU,FRA,sovereign listed
+ATG,Antigua and Barbuda,all,0.051,CSA,ATG,continent Americas
+AUS,Australia,all,0.051,AUS,AUS,sovereign listed
+AUT,Austria,all,0.04,WEU,AUT,sovereign listed
+AZE,Azerbaijan,all,0.051,FSU,AZE,sovereign listed
+BDI,Burundi,all,0.051,AFR,BDI,continent Africa
+BEL,Belgium,all,0.04,WEU,BEL,sovereign listed
+BEN,Benin,all,0.051,AFR,BEN,sovereign listed
+BFA,Burkina Faso,all,0.051,AFR,BFA,continent Africa
+BGD,Bangladesh,all,0.051,ODA,BGD,sovereign listed
+BGR,Bulgaria,all,0.051,EEU,BGR,sovereign listed
+BHR,Bahrain,all,0.051,MEA,BHR,sovereign listed
+BHS,The Bahamas,all,0.051,CSA,BHS,continent Americas
+BIH,Bosnia and Herzegovina,all,0.051,EEU,BIH,sovereign listed
+BLM,Saint Barthelemy,all,0.04,WEU,FRA,sovereign listed
+BLR,Belarus,all,0.051,FSU,BLR,sovereign listed
+BLZ,Belize,all,0.051,CSA,BLZ,continent Americas
+BMU,Bermuda,all,0.043,UK,GBR,sovereign listed
+BOL,Bolivia,all,0.051,CSA,BOL,sovereign listed
+BRA,Brazil,all,0.051,CSA,BRA,sovereign listed
+BRB,Barbados,all,0.051,CSA,BRB,continent Americas
+BRN,Brunei,all,0.051,ODA,BRN,sovereign listed
+BTN,Bhutan,all,0.051,ODA,BTN,continent Asia
+BWA,Botswana,all,0.051,AFR,BWA,continent Africa
+CAF,Central African Republic,all,0.051,AFR,CAF,continent Africa
+CAN,Canada,all,0.046,CAN,CAN,sovereign listed
+CHE,Switzerland,all,0.04,WEU,CHE,sovereign listed
+CHL,Chile,all,0.051,CSA,CHL,sovereign listed
+CHN,China,all,0.051,CHI,CHN,sovereign listed
+CIV,Ivory Coast,all,0.051,AFR,CIV,sovereign listed
+CMR,Cameroon,all,0.051,AFR,CMR,sovereign listed
+COD,Democratic Republic of the Congo,all,0.051,AFR,COD,sovereign listed
+COG,Republic of the Congo,all,0.051,AFR,COG,sovereign listed
+COK,Cook Islands,all,0.051,AUS,NZL,sovereign listed
+COL,Colombia,all,0.051,CSA,COL,sovereign listed
+COM,Comoros,all,0.051,AFR,COM,continent Africa
+CPV,Cabo Verde,all,0.051,AFR,CPV,continent Africa
+CRI,Costa Rica,all,0.051,CSA,CRI,sovereign listed
+CUB,Cuba,all,0.051,CSA,CUB,sovereign listed
+CUW,Curaçao,all,0.04,WEU,NLD,sovereign listed
+CYM,Cayman Islands,all,0.043,UK,GBR,sovereign listed
+CYP,Cyprus,all,0.051,MEA,CYP,sovereign listed
+CZE,Czechia,all,0.051,EEU,CZE,sovereign listed
+DEU,Germany,all,0.04,WEU,DEU,sovereign listed
+DJI,Djibouti,all,0.051,AFR,DJI,continent Africa
+DMA,Dominica,all,0.051,CSA,DMA,continent Americas
+DNK,Denmark,all,0.04,WEU,DNK,sovereign listed
+DOM,Dominican Republic,all,0.051,CSA,DOM,sovereign listed
+DZA,Algeria,all,0.051,AFR,DZA,sovereign listed
+ECU,Ecuador,all,0.051,CSA,ECU,sovereign listed
+EGY,Egypt,all,0.051,AFR,EGY,sovereign listed
+ERI,Eritrea,all,0.051,AFR,ERI,continent Africa
+ESH,Western Sahara,all,0.051,AFR,ESH,continent Africa
+ESP,Spain,all,0.04,WEU,ESP,sovereign listed
+EST,Estonia,all,0.051,FSU,EST,sovereign listed
+ETH,Ethiopia,all,0.051,AFR,ETH,sovereign listed
+FIN,Finland,all,0.04,WEU,FIN,sovereign listed
+FJI,Fiji,all,0.051,ODA,FJI,continent Oceania
+FLK,Falkland Islands,all,0.043,UK,GBR,sovereign listed
+FRA,France,all,0.04,WEU,FRA,sovereign listed
+FRO,Faroe Islands,all,0.04,WEU,DNK,sovereign listed
+FSM,Federated States of Micronesia,all,0.051,ODA,FSM,continent Oceania
+GAB,Gabon,all,0.051,AFR,GAB,sovereign listed
+GBR,United Kingdom,all,0.043,UK,GBR,sovereign listed
+GEO,Georgia,all,0.051,FSU,GEO,sovereign listed
+GGY,Guernsey,all,0.043,UK,GBR,sovereign listed
+GHA,Ghana,all,0.051,AFR,GHA,sovereign listed
+GIB,Gibraltar,all,0.043,UK,GBR,sovereign listed
+GIN,Guinea,all,0.051,AFR,GIN,continent Africa
+GMB,Gambia,all,0.051,AFR,GMB,continent Africa
+GNB,Guinea-Bissau,all,0.051,AFR,GNB,continent Africa
+GNQ,Equatorial Guinea,all,0.051,AFR,GNQ,continent Africa
+GRC,Greece,all,0.04,WEU,GRC,sovereign listed
+GRD,Grenada,all,0.051,CSA,GRD,continent Americas
+GRL,Greenland,all,0.04,WEU,DNK,sovereign listed
+GTM,Guatemala,all,0.051,CSA,GTM,sovereign listed
+GUM,Guam,all,0.044,USA,USA,sovereign listed
+GUY,Guyana,all,0.051,CSA,GUY,continent Americas
+HKG,Hong Kong S.A.R.,all,0.051,CHI,CHN,sovereign listed
+HMD,Heard Island and McDonald Islands,all,0.051,AUS,AUS,sovereign listed
+HND,Honduras,all,0.051,CSA,HND,sovereign listed
+HRV,Croatia,all,0.051,EEU,HRV,sovereign listed
+HTI,Haiti,all,0.051,CSA,HTI,sovereign listed
+HUN,Hungary,all,0.051,EEU,HUN,sovereign listed
+IDN,Indonesia,all,0.051,ODA,IDN,sovereign listed
+IMN,Isle of Man,all,0.043,UK,GBR,sovereign listed
+IND,India,all,0.051,IND,IND,sovereign listed
+IOT,British Indian Ocean Territory,all,0.043,UK,GBR,sovereign listed
+IRL,Ireland,all,0.04,WEU,IRL,sovereign listed
+IRN,Iran,all,0.051,MEA,IRN,sovereign listed
+IRQ,Iraq,all,0.051,MEA,IRQ,sovereign listed
+ISL,Iceland,all,0.04,WEU,ISL,sovereign listed
+ISR,Israel,all,0.051,MEA,ISR,sovereign listed
+ITA,Italy,all,0.04,WEU,ITA,sovereign listed
+JAM,Jamaica,all,0.051,CSA,JAM,sovereign listed
+JEY,Jersey,all,0.043,UK,GBR,sovereign listed
+JOR,Jordan,all,0.051,MEA,JOR,sovereign listed
+JPN,Japan,all,0.018,JAP,JPN,sovereign listed
+KAZ,Kazakhstan,all,0.051,FSU,KAZ,sovereign listed
+KEN,Kenya,all,0.051,AFR,KEN,sovereign listed
+KGZ,Kyrgyzstan,all,0.051,FSU,KGZ,sovereign listed
+KHM,Cambodia,all,0.051,ODA,KHM,continent Asia
+KIR,Kiribati,all,0.051,ODA,KIR,continent Oceania
+KNA,Saint Kitts and Nevis,all,0.051,CSA,KNA,continent Americas
+KOR,South Korea,all,0.051,SKO,KOR,sovereign listed
+KWT,Kuwait,all,0.051,MEA,KWT,sovereign listed
+LAO,Laos,all,0.051,ODA,LAO,continent Asia
+LBN,Lebanon,all,0.051,MEA,LBN,sovereign listed
+LBR,Liberia,all,0.051,AFR,LBR,continent Africa
+LBY,Libya,all,0.051,AFR,LBY,sovereign listed
+LCA,Saint Lucia,all,0.051,CSA,LCA,continent Americas
+LIE,Liechtenstein,all,0.04,WEU,LIE,continent Europe
+LKA,Sri Lanka,all,0.051,ODA,LKA,sovereign listed
+LSO,Lesotho,all,0.051,AFR,LSO,continent Africa
+LTU,Lithuania,all,0.051,FSU,LTU,sovereign listed
+LUX,Luxembourg,all,0.04,WEU,LUX,sovereign listed
+LVA,Latvia,all,0.051,FSU,LVA,sovereign listed
+MAC,Macao S.A.R,all,0.051,CHI,CHN,sovereign listed
+MAF,Saint Martin,all,0.04,WEU,FRA,sovereign listed
+MAR,Morocco,all,0.051,AFR,MAR,sovereign listed
+MCO,Monaco,all,0.04,WEU,MCO,continent Europe
+MDA,Moldova,all,0.051,FSU,MDA,sovereign listed
+MDG,Madagascar,all,0.051,AFR,MDG,continent Africa
+MDV,Maldives,all,0.051,ODA,MDV,continent Asia
+MEX,Mexico,all,0.051,MEX,MEX,sovereign listed
+MHL,Marshall Islands,all,0.051,ODA,MHL,continent Oceania
+MKD,North Macedonia,all,0.051,EEU,MKD,sovereign listed
+MLI,Mali,all,0.051,AFR,MLI,continent Africa
+MLT,Malta,all,0.04,WEU,MLT,sovereign listed
+MMR,Myanmar,all,0.051,ODA,MMR,sovereign listed
+MNE,Montenegro,all,0.051,EEU,MNE,sovereign listed
+MNG,Mongolia,all,0.051,ODA,MNG,continent Asia
+MNP,Northern Mariana Islands,all,0.044,USA,USA,sovereign listed
+MOZ,Mozambique,all,0.051,AFR,MOZ,sovereign listed
+MRT,Mauritania,all,0.051,AFR,MRT,continent Africa
+MSR,Montserrat,all,0.043,UK,GBR,sovereign listed
+MUS,Mauritius,all,0.051,AFR,MUS,continent Africa
+MWI,Malawi,all,0.051,AFR,MWI,continent Africa
+MYS,Malaysia,all,0.051,ODA,MYS,sovereign listed
+NAM,Namibia,all,0.051,AFR,NAM,continent Africa
+NCL,New Caledonia,all,0.04,WEU,FRA,sovereign listed
+NER,Niger,all,0.051,AFR,NER,continent Africa
+NFK,Norfolk Island,all,0.051,AUS,AUS,sovereign listed
+NGA,Nigeria,all,0.051,AFR,NGA,sovereign listed
+NIC,Nicaragua,all,0.051,CSA,NIC,sovereign listed
+NIU,Niue,all,0.051,AUS,NZL,sovereign listed
+NLD,Netherlands,all,0.04,WEU,NLD,sovereign listed
+NOR,Norway,all,0.04,WEU,NOR,sovereign listed
+NPL,Nepal,all,0.051,ODA,NPL,sovereign listed
+NRU,Nauru,all,0.051,ODA,NRU,continent Oceania
+NZL,New Zealand,all,0.051,AUS,NZL,sovereign listed
+OMN,Oman,all,0.051,MEA,OMN,sovereign listed
+PAK,Pakistan,all,0.051,ODA,PAK,sovereign listed
+PAN,Panama,all,0.051,CSA,PAN,sovereign listed
+PCN,Pitcairn Islands,all,0.043,UK,GBR,sovereign listed
+PER,Peru,all,0.051,CSA,PER,sovereign listed
+PHL,Philippines,all,0.051,ODA,PHL,sovereign listed
+PLW,Palau,all,0.051,ODA,PLW,continent Oceania
+PNG,Papua New Guinea,all,0.051,ODA,PNG,continent Oceania
+POL,Poland,all,0.051,EEU,POL,sovereign listed
+PRI,Puerto Rico,all,0.044,USA,USA,sovereign listed
+PRK,North Korea,all,0.051,ODA,PRK,sovereign listed
+PRT,Portugal,all,0.04,WEU,PRT,sovereign listed
+PRY,Paraguay,all,0.051,CSA,PRY,sovereign listed
+PSE,Palestine,all,0.051,MEA,ISR,sovereign listed
+PYF,French Polynesia,all,0.04,WEU,FRA,sovereign listed
+QAT,Qatar,all,0.051,MEA,QAT,sovereign listed
+ROU,Romania,all,0.051,EEU,ROU,sovereign listed
+RUS,Russia,all,0.051,FSU,RUS,sovereign listed
+RWA,Rwanda,all,0.051,AFR,RWA,continent Africa
+SAU,Saudi Arabia,all,0.051,MEA,SAU,sovereign listed
+SDN,Sudan,all,0.051,AFR,SDN,sovereign listed
+SEN,Senegal,all,0.051,AFR,SEN,sovereign listed
+SGP,Singapore,all,0.051,ODA,SGP,sovereign listed
+SGS,South Georgia and the Islands,all,0.043,UK,GBR,sovereign listed
+SHN,Saint Helena,all,0.043,UK,GBR,sovereign listed
+SLB,Solomon Islands,all,0.051,ODA,SLB,continent Oceania
+SLE,Sierra Leone,all,0.051,AFR,SLE,continent Africa
+SLV,El Salvador,all,0.051,CSA,SLV,sovereign listed
+SMR,San Marino,all,0.04,WEU,SMR,continent Europe
+SOM,Somalia,all,0.051,AFR,SOM,continent Africa
+SPM,Saint Pierre and Miquelon,all,0.04,WEU,FRA,sovereign listed
+SRB,Republic of Serbia,all,0.051,EEU,SRB,sovereign listed
+SSD,South Sudan,all,0.051,AFR,SSD,continent Africa
+STP,São Tomé and Principe,all,0.051,AFR,STP,continent Africa
+SUR,Suriname,all,0.051,CSA,SUR,continent Americas
+SVK,Slovakia,all,0.051,EEU,SVK,sovereign listed
+SVN,Slovenia,all,0.051,EEU,SVN,sovereign listed
+SWE,Sweden,all,0.04,WEU,SWE,sovereign listed
+SWZ,eSwatini,all,0.051,AFR,SWZ,continent Africa
+SXM,Sint Maarten,all,0.04,WEU,NLD,sovereign listed
+SYC,Seychelles,all,0.051,AFR,SYC,continent Africa
+SYR,Syria,all,0.051,MEA,SYR,sovereign listed
+TCA,Turks and Caicos Islands,all,0.043,UK,GBR,sovereign listed
+TCD,Chad,all,0.051,AFR,TCD,continent Africa
+TGO,Togo,all,0.051,AFR,TGO,continent Africa
+THA,Thailand,all,0.051,ODA,THA,sovereign listed
+TJK,Tajikistan,all,0.051,FSU,TJK,sovereign listed
+TKM,Turkmenistan,all,0.051,FSU,TKM,sovereign listed
+TLS,East Timor,all,0.051,ODA,TLS,continent Asia
+TON,Tonga,all,0.051,ODA,TON,continent Oceania
+TTO,Trinidad and Tobago,all,0.051,CSA,TTO,sovereign listed
+TUN,Tunisia,all,0.051,AFR,TUN,sovereign listed
+TUR,Turkey,all,0.051,MEA,TUR,sovereign listed
+TUV,Tuvalu,all,0.051,ODA,TUV,continent Oceania
+TWN,Taiwan,all,0.051,ODA,TWN,sovereign listed
+TZA,United Republic of Tanzania,all,0.051,AFR,TZA,sovereign listed
+UGA,Uganda,all,0.051,AFR,UGA,continent Africa
+UKR,Ukraine,all,0.051,FSU,UKR,sovereign listed
+UMI,United States Minor Outlying Islands,all,0.044,USA,USA,sovereign listed
+URY,Uruguay,all,0.051,CSA,URY,sovereign listed
+USA,United States of America,all,0.044,USA,USA,sovereign listed
+UZB,Uzbekistan,all,0.051,FSU,UZB,sovereign listed
+VAT,Vatican,all,0.04,WEU,VAT,continent Europe
+VCT,Saint Vincent and the Grenadines,all,0.051,CSA,VCT,continent Americas
+VEN,Venezuela,all,0.051,CSA,VEN,sovereign listed
+VGB,British Virgin Islands,all,0.043,UK,GBR,sovereign listed
+VIR,United States Virgin Islands,all,0.044,USA,USA,sovereign listed
+VNM,Vietnam,all,0.051,ODA,VNM,sovereign listed
+VUT,Vanuatu,all,0.051,ODA,VUT,continent Oceania
+WLF,Wallis and Futuna,all,0.04,WEU,FRA,sovereign listed
+WSM,Samoa,all,0.051,ODA,WSM,continent Oceania
+YEM,Yemen,all,0.051,MEA,YEM,sovereign listed
+ZAF,South Africa,all,0.051,AFR,ZAF,sovereign listed
+ZMB,Zambia,all,0.051,AFR,ZMB,sovereign listed
+ZWE,Zimbabwe,all,0.051,AFR,ZWE,sovereign listed

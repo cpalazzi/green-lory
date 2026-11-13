@@ -332,7 +332,7 @@ runs:
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
     finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
-    finance_csv_sha256: 0eddcae64bcfc6ee6fa6b6cf0e78885ba45670cca3e6079c9e4e4b03adc9865e
+    finance_csv_sha256: 3ba3673913295f9cd9d944093bb75bf04ae29538b23d1447b2c4a905a62c3de3
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour
@@ -359,7 +359,7 @@ runs:
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
     finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
-    finance_csv_sha256: 0eddcae64bcfc6ee6fa6b6cf0e78885ba45670cca3e6079c9e4e4b03adc9865e
+    finance_csv_sha256: 3ba3673913295f9cd9d944093bb75bf04ae29538b23d1447b2c4a905a62c3de3
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour
@@ -449,7 +449,7 @@ runs:
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed  # no PV output at sea
     finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
-    finance_csv_sha256: c9bae11600a0683094b0864335f194b8a03676d8705ff7dbc147676ab3fae011
+    finance_csv_sha256: 840f942d4151b2fc08b41275482fa4cc8bc292c2d2ed3954d5a8a7f78fe8bc66
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour
@@ -479,7 +479,7 @@ runs:
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed  # no PV output at sea
     finance_csv: inputs/finance/ameli2021_lowcarbon_wacc_sea_cells.csv  # by cell: the zone's rate, 11.8 % in international waters
-    finance_csv_sha256: c9bae11600a0683094b0864335f194b8a03676d8705ff7dbc147676ab3fae011
+    finance_csv_sha256: 840f942d4151b2fc08b41275482fa4cc8bc292c2d2ed3954d5a8a7f78fe8bc66
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour
@@ -638,7 +638,7 @@ runs:
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
     finance_csv: inputs/finance/ameli2021_reduced_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
-    finance_csv_sha256: 76e3a8af38911505b89b6de5ff2ae03210dc278bbd19257cb9b1f8edb8b34477
+    finance_csv_sha256: 7dd9f2bbd3521aad9fc6dd4fc2e3d9314dcc8190984024434f0e7308b87364c6
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour
@@ -665,7 +665,7 @@ runs:
     plant_dir: model/plants/ammonia_plant_1mt
     pv_policy: fixed
     finance_csv: inputs/finance/ameli2021_reduced_wacc_by_country.csv  # by country (inputs/cells/cell_countries.csv)
-    finance_csv_sha256: 76e3a8af38911505b89b6de5ff2ae03210dc278bbd19257cb9b1f8edb8b34477
+    finance_csv_sha256: 7dd9f2bbd3521aad9fc6dd4fc2e3d9314dcc8190984024434f0e7308b87364c6
     time_step_h: 1
     temporal_accounting: snapshot_weighted
     ramp_limit_basis: per_hour

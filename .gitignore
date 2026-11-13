@@ -53,9 +53,13 @@ references/
 
 # Finance tables keyed by cell are large and made outside the repository, so not tracked:
 # runs.yaml pins their hashes and arc/stage_release.sh copies them into releases. Finance tables
-# keyed by country are small and tracked.
+# keyed by country are small and tracked, with their provenance and the region list and regional
+# rates they are built from (model/countries.py).
 /inputs/finance/*
 !/inputs/finance/*_by_country.csv
+!/inputs/finance/*_by_country_provenance.json
+!/inputs/finance/ameli2021_tiam_ucl_regions.csv
+!/inputs/finance/ameli2021_wacc_by_region.csv
 
 # pip install -e . metadata
 *.egg-info/

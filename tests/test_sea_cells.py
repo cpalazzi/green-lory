@@ -127,9 +127,10 @@ def test_a_flat_run_at_sea_keeps_only_the_depth_class_costs(tmp_path):
     assert frozen["electrolysis"]["build_cost_multiplier"] == pytest.approx(2.0)
 
 
-def test_finance_takes_the_zone_its_region_or_the_international_rate():
-    by_country = pd.DataFrame({"iso3": ["GBR", "ZAF", "BRA", "SAU", "IDN", "FRA"], "ameli_region": ["UK", "AFR", "CSA", "MEA", "ODA", "WEU"],
-                               "interest_rate": [0.044, 0.118, 0.092, 0.068, 0.068, 0.042]})
+def test_finance_takes_the_zone_sovereign_or_the_international_rate():
+    by_country = pd.DataFrame({"iso3": ["GBR", "ZAF", "BRA", "SAU", "IDN", "FRA", "MUS"],
+                               "ameli_region": ["UK", "AFR", "CSA", "MEA", "ODA", "WEU", "AFR"],
+                               "interest_rate": [0.044, 0.118, 0.092, 0.068, 0.068, 0.042, 0.118]})
     cells = pd.DataFrame({"latitude": [55.0, -20.0, 40.0], "longitude": [2.0, 57.0, -30.0], "eez_iso3": ["GBR", "MUS", np.nan]})
     table = sea_cells.sea_finance_table(cells, by_country)
     assert table.interest_rate.tolist() == [0.044, 0.118, 0.118]
