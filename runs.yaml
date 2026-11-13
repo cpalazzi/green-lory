@@ -782,6 +782,18 @@ runs:
       The capacities of all at sea x 5 x the unprotected share of each cell's sea; LCOA and
       designs are the parent's.
 
+  # The 20 % sensitivity at sea of all, for the network of all at 20 %, as for the low-carbon
+  # runs above (`derive --multiplier 1 --protected-areas ...`)
+  gl_dea2050_amelired_bspat_wspat_land20oct_fixed_offshore_mpa:
+    role: campaign all at sea, 20 % of the sea outside protected areas (share sensitivity)
+    runner: derived
+    derived_from: gl_dea2050_amelired_bspat_wspat_land20oct_fixed_offshore
+    land_share: 0.2
+    protected_areas: inputs/site_costs/protected_areas.csv
+    notes: >-
+      The capacities of all at sea x the unprotected share of each cell's sea; LCOA and designs
+      are the parent's.
+
 # Green-porpoise shipping networks. Each one takes the supplier table of one entry above
 # (`supplier_run`; `archived` is the published table c_NH3_cost_4.5.csv of Salmon 2023) and
 # finds the cheapest way to supply the 2050 ammonia bunker demand from it. Every network uses
@@ -868,7 +880,9 @@ networks:
   # the optimum (D6), on the supplier tables of the four cases with all the land and sea the rules
   # leave and of base and all with 20 % of it. Each table holds the land run's plants and the sea
   # run's (`sea_supplier_run`); the network keeps the 4,000 cheapest suppliers that can make
-  # 1 Mt/yr, each at most 10 Mt/yr. Submitted from green-porpoise release 20261111-legacy-gpo-v1.
+  # 1 Mt/yr, each at most 10 Mt/yr. Submitted from green-porpoise release 20261111-legacy-gpo-v1
+  # (base at 20 %) and 20261111-legacy-gpo-v2 (the other five, as `<id>_r2`: v1 cannot write
+  # Gurobi's node files).
 
   gpo_gl_dea2050_wacc5_bflat_wflat_land100oct_fixed_sea_iso1000_1mt_corrected:
     role: campaign base
@@ -924,6 +938,40 @@ networks:
     role: low-carbon WACC sensitivity of campaign all, share sensitivity
     supplier_run: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed
     sea_supplier_run: gl_dea2050_amelilc_bspat_wspat_land20oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of all on 20 % of the land and sea the rules leave (share sensitivity).
+
+  # The networks of finance and all with Ameli et al.'s (2021) reduced WACC, the campaign's
+  # finance case from 11 November 2026, on the same terms, from green-porpoise release
+  # 20261111-legacy-gpo-v2.
+
+  gpo_gl_dea2050_amelired_bflat_wflat_land100oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign finance
+    supplier_run: gl_dea2050_amelired_bflat_wflat_land100oct_fixed
+    sea_supplier_run: gl_dea2050_amelired_bflat_wflat_land100oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of finance on all the land and sea the rules leave.
+
+  gpo_gl_dea2050_amelired_bspat_wspat_land100oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign all
+    supplier_run: gl_dea2050_amelired_bspat_wspat_land100oct_fixed
+    sea_supplier_run: gl_dea2050_amelired_bspat_wspat_land100oct_fixed_offshore_mpa
+    equations: corrected
+    solver_time_limit_s: 19800
+    solver_gap_target: 0.01
+    accepted_gap: 0.01
+    description: The land and sea plants of all on all the land and sea the rules leave.
+
+  gpo_gl_dea2050_amelired_bspat_wspat_land20oct_fixed_sea_iso1000_1mt_corrected:
+    role: campaign all, share sensitivity
+    supplier_run: gl_dea2050_amelired_bspat_wspat_land20oct_fixed
+    sea_supplier_run: gl_dea2050_amelired_bspat_wspat_land20oct_fixed_offshore_mpa
     equations: corrected
     solver_time_limit_s: 19800
     solver_gap_target: 0.01
