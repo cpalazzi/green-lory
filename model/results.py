@@ -1305,12 +1305,14 @@ def plot_build_factors(surface: pd.DataFrame, site_costs: pd.DataFrame, *, title
                        minimum_mt_per_year: float = REFERENCE_OUTPUT_MT_PER_YEAR):
     """The remote factors of model/site_costs.py against the travel time to a city of 20,000
     people, on the installation (build) part of the capital cost and on its equipment part, alone
-    (solid) and with the cold factor (dashed); their anchor (a star); the location factors of the
-    Australian cost reviews (inputs/site_costs/calibration_sites.csv: GHD's installation factors,
-    Aurecon's installation and equipment factors), which the rule did not use; and, below, the
-    plants of surface that can make minimum_mt_per_year by travel time (site_costs, the run's
-    site-cost table), those under the cold factor darker. Travel times under 3 minutes are drawn at 3."""
+    (solid) and with the cold factor (dashed); the calibration point that sets both, Shamattawa
+    (crosses, REMOTE_ANCHOR_DAYS); the location factors of the Australian cost reviews
+    (inputs/site_costs/calibration_sites.csv: GHD's installation factors, Aurecon's installation
+    and equipment factors), which the rule did not use; and, below, the plants of surface that can
+    make minimum_mt_per_year by travel time (site_costs, the run's site-cost table), those under
+    the cold factor darker. Travel times under 3 minutes are drawn at 3."""
     import matplotlib.pyplot as plt
+    from matplotlib.legend_handler import HandlerTuple
     from matplotlib.patches import Patch
 
     from . import site_costs as rule
@@ -1323,35 +1325,38 @@ def plot_build_factors(surface: pd.DataFrame, site_costs: pd.DataFrame, *, title
     hours = np.logspace(np.log10(floor), np.log10(max(plant_hours.max(), 48.0) * 1.1), 400)
     sites = pd.read_csv(REPO_ROOT / "inputs" / "site_costs" / "calibration_sites.csv")
     ghd, aurecon = sites[sites["source"] == "ghd2025"], sites[sites["source"] == "aurecon2024"]
-    anchor_hours = rule.REMOTE_ANCHOR_DAYS * 24.0
+    calibration_hours = rule.REMOTE_ANCHOR_DAYS * 24.0
     remotest_site = sites["travel_min_city_20k"].max() / 60.0
 
     fig, (ax, low) = plt.subplots(2, 1, figsize=(10.0, 7.0), sharex=True, height_ratios=(3.0, 1.2), layout="constrained")
-    for at_anchor, colour, part in ((rule.REMOTE_BUILD_AT_ANCHOR, SERIES[1], "installation"),
-                                    (rule.REMOTE_EQUIPMENT_AT_ANCHOR, SERIES[0], "equipment")):
-        values = rule.remote_multiplier(hours * 60.0, at_anchor)
+    crosses = []
+    for at_calibration, colour, part in ((rule.REMOTE_BUILD_AT_ANCHOR, SERIES[1], "installation"),
+                                         (rule.REMOTE_EQUIPMENT_AT_ANCHOR, SERIES[0], "equipment")):
+        values = rule.remote_multiplier(hours * 60.0, at_calibration)
         ax.plot(hours, values, color=colour, linewidth=2, label=f"Factor on {part}")
         ax.plot(hours, values * rule.COLD_MULTIPLIER, color=colour, linewidth=2, linestyle="--",
                 label=f"Factor on {part}, with the cold factor")
+        crosses.append(ax.scatter([calibration_hours], [at_calibration], marker="x", s=36, color=colour, linewidths=1.5,
+                                  zorder=5))
     ax.scatter(ghd["travel_min_city_20k"].clip(lower=floor * 60) / 60, ghd["installation_om_cost_factor"], marker="o", s=22,
                facecolors="none", edgecolors=SERIES[1], linewidths=1.0, label="GHD 2025: installation, by site")
     ax.scatter(aurecon["travel_min_city_20k"].clip(lower=floor * 60) / 60, aurecon["installation_cost_factor"], marker="s", s=20,
                facecolors="none", edgecolors=SERIES[1], linewidths=1.0, label="Aurecon 2024: installation, by site")
     ax.scatter(aurecon["travel_min_city_20k"].clip(lower=floor * 60) / 60, aurecon["equipment_cost_factor"], marker="s", s=20,
                facecolors="none", edgecolors=SERIES[0], linewidths=1.0, label="Aurecon 2024: equipment, by site")
-    ax.scatter([anchor_hours, anchor_hours], [rule.REMOTE_BUILD_AT_ANCHOR, rule.REMOTE_EQUIPMENT_AT_ANCHOR], marker="*", s=180,
-               color=INK, zorder=5, label="Anchor: Shamattawa, Manitoba")
     for axis in (ax, low):
-        for x in (remotest_site, anchor_hours):
+        for x in (remotest_site, calibration_hours):
             axis.axvline(x, color=MUTED, linewidth=0.8, linestyle=":")
     top = ax.get_ylim()[1]
     ax.text(remotest_site, top, " remotest Australian site", rotation=90, va="top", ha="right", fontsize=8, color=MUTED)
-    ax.text(anchor_hours, top, " anchor", rotation=90, va="top", ha="right", fontsize=8, color=MUTED)
+    ax.text(calibration_hours, top, " calibration point", rotation=90, va="top", ha="right", fontsize=8, color=MUTED)
     ax.set_xscale("log")
     ax.set_ylabel("Factor on the capital cost (-)", color=INK)
     ax.set_title(title, loc="left", color=INK, fontsize=12)
     ax.grid(color=GRID, linewidth=0.5)
-    ax.legend(frameon=False, fontsize=8, loc="upper left", ncol=2)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles + [tuple(crosses)], labels + ["Calibration point: Shamattawa"],
+              handler_map={tuple: HandlerTuple(ndivide=None)}, frameon=False, fontsize=8, loc="upper left", ncol=2)
     bins = np.logspace(np.log10(floor), np.log10(hours[-1]), 40)
     cold = plants["cold_multiplier"] > 1
     low.hist([plant_hours[~cold], plant_hours[cold]], bins=bins, stacked=True, color=["#b5b4ae", MUTED], edgecolor="white", linewidth=0.5)
